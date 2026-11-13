@@ -240,6 +240,31 @@ class Veritabani(Base):
         self.assertEqual(summary["surveys"], {"invited": 0, "answered": 0, "open_campaigns": 0, "submitted": 0})
 
 
+class Arayuz(Base):
+    def test_kabuk_ve_statik_dosyalar(self):
+        status, page = self.app.dispatch("GET", "/", {})
+        self.assertEqual(status, 200)
+        self.assertIn('<script src="/static/app.js"', page.content)
+        self.assertNotIn("<script>", page.content)        # satır içi betik yok (CSP)
+        status, js = self.app.dispatch("GET", "/static/app.js", {})
+        self.assertEqual((status, js.content_type), (200, "application/javascript; charset=utf-8"))
+        self.assertNotIn("innerHTML", js.content)                  # sunucu verisi HTML olarak yorumlanmaz
+        self.assertNotIn("style=", js.content)                    # satır içi stil yok (style-src-attr 'none')
+        self.assertEqual(self.app.dispatch("GET", "/static/app.css", {})[0], 200)
+        self.assertEqual(self.app.dispatch("GET", "/static/yok.js", {})[0], 404)
+        local = self.make(TEDARIK_AUTH_MODE="local")
+        self.assertEqual(local.dispatch("GET", "/static/app.js", {})[0], 303)     # oturumsuz erişilmez
+
+    def test_aralik_filtresi_ve_siralama(self):
+        for code, end in (("K1", "2026-01-10"), ("K2", "2026-03-01"), ("K3", "2026-06-30")):
+            sid = self.ok("POST", "/suppliers", {"code": "S" + code, "name": code})["id"]
+            self.ok("POST", "/contracts", {"code": code, "supplier_id": sid, "title": code, "end_date": end})
+        found = self.ok("GET", "/contracts?end_date__gte=2026-02-01&end_date__lte=2026-06-30&order=end_date")
+        self.assertEqual([c["code"] for c in found], ["K2", "K3"])
+        self.assertEqual([s["code"] for s in self.ok("GET", "/suppliers?owner__null=1&order=-code")][:1], ["SK3"])
+        self.assertEqual(self.call("GET", "/contracts?order=yok")[0], 400)
+
+
 class Cekirdek(Base):
     def test_dogrulama(self):
         self.base_data()

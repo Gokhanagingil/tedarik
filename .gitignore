@@ -9,3 +9,4 @@ evidence-files/
 *.xlsx
 *.csv
 !tests/**/*.csv
+verification/

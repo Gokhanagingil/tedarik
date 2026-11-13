@@ -57,7 +57,7 @@ QUESTIONS = Resource("survey_questions", "Anket Soruları", {
     "position": "INTEGER NOT NULL DEFAULT 1", "code": "TEXT", "text": "TEXT NOT NULL", "help": "TEXT",
     "kind": "TEXT NOT NULL DEFAULT 'scale_1_5'", "required": "INTEGER NOT NULL DEFAULT 1",
     "weight": "REAL NOT NULL DEFAULT 1", "options_json": "TEXT", "show_if_json": "TEXT",
-    "risk_category": "TEXT", "risk_threshold": "INTEGER"},
+    "risk_category": "TEXT", "risk_threshold": "INTEGER", "disabled": "INTEGER NOT NULL DEFAULT 0"},
     module=M, unique=(("template_id", "code"),), search=("text", "code"),
     enums={"kind": KINDS, "risk_category": RISK_CATEGORIES})
 
@@ -172,7 +172,7 @@ def _question_rules(db, data, current, principal):
         if not isinstance(rule, dict) or not isinstance(rule.get("question"), str) or \
                 not {"equals", "in", "min", "max"} & set(rule):
             raise crud.Invalid("Koşul biçimi: {\"question\": \"S1\", \"equals\" | \"in\" | \"min\" | \"max\": ...}")
-        source = one(db, "SELECT * FROM tdr_survey_questions WHERE template_id=? AND code=?",
+        source = one(db, "SELECT * FROM tdr_survey_questions WHERE template_id=? AND code=? AND disabled=0",
                      (merged["template_id"], rule["question"]))
         if not source or (current and source["id"] == current["id"]):
             raise crud.Invalid("Koşuldaki soru bu şablonda bulunamadı")
@@ -251,11 +251,12 @@ TARGETS.before_save = _target_rules
 INVITES.before_save = _invite_rules
 
 
-def structure(db, template_id):
+def structure(db, template_id, include_disabled=False):
+    """Şablon yapısı. Kaldırılmış (disabled) sorular yalnızca kurucuda görünür; yanıt, sonuç ve kopyaya girmez."""
     template = crud.get(db, TEMPLATES, template_id)
     sections = rows(db, "SELECT * FROM tdr_survey_sections WHERE template_id=? ORDER BY position, id", (template_id,))
-    questions = rows(db, "SELECT * FROM tdr_survey_questions WHERE template_id=? ORDER BY position, id",
-                     (template_id,))
+    questions = rows(db, "SELECT * FROM tdr_survey_questions WHERE template_id=?"
+                         + ("" if include_disabled else " AND disabled=0") + " ORDER BY position, id", (template_id,))
     for q in questions:
         q["options"] = _json(q.pop("options_json"))
         q["show_if"] = _json(q.pop("show_if_json"))
@@ -272,7 +273,7 @@ def _manage(c, res, action="write"):
 
 def template_structure(c):
     authz.check(c.principal, TEMPLATES, "read")
-    return structure(c.db, c.params["id"])
+    return structure(c.db, c.params["id"], include_disabled=c.query.get("all") == "1")
 
 
 def publish(c):
@@ -280,7 +281,7 @@ def publish(c):
     template = crud.get(c.db, TEMPLATES, c.params["id"])
     if template["status"] != "draft":
         raise crud.Conflict("Yalnızca taslak şablon yayımlanır")
-    if not one(c.db, "SELECT 1 AS x FROM tdr_survey_questions WHERE template_id=?", (template["id"],)):
+    if not one(c.db, "SELECT 1 AS x FROM tdr_survey_questions WHERE template_id=? AND disabled=0", (template["id"],)):
         raise crud.Invalid("Yayımlamak için en az bir soru ekleyin")
     c.db.execute("UPDATE tdr_survey_templates SET status='published', updated_at=? WHERE id=?",
                  (utcnow(), template["id"]))
@@ -335,7 +336,7 @@ def reorder(c):
     items = c.body.get("questions")
     if not isinstance(items, list):
         raise crud.Invalid("questions listesi gerekli")
-    owned = {r["id"] for r in rows(c.db, "SELECT id FROM tdr_survey_questions WHERE template_id=?",
+    owned = {r["id"] for r in rows(c.db, "SELECT id FROM tdr_survey_questions WHERE template_id=? AND disabled=0",
                                    (template["id"],))}
     sections = {r["id"] for r in rows(c.db, "SELECT id FROM tdr_survey_sections WHERE template_id=?",
                                       (template["id"],))}
@@ -434,7 +435,8 @@ def open_campaign(c):
         raise crud.Conflict(f"Kampanya '{campaign['status']}' durumunda; açılamaz")
     template = crud.get(c.db, TEMPLATES, campaign["template_id"])
     if template["status"] == "draft":           # açılış şablonu dondurur
-        if not one(c.db, "SELECT 1 AS x FROM tdr_survey_questions WHERE template_id=?", (template["id"],)):
+        if not one(c.db, "SELECT 1 AS x FROM tdr_survey_questions WHERE template_id=? AND disabled=0",
+                   (template["id"],)):
             raise crud.Invalid("Şablonda soru yok")
         c.db.execute("UPDATE tdr_survey_templates SET status='published', updated_at=? WHERE id=?",
                      (utcnow(), template["id"]))

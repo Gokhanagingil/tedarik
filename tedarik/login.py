@@ -65,11 +65,6 @@ ENTRA_DENIED = f"""<!doctype html><html lang="tr"><meta charset="utf-8"><title>T
 yöneticinizden Tedarik uygulama rolünüzü ve MFA ilkesini kontrol etmesini isteyin.</p>
 <a class="button" href="/login">Tekrar giriş yap</a></main></html>"""
 
-HOME = f"""<!doctype html><html lang="tr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tedarik</title>{STYLE}<main>{BRAND}<p class="muted">API çalışıyor. Arayüz sonraki adımda eklenecek (DURUM.md, adım 5).</p>
-<p class="muted">Kaynaklar: /api/tdr/suppliers · Pano: /api/tdr/dashboard/summary</p></main></html>"""
-
-
 def page(content, status=200, cookie=None):
     return status, Reply(Raw(content, HTML), {"Set-Cookie": cookie} if cookie else None)
 
@@ -151,7 +146,8 @@ def entra_callback(c):
 # ------------------------------------------------------------------ oturumlu yollar
 
 def home(c):
-    return page(HOME)
+    from .ui import shell
+    return shell(c)
 
 
 def me(c):
@@ -296,7 +292,15 @@ def update_user(c):
     return _user(c, user_id)
 
 
+def directory(c):
+    """Davet ve sahip seçimi için etkin kullanıcıların adı ve görünen adı (parola, rol bilgisi yok)."""
+    authz.require_human(c.principal)
+    authz.require(c.principal, "write")
+    return rows(c.db, "SELECT username, display_name FROM users WHERE is_active=1 ORDER BY display_name, username")
+
+
 def register(app):
+    app.route("GET", API + "/directory", directory)
     app.login_limiter = session.LoginLimiter()
     app.route("GET", "/login", login_page, public=True)
     app.route("POST", "/api/login", login, public=True)

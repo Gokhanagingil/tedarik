@@ -46,7 +46,7 @@ FIELDS = {
     "anonymous": "Anonim", "min_responses": "Sonuç için en az yanıt", "opens_on": "Açılış tarihi",
     "closes_on": "Kapanış tarihi", "salt": "Anonimlik anahtarı", "response_id": "Yanıt",
     "respondent_key": "Yanıtlayan anahtarı", "started_at": "Başlangıç", "submitted_at": "Gönderim zamanı",
-    "value_number": "Sayısal yanıt", "value_text": "Metin yanıt", "values_json": "Seçilenler", "origin_ref": "Kaynak (anket sinyali)",
+    "value_number": "Sayısal yanıt", "disabled": "Kaldırıldı", "value_text": "Metin yanıt", "values_json": "Seçilenler", "origin_ref": "Kaynak (anket sinyali)",
     "survey_templates.parent_id": "Önceki sürüm", "survey_targets.supplier_id": "Tedarikçi",
     # aktarım ve iz
     "filename": "Dosya adı", "summary_json": "Özet", "batch_id": "Aktarım", "row_no": "Satır",

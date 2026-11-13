@@ -23,7 +23,8 @@ class Conflict(RuntimeError):
     pass
 
 
-RESERVED = {"q", "limit", "offset"}
+RESERVED = {"q", "limit", "offset", "order"}
+OPERATORS = {"gte": ">=", "lte": "<=", "ne": "<>"}
 
 
 def clean(payload):
@@ -166,6 +167,14 @@ def listing(db, res, query):
     for key, value in query.items():
         if key in RESERVED:
             continue
+        name, _, op = key.partition("__")
+        if op and name in res.fields and op in OPERATORS:       # ör. end_date__lte=2026-12-31
+            where.append(f"{name} {OPERATORS[op]} ?")
+            args.append(_query_value(res.columns[name], value))
+            continue
+        if op == "null" and name in res.fields:                  # ör. owner__null=1
+            where.append(f"{name} IS {'' if value in ('1', 'true') else 'NOT '}NULL")
+            continue
         if key in res.fields:
             where.append(f"{key}=?")
             args.append(_query_value(res.columns[key], value))
@@ -184,5 +193,10 @@ def listing(db, res, query):
         offset = max(int(query.get("offset", 0)), 0)
     except ValueError:
         raise Invalid("limit ve offset tamsayı olmalı") from None
+    order = query.get("order", "-id")
+    column = order.lstrip("-")
+    if column != "id" and column not in res.fields:
+        raise Invalid(f"Bilinmeyen sıralama alanı: {column}")
+    direction = "DESC" if order.startswith("-") else "ASC"
     sql = f"SELECT * FROM {res.table}" + (" WHERE " + " AND ".join(where) if where else "")
-    return rows(db, sql + " ORDER BY id DESC LIMIT ? OFFSET ?", (*args, limit, offset))
+    return rows(db, sql + f" ORDER BY {column} {direction}, id DESC LIMIT ? OFFSET ?", (*args, limit, offset))

@@ -69,6 +69,9 @@ class Kurucu(AnketTabani):
         self.assertEqual(copy["questions"][2]["show_if"], {"question": "S2", "equals": "yes"})
         self.assertNotEqual(copy["questions"][0]["section_id"], q["kalite"])
         self.ok("PATCH", f"/survey_questions/{copy['questions'][0]['id']}", {"text": "Kalite (yeni sürüm)"})
+        self.ok("PATCH", f"/survey_questions/{copy['questions'][4]['id']}", {"disabled": 1})     # silme yok, kaldır
+        self.assertEqual(len(self.ok("GET", f"/survey_templates/{copy['id']}/structure")["questions"]), 4)
+        self.assertEqual(len(self.ok("GET", f"/survey_templates/{copy['id']}/structure?all=1")["questions"]), 5)
 
     def test_baslangic_sablonlari(self):
         templates = {t["code"]: t for t in self.ok("GET", "/survey_templates")}

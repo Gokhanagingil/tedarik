@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik, Excel ve anket motoru tamamlandı; sıradaki iş arayüz.
+Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik, Excel, anket motoru ve arayüz tamamlandı; sıradaki iş dağıtım.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -64,16 +64,23 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Yanıt: "Anketlerim" listesi, taslak kaydetme, zorunlu ve koşullu soru denetimi, gönderilen yanıt değişmez.
   - Sonuç: yanıt oranı, genel, bölüm ve tedarikçi puanı, dağılımlar, NPS, metin yanıtları; anonimlikte en az yanıt eşiği; risk sinyalinden tek adımda tedarikçi riski; tedarikçi 360 için anket geçmişi.
   - İki örnek şablon taslak olarak gelir (öneridir, düzenlenebilir).
-- Testler: 58 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
+- **Adım 5 (2026-11-13): Arayüz.** KS GRC görsel diliyle (koyu kenar menü, aranabilir liste, sağda boyutlandırılabilir detay paneli), derlemesiz, dış kaynaksız, satır içi betik ve stil yok.
+  - Genel bakış: göstergeler, "Dikkat gerektirenler" (tıklanınca filtreli liste), satır içi SVG grafikler.
+  - Meta veriden üretilen liste, filtre, arama, sıralama, sayfalama, kayıt formu (alan bazında doğrulama ve sunucu hatası gösterimi), detay ve ilişkili kayıtlar; tüm kaynaklar için.
+  - Tedarikçi 360: özet ve uyarılar, angajmanlar, son 12 ay göstergeleri, riskler, anket puanları, sözleşmeler, kişiler ve sorumluluklar.
+  - Risk: puan kartları, değerlendirme penceresi (canlı artık risk hesabı), kabul, kapanış ve yeniden açma (iştah istisnası uyarısıyla), değerlendirme ve karar zaman çizelgesi.
+  - Anket: şablon kurucu (bölüm, soru türü, seçenek puanı, koşul, risk eşiği, sıralama, kaldır/geri al, önizleme, yayımla, yeni sürüm), kampanya (değerlendirilenler, toplu davet, aç/kapat, sonuçlar, risk sinyalinden risk aç), Anketlerim ve yanıt formu (otomatik taslak kaydı, ilerleme, koşullu sorular, eksik soruya kaydırma).
+  - Aktarım sihirbazı (tür → dosya → deneme → uygula, sürükle-bırak, şablon indirme), dışa aktarım, kullanıcı yönetimi (geçici parola bir kez gösterilir).
+  - Klavye: `/` arama, `Esc` panel ve pencere kapatma, satırlarda Enter. Dar ekran düzeni.
+  - `scripts/browser_smoke.py`: gerçek Chromium'da her ekran ve ana akışlar; konsol hatası kabul edilmez. CI'da ayrı iş.
+- Testler: 60 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
 
-- **Arayüz yok.** Yalnızca API ve yer tutucu sayfa var.
 - **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
 - **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
-- **Kullanıcı yönetimi ekranı yok** (API var; arayüz adım 5).
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
 - **Dağıtım dosyaları yok** (Dockerfile, compose, yedekleme).
 - **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
@@ -85,7 +92,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 3. ~~**Kimlik aktarımı.**~~ Tamamlandı (2026-11-13).
 4. ~~**Excel.**~~ Tamamlandı (2026-11-13). Kalan: gerçek SAP/Dynamics başlıklarıyla `ALIASES` doğrulaması.
 4a. ~~**Anket motoru**~~ Tamamlandı (2026-11-13). Not: anket tabloları değişti; eski iskelet veritabanı varsa silinip yeniden açılmalı (üretim verisi yok).
-5. **Arayüz.** KS GRC'nin görsel diliyle (`ui_v2.py` + `ksgrc.js` düzeni): tedarikçi listesi ve filtreler, tedarikçi 360 paneli, angajman, performans, anket, risk ekranları, pano (satır içi SVG grafikler). Her ekran için Playwright duman testi.
+5. ~~**Arayüz.**~~ Tamamlandı (2026-11-13).
 6. **Dağıtım.** KS GRC'nin Dockerfile, compose ve yedekleme düzenini PostgreSQL ile uyarla (`pg_dump` tabanlı yedek, geri yükleme denetimi); CI'a gitleaks, trivy, bandit, pip-audit ekle.
 7. **Periyodik işler.** Kritiklik seviyesine göre değerlendirme, anket ve risk gözden geçirme takvimi; geciken işler panosu.
 8. **MCP sözleşmesi.** `docs/MCP_SOZLESMESI.md`; KS GRC'ye kanıt akışı için örnek otomatik kontroller.

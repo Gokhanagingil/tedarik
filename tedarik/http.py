@@ -239,9 +239,10 @@ def build(config):
     for mod in loaded:
         if hasattr(mod, "register"):
             mod.register(app)
-    from . import login, meta
+    from . import login, meta, ui
     login.register(app)
     meta.register(app)
+    ui.register(app)
     with app.database.connect() as db:
         for mod in loaded:
             if hasattr(mod, "seed"):
