@@ -32,7 +32,8 @@ jobs:
       # SQLite işi bilerek paketsizdir: çekirdeğin ek paket istemediğini kanıtlar (Entra testleri atlanır).
       - name: Install hash-locked dependencies
         if: matrix.engine == 'postgres'
-        run: python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
       - name: Compile
         run: python -m compileall -q app.py tedarik tests
       - name: Tests (${{ matrix.engine }})
