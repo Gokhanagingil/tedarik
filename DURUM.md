@@ -100,7 +100,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 5. ~~**Arayüz.**~~ Tamamlandı (2026-11-13).
 6. ~~**Dağıtım.**~~ Tamamlandı (2026-11-13). Kalan: CI'a gitleaks, trivy, bandit, pip-audit; kalıcı alan adı ve TLS.
 7. ~~**Periyodik işler.**~~ Tamamlandı (2026-11-13).
-8. **MCP sözleşmesi.** `docs/MCP_SOZLESMESI.md`; KS GRC'ye kanıt akışı için örnek otomatik kontroller.
+8. ~~**MCP sözleşmesi.**~~ Tamamlandı (2026-11-13): `docs/MCP_SOZLESMESI.md`. Kalan: KS GRC tarafında örnek kontrollerin tanımlanması.
 9. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler

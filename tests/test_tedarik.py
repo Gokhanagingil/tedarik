@@ -108,6 +108,9 @@ class Guvenlik(Base):
         self.assertEqual(self.call("POST", "/sla_measurements", body, headers=mcp)[0], 403)   # source=mcp yok
         self.assertEqual(self.call("POST", "/sla_measurements", {**body, "source": "mcp"}, headers=mcp)[0], 201)
         self.assertEqual(self.call("GET", "/suppliers", headers={"X-API-Key": "yanlis"})[0], 401)
+        self.assertEqual(self.call("GET", "/schedule", headers=mcp)[0], 200)        # KS GRC kanıt kaynağı
+        for path in ("/users", "/audit_log", "/survey_templates", "/export"):
+            self.assertEqual(self.call("GET", path, headers=mcp)[0], 403, path)
 
     def test_farkli_kokenden_degisiklik_reddedilir(self):
         headers = {"Origin": "http://kotu.example", "Host": "127.0.0.1:8090"}
