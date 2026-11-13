@@ -6,7 +6,7 @@ kimin sahipliğinde alıyor" bilgisi Angajman kaydında durur. Performans, anket
 from .. import audit, auth as authz, crud
 from ..db import one, rows
 from ..http import API
-from ..schema import Resource, fk
+from ..schema import RESOURCES, Resource, fk
 
 M = "core"
 ACTIVE = "INTEGER NOT NULL DEFAULT 1"
@@ -91,8 +91,40 @@ def _responsibility_rules(db, data, current, principal):
 
 
 ENGAGEMENTS.before_save = _engagement_rules
-from ..schema import RESOURCES  # noqa: E402
+
+
+# ---- birim kapsamı: Birim Kullanıcısı yalnızca kendi biriminin angajmanına ve ona bağlı kayıtlara yazar.
+# Angajmanın sahibi satın alan birimdir (org_unit_id). Angajmana bağlı olmayan tedarikçi düzeyindeki kayıt
+# (olay, risk, değerlendirme), kullanıcının biriminin o tedarikçiyle angajmanı varsa yazılabilir.
+
+def engagement_units(db, engagement_id):
+    row = one(db, "SELECT org_unit_id FROM tdr_engagements WHERE id=?", (engagement_id,))
+    return {row["org_unit_id"]} if row else set()
+
+
+def supplier_units(db, supplier_id):
+    return {r["org_unit_id"] for r in rows(db, "SELECT DISTINCT org_unit_id FROM tdr_engagements "
+                                               "WHERE supplier_id=?", (supplier_id,))}
+
+
+def engagement_or_supplier(db, record):
+    if record.get("engagement_id"):
+        return engagement_units(db, record["engagement_id"])
+    return supplier_units(db, record.get("supplier_id"))
+
+
+def via(resource_name, key):
+    """Üst kayıt üzerinden kapsam: ör. SLA ölçümü -> SLA tanımı -> angajman."""
+    def scope(db, record):
+        parent = RESOURCES[resource_name]
+        row = one(db, f"SELECT * FROM {parent.table} WHERE id=?", (record.get(key),))
+        return parent.scope(db, row) if row else set()
+    return scope
+
+
+ENGAGEMENTS.scope = lambda db, record: {record.get("org_unit_id")}
 RESOURCES["responsibilities"].before_save = _responsibility_rules
+RESOURCES["responsibilities"].scope = engagement_or_supplier
 
 
 def _ids(body, key):
@@ -123,7 +155,7 @@ def supplier_context(c):
 def _replace_map(c, res, table, parent_col, child_col, key):
     authz.check(c.principal, res, "write")
     parent = c.params["id"]
-    crud.get(c.db, res, parent)
+    crud.check_scope(c.db, res, c.principal, crud.get(c.db, res, parent))
     ids = _ids(c.body, key)
     c.db.execute(f"DELETE FROM {table} WHERE {parent_col}=?", (parent,))
     for item in ids:

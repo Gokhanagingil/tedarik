@@ -64,7 +64,9 @@ Modüller `TEDARIK_MODULES` ile seçilir. Kapalı modülün tablosu ve uç nokta
 
 MCP anahtarı rol değildir. Yalnızca kaynağın açıkça izin verdiği işlemi yapar: ana veriyi okur, SLA ölçümü ve performans olayını `source=mcp` ile yazar. Ana veriyi değiştiremez, toplu dışa aktarım yapamaz.
 
-Açık konu: Birim Kullanıcısının yalnızca kendi biriminin kayıtlarını değiştirebilmesi (satır kapsamı) henüz yok. Kimlik aktarımıyla birlikte eklenecek.
+**Birim kapsamı.** Birim Kullanıcısı yalnızca kendi biriminin kayıtlarına yazar; okuma herkese açıktır (portalın amacı görünürlük). Angajmanın sahibi satın alan birimdir (`org_unit_id`). SLA tanımı ve ölçümü, risk faaliyeti, değerlendirme puanı, aday tedarikçi ve teklif kapsamını üst kaydından alır. Angajmana bağlı olmayan tedarikçi düzeyindeki olay, risk veya değerlendirme, kullanıcının biriminin o tedarikçiyle angajmanı varsa yazılabilir. Kayıt başka birime taşınamaz. Kapsam `Resource.scope` ile tanımlanır ve `crud` katmanında her yazmada denetlenir. Kullanıcının birimleri `tdr_user_units` tablosundadır; yönetici `PATCH /api/tdr/users/{id}` ile atar.
+
+**Oturum.** KS GRC `identity.py` ve `entra_auth.py` kopyalarıyla (`tedarik/vendor/`, K-012, K-013). Çerez adları KS GRC'den farklıdır; iki uygulama aynı alan adında birbirinin oturumunu ezmez.
 
 ## Veri aktarımı
 

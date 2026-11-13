@@ -10,8 +10,7 @@ import re
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qsl, urlparse
 
-from . import audit, auth as authz, crud
-from . import migrate
+from . import accounts, audit, auth as authz, crud, migrate  # noqa: F401 (accounts: kaynak kaydı)
 from .db import Database, IntegrityError, one, utcnow
 from .schema import RESOURCES, Resource
 
@@ -25,33 +24,45 @@ Resource("idempotency", "Tekrar Koruması", {
     "response_json": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL",
 }, module="core", api=(), search=(), immutable=True)
 
-HOME = """<!doctype html><html lang="tr"><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Tedarik</title>
-<style>body{margin:0;background:#f5f7fb;color:#18253b;font:15px system-ui,Arial}
-main{max-width:640px;margin:12vh auto;padding:0 24px}h1{font-size:25px}code{background:#e8effb;padding:2px 6px;border-radius:5px}</style>
-<main><h1>Tedarik</h1><p>API çalışıyor. Arayüz bir sonraki aşamada eklenecek.</p>
-<p>Sağlık kontrolü: <code>/api/health</code> · Kaynaklar: <code>/api/tdr/suppliers</code></p></main></html>"""
+# Parola değişimi beklenirken yalnızca bu yollar açıktır (KS GRC `authorized`).
+PASSWORD_CHANGE_ROUTES = {"/api/me", "/api/change-password", "/api/logout", "/change-password"}
 
 
 class Raw:
-    """JSON dışı yanıt (ör. CSV dışa aktarımı)."""
+    """JSON dışı yanıt (ör. CSV dışa aktarımı, HTML sayfa)."""
 
     def __init__(self, content, content_type, filename=None):
         self.content, self.content_type, self.filename = content, content_type, filename
 
 
+class Reply:
+    """Ek başlıklı yanıt (Set-Cookie, Location). `payload` bir sözlük veya Raw olabilir."""
+
+    def __init__(self, payload, headers=None):
+        self.payload, self.headers = payload, dict(headers or {})
+
+
+def redirect(location, cookie=None):
+    headers = {"Location": location}
+    if cookie:
+        headers["Set-Cookie"] = cookie
+    return 303, Reply(Raw("", "text/plain; charset=utf-8"), headers)
+
+
 class Ctx:
-    def __init__(self, app, db, principal, params, query, body):
+    def __init__(self, app, db, principal, params, query, body, headers=None, client="", raw_query=""):
         self.app, self.db, self.principal = app, db, principal
         self.params, self.query, self.body = params, query, body or {}
+        self.headers, self.client, self.raw_query = headers if headers is not None else {}, client, raw_query
 
 
 class App:
     def __init__(self, config):
         self.config = config
-        self.auth = authz.Auth(config)
-        self.routes = []
         self.database = Database(config)
+        self.auth = authz.Auth(config, self.database)
+        self.routes = []
+        self.public = []      # kimlik gerektirmeyen yollar: giriş sayfası, parola girişi, Entra dönüşü
 
     def close(self):
         self.database.close()
@@ -59,33 +70,48 @@ class App:
     def enabled(self, module):
         return module in self.config.modules
 
-    def route(self, method, pattern, fn):
+    def route(self, method, pattern, fn, public=False):
         """pattern örneği: /api/tdr/suppliers/{id}/context (süslü parantezli parçalar tamsayıdır)."""
         regex = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>\\d+)", pattern) + "$")
-        self.routes.append((method, regex, fn))
+        (self.public if public else self.routes).append((method, regex, fn))
 
-    def dispatch(self, method, target, headers=None, raw=b""):
+    @staticmethod
+    def _find(routes, method, path):
+        for verb, regex, candidate in routes:
+            match = regex.match(path) if verb == method else None
+            if match:
+                return candidate, match
+        return None, None
+
+    def dispatch(self, method, target, headers=None, raw=b"", client=""):
         headers = headers if headers is not None else {}
         url = urlparse(target)
+        fn, match = self._find(self.public, method, url.path)
+        if fn:
+            return self._execute(fn, match, method, url, headers, raw, None, client)
         try:
             principal = self.auth.resolve(headers)
         except authz.Unauthenticated:
-            return 401, {"error": "Oturum açılması gerekiyor"}
+            if url.path.startswith("/api/"):
+                return 401, {"error": "Oturum açılması gerekiyor"}
+            return redirect("/login")
+        if principal.must_change_password and url.path not in PASSWORD_CHANGE_ROUTES:
+            if url.path.startswith("/api/"):
+                return 403, {"error": "Parolanızı değiştirmeniz gerekiyor"}
+            return redirect("/change-password")
         if url.path == "/api/health":      # KS GRC gibi kimlik ister; anonim istek 401 alır
             return 200, {"status": "ok"}
-        fn = match = None
-        for verb, regex, candidate in self.routes:
-            match = regex.match(url.path) if verb == method else None
-            if match:
-                fn = candidate
-                break
+        fn, match = self._find(self.routes, method, url.path)
         if not fn:
             return 404, {"error": "Bulunamadı"}
+        return self._execute(fn, match, method, url, headers, raw, principal, client)
+
+    def _execute(self, fn, match, method, url, headers, raw, principal, client):
         if len(raw) > MAX_BODY:
             return 413, {"error": "Gövde 2 MB sınırını aşıyor"}
         try:
             body, idem = self._body(method, raw)
-            if method != "GET" and not self._same_origin(principal, headers):
+            if principal and method != "GET" and not self.same_origin(principal, headers):
                 return 403, {"error": "Güvenlik doğrulaması başarısız"}
             with self.database.connect() as db:
                 if idem:
@@ -97,7 +123,8 @@ class App:
                             raise crud.Conflict("Bu işlem anahtarı farklı bir istek için zaten kullanılmış")
                         return 200, {**json.loads(seen["response_json"]), "replayed": True}
                 params = {k: int(v) for k, v in match.groupdict().items()}
-                result = fn(Ctx(self, db, principal, params, dict(parse_qsl(url.query)), body))
+                result = fn(Ctx(self, db, principal, params, dict(parse_qsl(url.query)), body,
+                                headers, client, url.query))
                 status, payload = result if isinstance(result, tuple) else (200, result)
                 if idem and isinstance(payload, dict):
                     db.execute("INSERT INTO tdr_idempotency (idem_key, route, body_hash, response_json, created_at) "
@@ -138,7 +165,14 @@ class App:
             idem = (key, hashlib.sha256(canonical.encode()).hexdigest())
         return body, idem
 
-    def _same_origin(self, principal, headers):
+    def expected_origin(self, headers):
+        """Entra'da köken yapılandırılmış dönüş adresinden gelir; yerel modda istekteki Host'tan (KS GRC)."""
+        if self.auth.entra:
+            return self.auth.entra.config.origin
+        scheme = "https" if self.config.cookie_secure else "http"
+        return f"{scheme}://{headers.get('Host')}"
+
+    def same_origin(self, principal, headers):
         """Tarayıcı oturumuyla yapılan değişiklikler yalnızca aynı kökenden kabul edilir."""
         if principal.auth_type == "api_key":
             return True
@@ -148,8 +182,10 @@ class App:
         origin = headers.get("Origin")
         if origin is None:
             return principal.auth_type == "dev"   # yerel geliştirmede curl ve testler
-        scheme = "https" if self.config.cookie_secure else "http"
-        return origin == f"{scheme}://{headers.get('Host')}"
+        if self.auth.entra and (headers.get("Host") or "").lower() != urlparse(
+                self.auth.entra.config.redirect).netloc.lower():
+            return False
+        return origin == self.expected_origin(headers)
 
 
 def guard_readonly(res, body):
@@ -201,6 +237,8 @@ def build(config):
     for mod in loaded:
         if hasattr(mod, "register"):
             mod.register(app)
+    from . import login
+    login.register(app)
     with app.database.connect() as db:
         for mod in loaded:
             if hasattr(mod, "seed"):
@@ -224,13 +262,14 @@ def handler_class(app):
             if length > MAX_BODY:
                 return self._send(413, {"error": "Gövde 2 MB sınırını aşıyor"})
             raw = self.rfile.read(length) if length > 0 else b""
-            if self.command == "GET" and urlparse(self.path).path in ("/", "/index.html"):
-                return self._send(200, Raw(HOME, "text/html; charset=utf-8"))
-            self._send(*app.dispatch(self.command, self.path, self.headers, raw))
+            self._send(*app.dispatch(self.command, self.path, self.headers, raw, self.client_address[0]))
 
         do_GET = do_POST = do_PATCH = _run
 
         def _send(self, status, payload):
+            extra = {}
+            if isinstance(payload, Reply):
+                payload, extra = payload.payload, payload.headers
             content_type = "application/json; charset=utf-8"
             if isinstance(payload, Raw):
                 content_type, text = payload.content_type, payload.content
@@ -258,6 +297,8 @@ def handler_class(app):
                     "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "
                     "connect-src 'self'; img-src 'self' data:; style-src 'self' " + hashes("style") + "; "
                     "style-src-attr 'none'; script-src 'self' " + hashes("script") + "; object-src 'none'"))
+            for name, value in extra.items():
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(raw)
 

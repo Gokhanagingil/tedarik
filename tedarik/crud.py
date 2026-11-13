@@ -100,6 +100,15 @@ def validate(res, data, partial=False):
     return data
 
 
+def check_scope(db, res, principal, record):
+    """Birim Kullanıcısı yalnızca kendi biriminin kaydını yazar (kaynakta `scope` tanımlıysa)."""
+    if principal is None or principal.role != "UNIT_USER" or res.scope is None:
+        return
+    owners = {u for u in res.scope(db, record) if u is not None}
+    if not owners & principal.units:
+        raise Forbidden("Yalnızca kendi biriminizin kayıtlarını değiştirebilirsiniz")
+
+
 def get(db, res, record_id):
     record = one(db, f"SELECT * FROM {res.table} WHERE id=?", (record_id,))
     if not record:
@@ -112,6 +121,7 @@ def insert(db, res, payload, principal=None):
     validate(res, data)
     if res.before_save:
         res.before_save(db, data, None, principal)
+    check_scope(db, res, principal, data)
     now = utcnow()
     for field in ("created_at", "updated_at"):
         if field in res.fields:
@@ -128,6 +138,8 @@ def update(db, res, record_id, payload, principal=None):
     validate(res, data, partial=True)
     if res.before_save:
         res.before_save(db, data, current, principal)
+    check_scope(db, res, principal, current)
+    check_scope(db, res, principal, {**current, **data})
     if "updated_at" in res.fields:
         data["updated_at"] = utcnow()
     sets = ", ".join(f"{field}=?" for field in data)

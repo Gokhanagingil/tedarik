@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: KS GRC uyumu doğrulandı, PostgreSQL temeli kuruldu; sıradaki iş kimlik aktarımı.
+Son güncelleme: 2026-11-13 · Aşama: KS GRC uyumu, PostgreSQL temeli ve kimlik tamamlandı; sıradaki iş Excel.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -42,18 +42,26 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Türkçe arama düzeltildi: `Örnek`, `ÖRNEK`, `ornek` aynı sonucu verir (önceden ASCII dışı büyük harfle başlayan arama iki motorda da boş dönüyordu). `%` ve `_` artık joker sayılmıyor.
   - `requirements.txt`: psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0; hash ile sabit, temiz ortamda doğrulandı.
   - CI: SQLite (ek paketsiz) ve PostgreSQL 16 matrisi.
-- Testler: 30 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor.
+- **Adım 3 (2026-11-13): Kimlik aktarımı.**
+  - KS GRC `identity.py` (değiştirilmeden) ve `entra_auth.py` (K-012 yaması, 3 satır) `tedarik/vendor/` altında; test kaynakla farkı denetler. Uyarlama `session.py` içinde: çerez adları, ortam adları, rol listesi.
+  - `local` modu: parola girişi, 5 dakikada 8 deneme sınırı, ilk girişte zorunlu parola değişimi, çıkış, `python -m tedarik.bootstrap create` ile ilk yönetici. Roller `tdr_user_roles` tablosunda.
+  - `entra` modu: PKCE, MFA bağlamı, `KS.TDR.*` uygulama rolleri; kurumsal modda parola yolları ve kullanıcı açma kapalı; köken yapılandırılmış adresten.
+  - Birim kapsamı: Birim Kullanıcısı yalnızca kendi biriminin angajmanına ve ona bağlı kayıtlara yazar (SLA, olay, değerlendirme, risk, faaliyet, ihtiyaç, teklif). Birimler `tdr_user_units`, yönetici atar.
+  - `/api/me`, `/api/tdr/users` (liste, açma, güncelleme, devre dışı bırakma; devre dışı hesabın oturumu hemen kapanır). Anonim sayfa isteği `/login` sayfasına yönlenir.
+  - Giriş ve parola sayfaları gerçek Chromium'da içerik güvenlik politikası altında denendi.
+  - Belge: `docs/KIMLIK.md` (Entra kaydı, roller, davranış).
+- Testler: 45 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
 
 - **Arayüz yok.** Yalnızca API ve yer tutucu sayfa var.
-- **Oturum sağlayıcısı yok.** Yalnızca yerel `dev` modu ve MCP anahtarı çalışır; `local` ve `entra` modları açılışta durur.
 - **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
 - **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **XLSX yok.** İçe ve dışa aktarma şimdilik CSV (UTF-8, `;` ayraçlı; Excel doğrudan açar).
 - **İçe aktarma yalnızca tedarikçi ana verisi için.** Angajman, katalog, sözleşme aktarımları yok.
-- **Birim bazlı yazma kapsamı yok.** Birim Kullanıcısı tüm angajmanları değiştirebilir.
+- **Kullanıcı yönetimi ekranı yok** (API var; arayüz adım 5).
+- **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
 - **Dağıtım dosyaları yok** (Dockerfile, compose, yedekleme).
 - **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
 - **Türkçe alan etiketleri yok** (KS GRC `/api/metadata` karşılığı).
@@ -62,7 +70,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 1. ~~**KS GRC'yi tam oku ve uyumu doğrula.**~~ Tamamlandı (2026-11-13).
 2. ~~**Veritabanı temeli: PostgreSQL** (K-011).~~ Tamamlandı (2026-11-13).
-3. **Kimlik aktarımı.** `identity.py` ve `entra_auth.py` dosyalarını `tedarik/vendor/` altına al (K-012, K-013); `local` ve `entra` modlarını aç; rolleri Entra uygulama rollerine bağla; birim bazlı yazma kapsamını ekle; giriş hız sınırı; `/api/me`.
+3. ~~**Kimlik aktarımı.**~~ Tamamlandı (2026-11-13).
 4. **Excel.** `xlsx_io.py` aktarımı; XLSX içe ve dışa aktarma; Türkçe alan etiketleri (`/api/tdr/metadata`); uygulamanın kendi ürettiği içe aktarma şablonu; angajman, katalog ve sözleşme aktarımları; gerçek başlıklarla `ALIASES` doğrulaması.
 5. **Arayüz.** KS GRC'nin görsel diliyle (`ui_v2.py` + `ksgrc.js` düzeni): tedarikçi listesi ve filtreler, tedarikçi 360 paneli, angajman, performans, anket, risk ekranları, pano (satır içi SVG grafikler). Her ekran için Playwright duman testi.
 6. **Dağıtım.** KS GRC'nin Dockerfile, compose ve yedekleme düzenini PostgreSQL ile uyarla (`pg_dump` tabanlı yedek, geri yükleme denetimi); CI'a gitleaks, trivy, bandit, pip-audit ekle.

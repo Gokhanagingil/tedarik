@@ -21,6 +21,7 @@ from .. import audit, auth as authz, crud
 from ..db import one, rows, utcnow
 from ..http import API, guard_readonly
 from ..schema import Resource, fk
+from .core import engagement_or_supplier, via
 
 M = "risks"
 WEIGHTS = {"low": Decimal("0.2"), "medium": Decimal("0.4"), "high": Decimal("0.6")}
@@ -173,6 +174,7 @@ def update_risk(c):
     if not body:
         raise crud.Invalid("Güncellenecek alan yok")
     current = crud.get(c.db, RISKS, c.params["id"])
+    crud.check_scope(c.db, RISKS, c.principal, current)
     cleaned = crud.clean(body)
     crud.validate(RISKS, cleaned, partial=True)
     _risk_fields(c.db, cleaned, current, c.principal)
@@ -207,6 +209,7 @@ def contribution(mitigations):
 def assess(c):
     authz.check(c.principal, ASSESSMENTS, "write")
     risk = crud.get(c.db, RISKS, c.params["id"])
+    crud.check_scope(c.db, RISKS, c.principal, risk)
     if risk["status"] in TERMINAL:
         raise crud.Conflict("Yeni değerlendirme için riski yeniden açın")
     if not risk.get("review_date") or not all(risk.get(k) for k in STATEMENT):
@@ -242,6 +245,8 @@ def _action_rules(db, data, current, principal):
 
 
 ACTIONS.before_save = _action_rules
+RISKS.scope = engagement_or_supplier
+ACTIONS.scope = via("supplier_risks", "risk_id")
 
 
 def risk_context(c):

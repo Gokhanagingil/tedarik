@@ -11,7 +11,26 @@ export TEDARIK_AUTH_MODE=dev
 python app.py
 ```
 
-Tarayıcı: `http://127.0.0.1:8090`. `dev` modu yalnızca yerel adreste çalışır; ağa açık çalıştırma için oturum sağlayıcısının eklenmesi gerekir (DURUM.md, adım 2). `TEDARIK_AUTH_MODE` verilmezse uygulama başlamaz; anonim erişim yoktur.
+Tarayıcı: `http://127.0.0.1:8090`. `dev` modu yalnızca yerel adreste çalışır ve oturum açtırmaz. `TEDARIK_AUTH_MODE` verilmezse uygulama başlamaz; anonim erişim yoktur.
+
+## Kimlik modları
+
+| Mod | Kullanım | Giriş |
+| --- | --- | --- |
+| `dev` | Yalnızca geliştirici bilgisayarı | Yok; kullanıcı ve rol `TEDARIK_DEV_USER`, `TEDARIK_DEV_ROLE`, `TEDARIK_DEV_UNITS` |
+| `local` | Pilot | Kullanıcı adı ve parola; ilk girişte parola değişimi; 5 dakikada 8 hatalı denemeden sonra 429 |
+| `entra` | Kurumsal | Microsoft Entra ID, MFA bağlamı zorunlu, rol Entra uygulama rolünden (`KS.TDR.*`) |
+
+İlk yönetici (`local`):
+
+```
+export TEDARIK_AUTH_MODE=local
+umask 077
+python -m tedarik.bootstrap create tdradmin > .first-login
+python app.py
+```
+
+Geçici parolayı `.first-login` dosyasından okuyun, ilk girişte değiştirin, dosyayı silin. Diğer kullanıcıları yönetici `POST /api/tdr/users` ile açar (rol ve birimlerle); yanıttaki geçici parola yalnızca bir kez gösterilir. Entra kurulumu: [docs/KIMLIK.md](docs/KIMLIK.md).
 
 ## Örnek
 
@@ -55,4 +74,8 @@ PostgreSQL testleri her test için ayrı bir şema açar ve test bitince siler. 
 | `TEDARIK_MODULES` | Etkin modüller | `core,performance,surveys,risks,transfer,dashboard` |
 | `TEDARIK_API_KEY` veya `TEDARIK_API_KEY_FILE` | MCP anahtarı (en az 32 karakter) | yok |
 | `TEDARIK_COOKIE_SECURE` | HTTPS arkasında `1` | `0` |
-| `TEDARIK_DEV_USER`, `TEDARIK_DEV_ROLE` | Yerel geliştirmede kullanıcı ve rol | `dev`, `ADMIN` |
+| `TEDARIK_DEV_USER`, `TEDARIK_DEV_ROLE`, `TEDARIK_DEV_UNITS` | `dev` modunda kullanıcı, rol ve birim kimlikleri (virgülle) | `dev`, `ADMIN`, yok |
+| `TEDARIK_ENTRA_TENANT_ID`, `TEDARIK_ENTRA_CLIENT_ID` | Entra kiracı ve uygulama kimliği (UUID) | yok |
+| `TEDARIK_ENTRA_REDIRECT_URI` | Tam HTTPS dönüş adresi, `/auth/entra/callback` ile biter | yok |
+| `TEDARIK_ENTRA_AUTH_CONTEXT` | MFA ilkesine bağlı kimlik doğrulama bağlamı (`c1`…`c99`) | yok |
+| `TEDARIK_ENTRA_CLIENT_SECRET_FILE` | Entra istemci sırrı dosyası (veya `TEDARIK_ENTRA_CLIENT_SECRET`) | yok |

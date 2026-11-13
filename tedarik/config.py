@@ -11,6 +11,7 @@ AUTH_MODES = {"dev", "local", "entra"}
 class Config:
     def __init__(self, env=None):
         env = os.environ if env is None else env
+        self.env = dict(env)
         self.db = env.get("TEDARIK_DB", "tedarik.db")                 # SQLite dosyası (geliştirme, test)
         self.database_url = self._database_url(env)                    # PostgreSQL (üretim) — K-011
         self.db_schema = env.get("TEDARIK_DB_SCHEMA", "")
@@ -20,6 +21,10 @@ class Config:
         self.auth_mode = env.get("TEDARIK_AUTH_MODE", "")
         self.dev_user = env.get("TEDARIK_DEV_USER", "dev")
         self.dev_role = env.get("TEDARIK_DEV_ROLE", "ADMIN")
+        units = env.get("TEDARIK_DEV_UNITS", "")
+        if units and not all(u.strip().isdigit() for u in units.split(",")):
+            raise ValueError("TEDARIK_DEV_UNITS birim kimliklerinin virgülle ayrılmış listesi olmalı")
+        self.dev_units = tuple(int(u) for u in units.split(",") if u.strip())
         self.cookie_secure = env.get("TEDARIK_COOKIE_SECURE", "0") == "1"
         names = [m.strip() for m in env.get("TEDARIK_MODULES", DEFAULT_MODULES).split(",") if m.strip()]
         self.modules = ["core"] + [m for m in names if m != "core"]
@@ -54,6 +59,8 @@ class Config:
             raise ValueError("TEDARIK_AUTH_MODE gerekli (dev | local | entra); anonim erişim açılmaz")
         if self.auth_mode == "dev" and self.host not in LOOPBACK:
             raise ValueError("dev kimlik modu yalnızca yerel adreste (127.0.0.1) çalışır")
+        if self.auth_mode != "entra" and any(k.startswith("TEDARIK_ENTRA_") and v for k, v in self.env.items()):
+            raise ValueError("Entra ayarları için TEDARIK_AUTH_MODE=entra gerekli")   # KS GRC ile aynı
         if not 1 <= self.db_pool_size <= 100:
             raise ValueError("TEDARIK_DB_POOL_SIZE 1-100 arasında olmalı")
         unknown = set(self.modules) - set(KNOWN_MODULES)

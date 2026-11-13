@@ -3,6 +3,7 @@ from .. import auth as authz, crud
 from ..db import one, rows, today, utcnow
 from ..http import API
 from ..schema import RESOURCES, Resource, fk
+from .core import engagement_or_supplier, engagement_units, via
 
 M = "performance"
 
@@ -80,6 +81,11 @@ def _score(db, data, current, principal):
 
 
 MEASUREMENTS.before_save = _measurement
+SLAS.scope = lambda db, record: engagement_units(db, record.get("engagement_id"))
+MEASUREMENTS.scope = via("sla_definitions", "sla_id")
+EVENTS.scope = engagement_or_supplier
+RESOURCES["performance_reviews"].scope = engagement_or_supplier
+RESOURCES["review_scores"].scope = via("performance_reviews", "review_id")
 EVENTS.before_save = _event
 RESOURCES["performance_reviews"].before_save = _review
 RESOURCES["review_scores"].before_save = _score

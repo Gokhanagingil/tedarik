@@ -8,7 +8,8 @@ import json
 from .. import audit, auth as authz, crud
 from ..db import one, rows
 from ..http import API, guard_readonly
-from ..schema import Resource, fk
+from ..schema import RESOURCES, Resource, fk
+from .core import via
 from . import workflow
 
 M = "sourcing"
@@ -50,6 +51,11 @@ DEFINITION = {
         {"action": "cancel", "from": "*", "to": "cancelled"},
     ],
 }
+
+
+NEEDS.scope = lambda db, record: {record.get("org_unit_id")}
+RESOURCES["need_candidates"].scope = via("needs", "need_id")
+RESOURCES["quotes"].scope = via("needs", "need_id")
 
 
 def _selected(db, need_id, extra=""):
@@ -109,6 +115,7 @@ def need_context(c):
 def need_transition(c):
     authz.check(c.principal, NEEDS, "write")
     need = crud.get(c.db, NEEDS, c.params["id"])
+    crud.check_scope(c.db, NEEDS, c.principal, need)
     state = workflow.transition(c.db, need["workflow_instance_id"], c.body["action"], c.principal,
                                 c.body.get("comment"))
     audit.log(c.db, c.principal, "TRANSITION", "needs", need["id"], {"action": c.body["action"], "to": state})

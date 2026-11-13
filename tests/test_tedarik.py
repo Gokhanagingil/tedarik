@@ -45,8 +45,8 @@ class Base(unittest.TestCase):
         env.update(extra)
         return env
 
-    def make(self, role="ADMIN", user="dev", modules=None):
-        extra = {"TEDARIK_DEV_ROLE": role, "TEDARIK_DEV_USER": user}
+    def make(self, role="ADMIN", user="dev", modules=None, units="", **env):
+        extra = {"TEDARIK_DEV_ROLE": role, "TEDARIK_DEV_USER": user, "TEDARIK_DEV_UNITS": units, **env}
         if modules:
             extra["TEDARIK_MODULES"] = modules
         app = build(Config(self.env(**extra)))
@@ -83,7 +83,7 @@ class Guvenlik(Base):
             Config({"TEDARIK_DB": self.path})
         with self.assertRaises(ValueError):
             Config({"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "dev", "TEDARIK_HOST": "0.0.0.0"})
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):        # eksik Entra ayarıyla uygulama açılmaz
             build(Config(self.env(TEDARIK_AUTH_MODE="entra")))
 
     def test_roller(self):
@@ -92,7 +92,7 @@ class Guvenlik(Base):
         self.assertEqual(self.call("GET", "/suppliers", app=viewer)[0], 200)
         self.assertEqual(self.call("POST", "/suppliers", {"code": "X", "name": "X"}, app=viewer)[0], 403)
         self.assertEqual(self.call("GET", "/audit_log", app=viewer)[0], 403)
-        unit_user = self.make(role="UNIT_USER")
+        unit_user = self.make(role="UNIT_USER", units="1")
         self.assertEqual(self.call("POST", "/suppliers", {"code": "X", "name": "X"}, app=unit_user)[0], 403)
         self.assertEqual(self.call("PATCH", "/engagements/1", {"business_owner": "can"}, app=unit_user)[0], 200)
 
@@ -422,7 +422,7 @@ class Anket(Base):
         self.ok("POST", f"/survey_invitations/{invites[0]}/answers", answers)
         self.assertEqual(self.ok("GET", "/audit_log?object_type=survey_invitations")[0]["method"], "ANSWER")
         self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers", answers)[0], 409)
-        other = self.make(role="UNIT_USER", user="mehmet")
+        other = self.make(role="UNIT_USER", user="mehmet", units="1")
         self.assertEqual(self.call("POST", f"/survey_invitations/{invites[1]}/answers", answers, app=other)[0], 403)
         result = self.ok("GET", f"/survey_campaigns/{campaign}/results")
         self.assertEqual((result["invited"], result["answered"], result["response_rate"]), (2, 1, 50.0))
@@ -465,7 +465,7 @@ class KaynakBulma(Base):
                                                       "selected": 1}, app=self.full)
         self.assertTrue(winner["id"])
         self.assertEqual(self.step(need, "award")[0], 200)
-        unit_user = self.make(role="UNIT_USER", modules="core,workflow,sourcing")
+        unit_user = self.make(role="UNIT_USER", modules="core,workflow,sourcing", units="1")
         self.assertEqual(self.step(need, "approve", app=unit_user)[0], 403)
         self.assertEqual(self.step(need, "approve")[1]["state"], "completed")
         context = self.ok("GET", f"/needs/{need}/context", app=self.full)

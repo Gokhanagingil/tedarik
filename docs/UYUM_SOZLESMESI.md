@@ -8,10 +8,10 @@ Amaç: `tedarik` ile `control` (KS GRC) ileride birleşebilsin veya tek uygulama
 | --- | --- | --- | --- |
 | Dil ve çalışma zamanı | Python 3.12, `ThreadingHTTPServer`, web çatısı yok (`app.py`) | Aynı | Uygulandı |
 | Veritabanı | SQLite, WAL, `foreign_keys=ON`, `busy_timeout=15000` (`app.connect`) | SQLite'ta aynı ayarlar; üretimde PostgreSQL (K-011). Test takımı iki motorda | Uygulandı; PostgreSQL bilinçli fark (K-011) |
-| Bağımlılıklar | `requirements.txt`: PyJWT 2.15.1, cryptography 50.0.2, cffi 2.1.1, pycparser 3.12, defusedxml 0.7.1; hash ile sabit, `--only-binary`, Linux CPython 3.12 amd64/arm64 | Aynı kural: psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0 (temiz ortamda `--require-hashes` ile doğrulandı). Kimlik (adım 3) ve XLSX (adım 4) paketleri KS GRC'yle aynı sürüm ve hashle | Kısmen; kalanı adım 3 ve 4 |
+| Bağımlılıklar | `requirements.txt`: PyJWT 2.15.1, cryptography 50.0.2, cffi 2.1.1, pycparser 3.12, defusedxml 0.7.1; hash ile sabit, `--only-binary`, Linux CPython 3.12 amd64/arm64 | Kimlik paketleri KS GRC ile aynı satırlar; ek olarak psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0. Temiz ortamda `--require-hashes` ile doğrulandı. defusedxml adım 4'te | Kısmen; kalanı adım 4 |
 | Tablo tanımı | `TABLES` ve `grc_plus.SCHEMA` sözlükleri, açılışta `ALTER TABLE ADD COLUMN` | `Resource` kaydı, aynı eklemeli evrim; ek olarak sürümlü göç kaydı (`tdr_schema_migrations`) ve tipli alanlar (DATE, TIMESTAMP, DECIMAL) | Uygulandı |
 | Kimlikler | Tamsayı `id`; `code` (tekil), `name`/`title` | Aynı | Uygulandı |
-| Tablo adları | Öneksiz (`controls`, `risks`, `activity_log`, ...) | `tdr_` önekli. İstisna: kimlik tabloları (`users`, `auth_sessions`, `entra_subjects`) KS GRC ile ortaktır (K-013) | Uygulandı; kimlik: adım 3 |
+| Tablo adları | Öneksiz (`controls`, `risks`, `activity_log`, ...) | `tdr_` önekli. İstisna: kimlik tabloları (`users`, `auth_sessions`, `entra_subjects`) KS GRC ile aynı ad ve yapıda (K-013) | Uygulandı |
 | API kalıbı | `/api/<kaynak>`, `/api/<kaynak>/<id>/context` | `/api/tdr/<kaynak>`, `.../context` | Uygulandı |
 | Silme | Uç nokta yok; durum alanıyla kapatma | Aynı | Uygulandı |
 | Hata biçimi | `{"error": "..."}`, Türkçe; beklenmeyen hata `500 Beklenmeyen işlem hatası`, ayrıntı sızdırılmaz (`grc_plus._error`) | Aynı; SQL hatası ayrıntısı artık 500 ile gizlenir | Uygulandı (bu adımda düzeltildi) |
@@ -21,13 +21,13 @@ Amaç: `tedarik` ile `control` (KS GRC) ileride birleşebilsin veya tek uygulama
 | Tekrar koruması | Gövdede `idempotency_key`, `^[A-Za-z0-9_.:-]{8,160}$`; kanonik JSON'un SHA-256'sı; alındı okunmadan önce `BEGIN IMMEDIATE`; ilk yanıt 201, tekrar 200 + `replayed: true`, farklı içerik 409 (`execution_service.record`) | Aynı biçim, aynı kanonik JSON, aynı kilit; tüm POST uç noktalarında | Uygulandı (bu adımda düzeltildi: biçim, kilit, eşzamanlılık testi) |
 | Güvenlik başlıkları | `nosniff`, `no-store`, `DENY`, `no-referrer`, Permissions-Policy; HSTS yalnızca güvenli çerezde | Aynı | Uygulandı |
 | İçerik güvenlik politikası | `default-src 'none'`; satır içi blokların SHA-256 özeti; arayüz betiği ayrı dosya (`/ksgrc.js`, `script-src 'self'`) | Aynı başlık; arayüz de ayrı dosyayla gelecek | Uygulandı; arayüz: adım 5 |
-| Köken denetimi | Oturumlu değişiklikte tek `Origin` başlığı zorunlu ve eşleşmeli; Entra'da beklenen köken yönlendirme adresinden gelir ve `Host` aynı olmalı | Tek başlık ve eşleşme uygulandı; Entra kökeni kimlik aktarımıyla | Uygulandı; Entra: adım 3 |
+| Köken denetimi | Oturumlu değişiklikte tek `Origin` başlığı zorunlu ve eşleşmeli; Entra'da beklenen köken yönlendirme adresinden gelir ve `Host` aynı olmalı | Aynı | Uygulandı |
 | Günlükleme | Sorgu dizgisi yazılmaz (`log_request`) | Aynı | Uygulandı |
-| Yerel kullanıcı ve oturum | PBKDF2-SHA256 600.000 tur, 12 saatlik HttpOnly `SameSite=Strict` çerez, ilk girişte parola değişimi, 5 dakikada 8 hatalı denemeden sonra 429 (`identity.py`, `app.handle_login`) | Dikiş hazır (`auth.py`) | Sonraki adım: 3 |
-| Kurumsal giriş | Tek kiracılı Entra, PKCE, `acrs` kimlik doğrulama bağlamı zorunlu, uygulama rolleri; oturum en fazla 1 saat (`entra_auth.py`) | Dikiş hazır | Sonraki adım: 3 |
-| Çerez adları | `control_grc_session`, `__Host-ksgrc_session`, `__Host-ksgrc_flow` | Aynı ad aynı alan adında KS GRC oturumunu ezer; tedarik kendi adlarını kullanacak (`tedarik_session`, `__Host-tdr_session`, `__Host-tdr_flow`) | Bilinçli fark; adım 3 |
-| Roller | Veritabanında ADMIN, AUDITOR, VIEWER (uygulanmıyor). Entra uygulama rolleri `KS.GRC.Admin`, `KS.GRC.Auditor`. **KS GRC denetçisi kayıt yazar**; yönetim ve Excel yalnızca Admin | Beş rol; tedarik denetçisi salt okur. Entra rol değerleri `KS.TDR.Admin`, `KS.TDR.SupplierManager`, `KS.TDR.UnitUser`, `KS.TDR.Auditor`, `KS.TDR.Viewer` (K-012). `KS.GRC.*` rolleri tedarikte yetki vermez | Doğrulandı; uygulama: adım 3 |
-| Rol eşlemesi kodu | `entra_auth.verify` iki rolü sabit kodlar; başka rol taşıyan token reddedilir | Kopya dosyada küçük, işaretli bir yama gerekir; KS GRC'ye geriye uyumlu öneri yazıldı (K-012) | Bilinçli fark; adım 3 |
+| Yerel kullanıcı ve oturum | PBKDF2-SHA256 600.000 tur, 12 saatlik HttpOnly `SameSite=Strict` çerez, ilk girişte parola değişimi, 5 dakikada 8 hatalı denemeden sonra 429 (`identity.py`, `app.handle_login`) | `identity.py` kopyası değiştirilmeden; aynı akış, aynı sınır; `bootstrap` komutu | Uygulandı |
+| Kurumsal giriş | Tek kiracılı Entra, PKCE, `acrs` kimlik doğrulama bağlamı zorunlu, uygulama rolleri; oturum en fazla 1 saat (`entra_auth.py`) | `entra_auth.py` kopyası (K-012 yaması); aynı doğrulamalar; kurumsal modda parola yolları ve kullanıcı açma 403 | Uygulandı |
+| Çerez adları | `control_grc_session`, `__Host-ksgrc_session`, `__Host-ksgrc_flow` | `tedarik_session`, `__Host-tdr_session`, `__Host-tdr_flow` (aynı alan adında KS GRC oturumunu ezmemek için) | Bilinçli fark; uygulandı |
+| Roller | Veritabanında ADMIN, AUDITOR, VIEWER (uygulanmıyor). Entra uygulama rolleri `KS.GRC.Admin`, `KS.GRC.Auditor`. **KS GRC denetçisi kayıt yazar**; yönetim ve Excel yalnızca Admin | Beş rol; tedarik denetçisi salt okur. Entra rol değerleri `KS.TDR.Admin`, `KS.TDR.SupplierManager`, `KS.TDR.UnitUser`, `KS.TDR.Auditor`, `KS.TDR.Viewer` (K-012); birden çok rolde en yetkilisi. `KS.GRC.*` rolleri tedarikte yetki vermez. Yerel modda rol `tdr_user_roles` | Uygulandı |
+| Rol eşlemesi kodu | `entra_auth.verify` iki rolü sabit kodlar; başka rol taşıyan token reddedilir | Kopya dosyada 3 satırlık işaretli yama (`tedarik/vendor/PATCHES.md`); test kaynakla farkı denetler | Bilinçli fark; uygulandı |
 | Risk puanlama | 1-5 × 1-5, iştah 1-25, katkı %20/%40/%60, kısmi yarım, toplam en çok %100, `Decimal` ile hesap (`risk_management.assess`) | Aynı, `Decimal` ile | Uygulandı |
 | Risk ifadesi | `cause`, `risk_event`, `consequence`, `owner`, `entity_name`; olasılık ve etki risk kaydında | Aynı alanlar; etkilenen varlık `supplier_id` ve `engagement_id` | Uygulandı (bu adımda eklendi) |
 | Risk durumu ve strateji | `status`: open, in_treatment, accepted, closed; `response_strategy`: mitigate, avoid, transfer, accept; `review_date` | Aynı kodlar ve alan adları | Uygulandı (bu adımda düzeltildi: `treating`, `strategy`, `review_due`) |
@@ -43,7 +43,7 @@ Amaç: `tedarik` ile `control` (KS GRC) ileride birleşebilsin veya tek uygulama
 | Arayüz | `ui_v2.py` kabuk + `ksgrc.js`: koyu kenar menü (244 px), sağda boyutlandırılabilir detay paneli (540 px), kartlar, CSS halka göstergeler, rozetler, `MENU`/`COLUMNS`/`FORM` tabloları | Yer tutucu sayfa | Sonraki adım: 5 |
 | Ortam değişkenleri | `CONTROL_*`; `CONTROL_AUTH_MODE` varsayılanı `local` | `TEDARIK_*`; kimlik modu zorunlu, varsayılan yok | Bilinçli fark (daha sıkı) |
 | Dağıtım | `python:3.12-alpine` özetle sabit, UID 10001, salt okunur kök, `cap_drop: ALL`, `no-new-privileges`, tmpfs, `127.0.0.1:18080`; kurumsal compose'da dosya tabanlı sırlar, `pids_limit`, `mem_limit`; nginx örneği; `backup.py` | Yok; tedarik `127.0.0.1:18090` kullanacak | Sonraki adım: 6 |
-| Testler | `unittest` (77 test), Playwright 1.57.0 duman testi, gitleaks 8.30.1, trivy 0.76.2, bandit, pip-audit, ZAP DAST | `unittest` (30 test, SQLite ve PostgreSQL'de) | Kısmen; adım 5 ve 6 |
+| Testler | `unittest` (77 test), Playwright 1.57.0 duman testi, gitleaks 8.30.1, trivy 0.76.2, bandit, pip-audit, ZAP DAST | `unittest` (45 test, SQLite ve PostgreSQL'de) | Kısmen; adım 5 ve 6 |
 | MCP sözleşmesi | `docs/MCP_CONTRACT_AND_ACCEPTANCE.md`: katalog okuma, kanıt yükleme, sonuç yazma, provenance, `collection_status` | Tedarik sözleşmesi yazılacak | Sonraki adım: 8 |
 
 ## Aktarım kuralı
@@ -55,8 +55,8 @@ KS GRC modülleri yeniden yazılmaz. `tedarik/vendor/` altına aynen kopyalanır
 | Dosya | Aynen kopyalanabilir mi | Not |
 | --- | --- | --- |
 | `xlsx_io.py` | Evet | Yalnızca `defusedxml` ister; veritabanına dokunmaz |
-| `identity.py` | Evet, sarmalayıcıyla | Çerez adları modül değişkeni (sarmalayıcı değiştirir). SQL'i SQLite'a özgü (`PRAGMA`, `?`, `lastrowid`); PostgreSQL'de veritabanı katmanının uyum bağlantısıyla çalışır. Giriş sayfaları KS GRC adını taşır; tedarik kendi sayfalarını sunar |
-| `entra_auth.py` | Küçük yamayla | Rol listesi ve `CONTROL_*` adları sabit. `configure()` ortam sözlüğü aldığı için ad çevirisi sarmalayıcıda yapılır; rol listesi için yama gerekir (K-012) |
+| `identity.py` | Evet, sarmalayıcıyla (aktarıldı) | Çerez adları modül değişkeni (sarmalayıcı değiştirir). SQL'i SQLite'a özgü (`PRAGMA`, `?`, `lastrowid`); PostgreSQL'de veritabanı katmanının uyum bağlantısıyla çalışır. Giriş sayfaları KS GRC adını taşır; tedarik kendi sayfalarını sunar |
+| `entra_auth.py` | Küçük yamayla (aktarıldı) | Rol listesi ve `CONTROL_*` adları sabit. `configure()` ortam sözlüğü aldığı için ad çevirisi sarmalayıcıda yapılır; rol listesi için yama gerekir (K-012) |
 | `backup.py` | Hayır | Tablo adları (`audits`, `controls`, `evidence`) ve `control.db` sabit; düzen örnek alınır |
 | `grc_excel.py`, `grc_plus.py`, `risk_management.py`, `execution_service.py` | Hayır | `app` modülüne ve KS GRC tablolarına bağlı; kurallar karşılık olarak uygulanır |
 
