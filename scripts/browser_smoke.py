@@ -75,6 +75,9 @@ def exercise(page, out, base, errors):
         expect(page.locator("#pageTitle")).not_to_have_text("Bir sorun oluştu")
         expect(page.locator("#content .notice.bad")).to_have_count(0)
         checks.append("ekran:" + key)
+    go(page, "schedule", "Takvim")
+    expect(page.locator("#content")).to_contain_text("Değerlendirme ve anket takvimi")
+    checks.append("takvim")
     # tedarikçi 360
     go(page, "r/suppliers", "Tedarikçiler")
     page.locator("#tableSearch").fill("örnek")

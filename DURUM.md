@@ -74,7 +74,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Klavye: `/` arama, `Esc` panel ve pencere kapatma, satırlarda Enter. Dar ekran düzeni.
   - `scripts/browser_smoke.py`: gerçek Chromium'da her ekran ve ana akışlar; konsol hatası kabul edilmez. CI'da ayrı iş.
 - **Adım 6 (2026-11-13): Dağıtım.** `Dockerfile` (KS GRC düzeni), `deploy/compose.yaml` (PostgreSQL 16 iç ağda, uygulama yalnızca 127.0.0.1:18090, kaynak sınırları, salt okunur, root olmayan), `deploy/deploy.sh` (sırları sunucuda üretir, önce yedek, ilk yönetici, sağlık denetimi, diğer konteynerlerin değişmediğini doğrular), `deploy/backup.sh` (günlük pg_dump, özet, 14 gün), `.github/workflows/deploy.yml` (elle başlatılır, önce testler). Yan yana çalışan ilgisiz bir konteynerle prova edildi: kurulum, güncelleme, yedek, geri yükleme, Docker yeniden başlatması. Belge: `docs/DAGITIM.md`.
-- Testler: 60 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
+- **Adım 7 (2026-11-13): Periyodik işler.** `policies` tablosu çekirdeğe taşındı (her kurulumda var). Kritiklik seviyesine göre değerlendirme ve anket sıklığı (`review.cadence_months`, `survey.cadence_months`) ve uyarı süresi politikadır; yönetici arayüzden değiştirir. `GET /api/tdr/schedule` ve "Takvim" ekranı: geciken ve yaklaşan değerlendirme, anket ve risk gözden geçirmeleri; pano uyarıları. Not: hatırlatma e-postası yok (uygulama dışarıya ileti göndermez; KS GRC ile aynı ilke).
+- CI düzeltildi: iş akışı dosyasındaki YAML hatası yüzünden adım 3'ten beri CI işleri hiç başlamamıştı. Paketsiz kurulumda Entra modu artık anlaşılır bir hatayla durur.
+- Testler: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
@@ -97,7 +99,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 4a. ~~**Anket motoru**~~ Tamamlandı (2026-11-13). Not: anket tabloları değişti; eski iskelet veritabanı varsa silinip yeniden açılmalı (üretim verisi yok).
 5. ~~**Arayüz.**~~ Tamamlandı (2026-11-13).
 6. ~~**Dağıtım.**~~ Tamamlandı (2026-11-13). Kalan: CI'a gitleaks, trivy, bandit, pip-audit; kalıcı alan adı ve TLS.
-7. **Periyodik işler.** Kritiklik seviyesine göre değerlendirme, anket ve risk gözden geçirme takvimi; geciken işler panosu.
+7. ~~**Periyodik işler.**~~ Tamamlandı (2026-11-13).
 8. **MCP sözleşmesi.** `docs/MCP_SOZLESMESI.md`; KS GRC'ye kanıt akışı için örnek otomatik kontroller.
 9. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 

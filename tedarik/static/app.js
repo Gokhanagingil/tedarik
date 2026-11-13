@@ -94,7 +94,7 @@ const META = {
   can: need => !!S.meta.permissions[need],
 };
 const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled']);
-const LONG = new Set(['description', 'cause', 'risk_event', 'consequence', 'treatment', 'note', 'comment', 'intro', 'outro',
+const LONG = new Set(['value_json', 'description', 'cause', 'risk_event', 'consequence', 'treatment', 'note', 'comment', 'intro', 'outro',
   'help', 'rationale', 'resolution', 'decision_rationale', 'exception_rationale', 'text']);
 const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met']);
 const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled']);
@@ -322,7 +322,7 @@ function showErrors(form, errors, message) {
 }
 const AUTO = new Set(['created_at', 'updated_at', 'id']);
 function editableFields(res, {only, skip = []} = {}) {
-  return (META.def(res).fields || []).filter(f => !f.readonly && !AUTO.has(f.name) && !f.name.endsWith('_json') && !skip.includes(f.name) && (!only || only.includes(f.name)));
+  return (META.def(res).fields || []).filter(f => !f.readonly && !AUTO.has(f.name) && (!f.name.endsWith('_json') || res === 'policies') && !skip.includes(f.name) && (!only || only.includes(f.name)));
 }
 /** Kayıt formu: oluşturma ve düzenleme. Yalnızca değişen alanlar gönderilir. */
 async function recordForm(res, record = null, {defaults = {}, only, skip, title, onsaved, extra} = {}) {
@@ -376,14 +376,14 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 
 // ------------------------------------------------------------------ menü ve ekran tanımları
 const MENU = [
-  ['GENEL', [['home', '▦', 'Genel Bakış'], ['my-surveys', '✎', 'Anketlerim']]],
+  ['GENEL', [['home', '▦', 'Genel Bakış'], ['schedule', '◷', 'Takvim'], ['my-surveys', '✎', 'Anketlerim']]],
   ['TEDARİK', [['r/suppliers', '◉'], ['r/engagements', '⇄'], ['r/contracts', '▤'], ['r/catalog_items', '◫']]],
   ['PERFORMANS', [['r/sla_definitions', '◷'], ['r/sla_measurements', '✓'], ['r/performance_events', '⚑'], ['r/performance_reviews', '★']]],
   ['RİSK', [['r/supplier_risks', '△'], ['r/risk_actions', '↗']]],
   ['ANKET', [['r/survey_templates', '▧'], ['r/survey_campaigns', '✉']]],
   ['KAYNAK BULMA', [['r/needs', '◇'], ['r/quotes', '₺']]],
   ['VERİ', [['transfer', '⇅', 'Aktarım', 'manage'], ['r/import_batches', '☰']]],
-  ['YÖNETİM', [['r/org_units', '⌂'], ['r/supplier_types', '◈'], ['r/review_criteria', '☆'], ['users', '⚙', 'Kullanıcılar', 'admin'], ['r/audit_log', '≡']]],
+  ['YÖNETİM', [['r/org_units', '⌂'], ['r/supplier_types', '◈'], ['r/review_criteria', '☆'], ['r/policies', '⚖'], ['users', '⚙', 'Kullanıcılar', 'admin'], ['r/audit_log', '≡']]],
 ];
 const COLUMNS = {
   suppliers: ['code', 'name', 'tier', 'status', 'segment', 'owner', 'city'],
@@ -405,6 +405,7 @@ const COLUMNS = {
   survey_campaigns: ['code', 'name', 'template_id', 'subject', 'audience', 'status', 'closes_on'],
   audit_log: ['occurred_at', 'actor', 'method', 'object_type', 'object_id', 'description'],
   import_batches: ['created_at', 'kind', 'source_system', 'filename', 'status', 'created_by'],
+  policies: ['code', 'value_json', 'description'],
   needs: ['code', 'title', 'org_unit_id', 'requester', 'needed_by'], quotes: ['need_id', 'supplier_id', 'amount', 'currency', 'received_at'],
 };
 const FILTERS = {
@@ -425,6 +426,7 @@ const DESCRIPTIONS = {
   survey_campaigns: 'Şablonun uygulanması: değerlendirilen tedarikçiler, davetliler, yanıtlar ve sonuçlar.',
   audit_log: 'Her yazma işleminin değiştirilemez izi.', import_batches: 'İçe aktarım geçmişi ve satır sonuçları.',
   org_units: 'İş birimleri. Birim Kullanıcıları yalnızca kendi birimlerinin kayıtlarına yazar.',
+  policies: 'Süreç kuralları kodda değil burada durur: değerlendirme ve anket sıklığı, uyarı süresi, teklif sayısı. Değer JSON biçimindedir.',
 };
 const RELATED = {
   engagements: [['sla_definitions', 'engagement_id'], ['responsibilities', 'engagement_id'], ['supplier_risks', 'engagement_id'],
@@ -568,7 +570,7 @@ async function openRecord(res, id) {
   if (DETAILS[res]) return DETAILS[res](id);
   const def = META.def(res); await loadRefs(res);
   let record; try { record = await api(`${res}/${id}`); } catch (e) { toast(e.message, false); return; }
-  const fields = def.fields.filter(f => !f.name.endsWith('_json') && f.name !== 'body_hash');
+  const fields = def.fields.filter(f => (!f.name.endsWith('_json') || res === 'policies') && f.name !== 'body_hash');
   const body = h('div', {}, section('Bilgiler', kv(fields.map(f => [f.label, display(res, f.name, record[f.name])]))));
   for (const [child, key] of RELATED[res] || []) {
     if (!META.def(child)) continue;
@@ -625,6 +627,7 @@ async function home() {
     h('div', {class: 'panel'}, h('h3', {text: 'Tedarikçi tipleri'}), barChart(sup.by_type.filter(x => x.count).slice(0, 8).map(x => ({label: x.key, value: x.count, color: 1})), {format: v => fmt.num(v, 0)})),
     data.events_90d ? h('div', {class: 'panel'}, h('h3', {text: 'Performans olayları (son 3 ay)'}), barChart(data.events_90d.map(x => ({label: META.option('performance_events', 'event_type', x.key), value: x.count,
       color: x.key === 'praise' ? 1 : 3})), {format: v => fmt.num(v, 0), onclick: i => Router.go('r/performance_events')})) : null);
+  const due = await api('schedule').catch(() => null);
   const attention = [];
   if (sup.without_owner) attention.push([`${sup.without_owner} aktif tedarikçinin ilişki sahibi yok`, 'r/suppliers?owner__null=1&status=active']);
   if (data.engagements.without_owner) attention.push([`${data.engagements.without_owner} aktif angajmanın iş sahibi yok`, 'r/engagements?business_owner__null=1&status=active']);
@@ -632,6 +635,12 @@ async function home() {
   if (data.risks?.above_appetite) attention.push([`${data.risks.above_appetite} risk iştah eşiğinin üstünde`, 'r/supplier_risks']);
   if (data.risks?.review_overdue) attention.push([`${data.risks.review_overdue} riskin gözden geçirmesi gecikti`, `r/supplier_risks?review_date__lte=${today(-1)}`]);
   if (data.risks?.unassessed) attention.push([`${data.risks.unassessed} açık risk henüz değerlendirilmedi`, 'r/supplier_risks?status=open']);
+  if (due) {
+    const sm = due.summary; const lateReviews = (sm.review_overdue || 0); const lateSurveys = (sm.survey_overdue || 0);
+    if (lateReviews) attention.unshift([`${lateReviews} tedarikçinin performans değerlendirmesi gecikti`, 'schedule']);
+    if (lateSurveys) attention.push([`${lateSurveys} tedarikçinin memnuniyet anketi gecikti`, 'schedule']);
+    if ((sm.review_due_soon || 0) + (sm.survey_due_soon || 0)) attention.push([`${(sm.review_due_soon || 0) + (sm.survey_due_soon || 0)} değerlendirme veya anket ${due.warning_days} gün içinde`, 'schedule']);
+  }
   if (S.mySurveys) attention.unshift([`Yanıtlamanızı bekleyen ${S.mySurveys} anket var`, 'my-surveys']);
   const todo = h('div', {class: 'panel'}, h('h3', {text: 'Dikkat gerektirenler'}), attention.length ? h('ul', {class: 'attention'}, attention.map(([text, link]) =>
     h('li', {}, h('span', {text}), h('a', {href: '#/' + link, class: 'btn ghost small', text: 'Aç →'})))) : h('div', {class: 'notice success', text: 'Bekleyen bir konu yok.'}));
@@ -1214,6 +1223,30 @@ async function respond(id) {
     h('span', {class: 'muted small', text: 'Gönderdikten sonra değiştiremezsiniz.'}))));
 }
 
+// ------------------------------------------------------------------ takvim
+async function schedulePage(params) {
+  const all = params.get('all') === '1';
+  setPage('Takvim', 'Kritiklik seviyesine göre performans değerlendirmesi ve memnuniyet anketi takvimi, gözden geçirmesi gelen riskler. Sıklıklar Yönetim → Politika Parametreleri\'nde.',
+    [h('a', {class: 'btn secondary', href: all ? '#/schedule' : '#/schedule?all=1', text: all ? 'Yalnızca geciken ve yaklaşanlar' : 'Tüm tedarikçiler'})]);
+  const data = await api('schedule' + (all ? '?all=1' : '')); const sm = data.summary;
+  const kindLabel = {review: 'Performans değerlendirmesi', survey: 'Memnuniyet anketi'};
+  const stateCell = i => i.state === 'overdue' ? pill(`${-i.days} gün gecikti`, 'bad') : i.state === 'due_soon' ? pill(`${i.days} gün kaldı`, 'warn') : pill('Zamanında', 'good');
+  const action = i => i.kind === 'review' && META.def('performance_reviews')?.can_write ? btn('Değerlendirme gir', () => createRecord('performance_reviews', {supplier_id: i.supplier_id}), 'ghost small')
+    : i.kind === 'survey' && META.def('survey_campaigns')?.can_write ? h('a', {class: 'btn ghost small', href: '#/r/survey_campaigns', text: 'Kampanyalar'}) : '';
+  const cards = h('div', {class: 'cards'},
+    metric('Geciken değerlendirme', String(sm.review_overdue || 0), `${sm.review_due_soon || 0} tanesi ${data.warning_days} gün içinde`, sm.review_overdue ? 'bad' : 'good'),
+    metric('Geciken anket', String(sm.survey_overdue || 0), `${sm.survey_due_soon || 0} tanesi ${data.warning_days} gün içinde`, sm.survey_overdue ? 'bad' : 'good'),
+    metric('Gözden geçirmesi geçen risk', String(sm.risk_overdue || 0), `${sm.risk_due_soon || 0} tanesi yaklaşıyor`, sm.risk_overdue ? 'warn' : 'good'));
+  const table = data.items.length ? h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Tedarikçi', 'Kritiklik', 'İş', 'Son yapılan', 'Vade', 'Durum', ''].map(t => h('th', {text: t})))),
+    h('tbody', {}, data.items.map(i => h('tr', {}, h('td', {class: 'cell-primary'}, h('a', {href: '#/r/suppliers/' + i.supplier_id, text: i.name}), h('span', {class: 'cell-sub', text: i.owner ? 'Sahip: ' + i.owner : 'İlişki sahibi yok'})),
+      h('td', {}, display('suppliers', 'tier', i.tier)), h('td', {text: `${kindLabel[i.kind]} · ${i.cadence_months} ayda bir`}),
+      h('td', {}, i.never ? pill('Hiç yapılmadı', 'warn') : fmt.date(i.last)), h('td', {text: fmt.date(i.due)}), h('td', {}, stateCell(i)), h('td', {}, action(i)))))))
+    : empty('Geciken veya yaklaşan iş yok', all ? '' : 'Tüm tedarikçileri görmek için yukarıdaki düğmeyi kullanın.');
+  const risks = data.risks.length ? h('ul', {class: 'mini'}, data.risks.map(r => h('li', {class: 'link', tabindex: '0', onclick: () => openRecord('supplier_risks', r.id)},
+    h('strong', {text: r.code + ' · ' + r.title}), ' ', stateCell(r), h('span', {class: 'cell-sub', text: `Gözden geçirme ${fmt.date(r.review_date)} · ${r.owner}`})))) : h('div', {class: 'muted small', text: 'Gözden geçirmesi gelen risk yok'});
+  content(cards, h('div', {class: 'panel'}, h('h3', {text: 'Değerlendirme ve anket takvimi'}), table), data.risks ? h('div', {class: 'panel'}, h('h3', {text: 'Risk gözden geçirmeleri'}), risks) : '');
+}
+
 // ------------------------------------------------------------------ aktarım
 function importSummary(sum) {
   const labels = {total: 'Satır', create: 'Yeni', update: 'Güncellenecek', skip: 'Değişmeyen', review: 'İnceleme', error: 'Hatalı'};
@@ -1338,6 +1371,7 @@ async function render() {
     else if (key === 'templates' && parts[1]) await templateBuilder(Number(parts[1]));
     else if (key === 'surveys' && parts[1]) await campaignPage(Number(parts[1]), params.get('tab'));
     else if (key === 'my-surveys') await mySurveys();
+    else if (key === 'schedule') await schedulePage(params);
     else if (key === 'respond' && parts[1]) await respond(Number(parts[1]));
     else if (key === 'transfer') await transferPage();
     else if (key === 'users') await usersPage();

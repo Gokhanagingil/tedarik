@@ -83,7 +83,7 @@ class Guvenlik(Base):
             Config({"TEDARIK_DB": self.path})
         with self.assertRaises(ValueError):
             Config({"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "dev", "TEDARIK_HOST": "0.0.0.0"})
-        with self.assertRaises(ValueError):        # eksik Entra ayarıyla uygulama açılmaz
+        with self.assertRaises((ValueError, RuntimeError)):   # eksik ayar veya paketle Entra modu açılmaz
             build(Config(self.env(TEDARIK_AUTH_MODE="entra")))
 
     def test_roller(self):
@@ -263,6 +263,30 @@ class Arayuz(Base):
         self.assertEqual([c["code"] for c in found], ["K2", "K3"])
         self.assertEqual([s["code"] for s in self.ok("GET", "/suppliers?owner__null=1&order=-code")][:1], ["SK3"])
         self.assertEqual(self.call("GET", "/contracts?order=yok")[0], 400)
+
+
+class Takvim(Base):
+    def test_kritiklige_gore_degerlendirme_ve_anket_takvimi(self):
+        from datetime import date, timedelta
+        old = (date.today() - timedelta(days=400)).isoformat()
+        critical = self.ok("POST", "/suppliers", {"code": "K", "name": "Kritik A.Ş.", "tier": "critical"})["id"]
+        standard = self.ok("POST", "/suppliers", {"code": "S", "name": "Standart Ltd.", "tier": "standard"})["id"]
+        self.ok("POST", "/performance_reviews", {"supplier_id": critical, "period_start": old, "period_end": old})
+        with self.db() as db:          # standart tedarikçi 2 yıl önce açılmış olsun
+            db.execute("UPDATE tdr_suppliers SET created_at=? WHERE id=?", ((date.today() - timedelta(days=800)).isoformat()
+                                                                           + "T00:00:00+00:00", standard))
+        due = self.ok("GET", "/schedule")
+        overdue = {(i["code"], i["kind"]) for i in due["items"] if i["state"] == "overdue"}
+        self.assertIn(("K", "review"), overdue)               # 6 ayda bir; son değerlendirme 400 gün önce
+        self.assertIn(("S", "review"), overdue)               # hiç değerlendirilmedi, 24 ay geçti
+        self.assertTrue(next(i for i in due["items"] if i["code"] == "S")["never"])
+        self.assertEqual(due["summary"]["review_overdue"], 2)
+        policy = next(p for p in self.ok("GET", "/policies") if p["code"] == "review.cadence_months")
+        self.ok("PATCH", f"/policies/{policy['id']}", {"value_json": '{"critical": 24, "important": 24, "standard": 36}'})
+        self.assertEqual(self.ok("GET", "/schedule")["summary"]["review_overdue"], 0)    # kural veriyle değişti
+        self.assertEqual(self.call("PATCH", f"/policies/{policy['id']}", {"value_json": "{bozuk"})[0], 400)
+        self.assertEqual(self.call("PATCH", f"/policies/{policy['id']}", {"value_json": "1"},
+                                   app=self.make(role="SUPPLIER_MANAGER"))[0], 403)
 
 
 class Cekirdek(Base):

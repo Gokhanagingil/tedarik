@@ -3,6 +3,8 @@
 Temel ayrım: Tedarikçi tekil tüzel kişidir (VKN ile). "Hangi birim, hangi ürün/hizmeti, kimin için,
 kimin sahipliğinde alıyor" bilgisi Angajman kaydında durur. Performans, anket ve risk angajmana bağlanır.
 """
+import json
+
 from .. import audit, auth as authz, crud
 from ..db import one, rows
 from ..http import API
@@ -10,6 +12,27 @@ from ..schema import RESOURCES, Resource, fk
 
 M = "core"
 ACTIVE = "INTEGER NOT NULL DEFAULT 1"
+
+POLICIES = Resource("policies", "Politika Parametreleri", {
+    "code": "TEXT NOT NULL UNIQUE", "value_json": "TEXT NOT NULL", "description": "TEXT"},
+    module=M, write="admin", search=("code", "description"))
+
+
+def policy(db, code, default=None):
+    """Süreç kuralı parametresi (ör. gözden geçirme sıklığı). Kod değişmeden yönetici değiştirir."""
+    row = one(db, "SELECT value_json FROM tdr_policies WHERE code=?", (code,))
+    return json.loads(row["value_json"]) if row else default
+
+
+def _policy_rules(db, data, current, principal):
+    if "value_json" in data:
+        try:
+            json.loads(data["value_json"])
+        except (TypeError, ValueError):
+            raise crud.Invalid("Değer geçerli JSON olmalı (ör. 3 veya {\"critical\": 6})") from None
+
+
+POLICIES.before_save = _policy_rules
 
 Resource("org_units", "Birimler", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "parent_id": fk("org_units", False),
@@ -191,6 +214,18 @@ STARTER_TYPES = (("HW", "Donanım"), ("SW", "Yazılım ve Lisans"), ("CLOUD", "B
                  ("TELCO", "Telekom"), ("FACILITY", "Tesis ve Veri Merkezi"))
 
 
+DEFAULT_POLICIES = (
+    ("review.cadence_months", {"critical": 6, "important": 12, "standard": 24},
+     "Kritiklik seviyesine göre performans değerlendirmesi sıklığı (ay)"),
+    ("survey.cadence_months", {"critical": 12, "important": 12, "standard": 24},
+     "Kritiklik seviyesine göre memnuniyet anketi sıklığı (ay)"),
+    ("schedule.warning_days", 30, "Yaklaşan iş olarak gösterilecek gün sayısı"),
+)
+
+
 def seed(db):
+    for code, value, description in DEFAULT_POLICIES:     # öneri; yönetici Politika Parametreleri'nden değiştirir
+        db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                   (code, json.dumps(value), description))
     for code, name in STARTER_TYPES:   # başlangıç önerisi; kurumun gerçek tip listesiyle değiştirilecek
         db.execute("INSERT INTO tdr_supplier_types (code, name) VALUES (?,?) ON CONFLICT DO NOTHING", (code, name))

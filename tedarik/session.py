@@ -29,7 +29,11 @@ ENV_MAP = {   # TEDARIK_* -> KS GRC entra_auth.configure() adları
 
 
 def entra_provider(config):
-    from .vendor import entra_auth
+    try:
+        from .vendor import entra_auth
+    except ImportError:
+        raise RuntimeError("Entra modu için PyJWT ve cryptography kurulmalı: "
+                           "python -m pip install --require-hashes --only-binary=:all: -r requirements.txt") from None
     entra_auth.ROLES = tuple(ENTRA_ROLES)          # K-012: tedarik rolleri, öncelik sırasıyla
     entra_auth.FLOW_COOKIE = FLOW_COOKIE
     env = {"CONTROL_AUTH_MODE": "entra", "CONTROL_COOKIE_SECURE": "1" if config.cookie_secure else "0"}

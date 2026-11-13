@@ -28,9 +28,6 @@ Resource("workflow_history", "İş Akışı Geçmişi", {
     "action": "TEXT NOT NULL", "actor": "TEXT NOT NULL", "at": "TIMESTAMP NOT NULL", "comment": "TEXT"},
     module=M, api=("list",), search=("action", "actor"), immutable=True)
 
-Resource("policies", "Politika Parametreleri", {
-    "code": "TEXT NOT NULL UNIQUE", "value_json": "TEXT NOT NULL", "description": "TEXT"},
-    module=M, write="admin", search=("code", "description"))
 
 
 def _definition_rules(db, data, current, principal):
@@ -55,9 +52,7 @@ def guard(name):
     return register
 
 
-def policy(db, code, default=None):
-    row = one(db, "SELECT value_json FROM tdr_policies WHERE code=?", (code,))
-    return json.loads(row["value_json"]) if row else default
+from .core import policy  # noqa: E402,F401  (politikalar çekirdekte: tüm modüller kullanır)
 
 
 def _spec(db, definition_id):
