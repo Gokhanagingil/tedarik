@@ -517,14 +517,14 @@ class Aktarim(Base):
         refs = self.ok("GET", f"/source_refs?supplier_id={supplier}")
         self.assertEqual((refs[0]["source_system"], refs[0]["external_id"]), ("sap", "100"))
         again = self.send()                                              # aynı dosya: çoğaltma olmaz
-        self.assertEqual((again["create"], again["update"]), (0, 2))
+        self.assertEqual((again["create"], again["update"], again["skip"]), (0, 0, 2))
         self.assertEqual(len(self.ok("GET", "/suppliers")), 3)
 
     def test_disa_aktarim_formul_enjeksiyonunu_etkisizlestirir(self):
         self.ok("POST", "/suppliers", {"code": "S9", "name": "=HYPERLINK(\"http://x\")"})
         status, raw = self.call("GET", "/export/suppliers")
         self.assertEqual(status, 200)
-        self.assertTrue(raw.content.startswith("\ufeffid;code;name"))
+        self.assertTrue(raw.content.startswith("\ufeffKayıt No;Kod;Ad"))
         self.assertIn("'=HYPERLINK", raw.content)
 
 

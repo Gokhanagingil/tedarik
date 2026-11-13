@@ -29,7 +29,7 @@ def cookie_of(reply):
 class KopyaDosyalar(unittest.TestCase):
     @unittest.skipUnless((CONTROL / "identity.py").exists(), "../control yok")
     def test_kopyalar_kaynakla_ayni(self):
-        for name, allowed in (("identity.py", 0), ("entra_auth.py", 3)):
+        for name, allowed in (("identity.py", 0), ("entra_auth.py", 3), ("xlsx_io.py", 0)):
             ours = (ROOT / "tedarik" / "vendor" / name).read_text("utf-8").splitlines()[1:]
             theirs = (CONTROL / name).read_text("utf-8").splitlines()
             changed = [line for line in ours if line not in theirs]

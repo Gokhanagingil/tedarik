@@ -9,6 +9,10 @@ diff <(tail -n +2 tedarik/vendor/entra_auth.py) ../control/entra_auth.py  # yaln
 
 `tests/test_kimlik.py` bu iki karşılaştırmayı `../control` klasörü varsa otomatik yapar.
 
+## xlsx_io.py
+
+Yama yok. `tedarik/modules/transfer.py` yalnızca `read_xlsx` ve `make_xlsx` işlevlerini çağırır; sınırlar (12 MB, 5.000 satır, 60 sütun, formül ve makro reddi) KS GRC ile aynıdır.
+
 ## identity.py
 
 Yama yok. Uyarlama `tedarik/session.py` içinde, modül değişkenleriyle yapılır:

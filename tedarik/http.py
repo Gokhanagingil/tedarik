@@ -8,7 +8,7 @@ import json
 import logging
 import re
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, quote, urlparse
 
 from . import accounts, audit, auth as authz, crud, migrate  # noqa: F401 (accounts: kaynak kaydı)
 from .db import Database, IntegrityError, one, utcnow
@@ -16,6 +16,7 @@ from .schema import RESOURCES, Resource
 
 API = "/api/tdr"   # KS GRC ile birleşmede uç nokta çakışmasını önleyen ad alanı
 MAX_BODY = 2 * 1024 * 1024
+MAX_UPLOAD_BODY = 18 * 1024 * 1024    # içe aktarma: 12 MB XLSX'in base64 hali (KS GRC xlsx_io sınırı)
 IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_.:-]{8,160}")   # KS GRC execution_service.record ile aynı
 LOG = logging.getLogger("tedarik")
 
@@ -70,9 +71,10 @@ class App:
     def enabled(self, module):
         return module in self.config.modules
 
-    def route(self, method, pattern, fn, public=False):
+    def route(self, method, pattern, fn, public=False, max_body=MAX_BODY):
         """pattern örneği: /api/tdr/suppliers/{id}/context (süslü parantezli parçalar tamsayıdır)."""
         regex = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>\\d+)", pattern) + "$")
+        fn.max_body = max(getattr(fn, "max_body", 0), max_body)
         (self.public if public else self.routes).append((method, regex, fn))
 
     @staticmethod
@@ -107,8 +109,8 @@ class App:
         return self._execute(fn, match, method, url, headers, raw, principal, client)
 
     def _execute(self, fn, match, method, url, headers, raw, principal, client):
-        if len(raw) > MAX_BODY:
-            return 413, {"error": "Gövde 2 MB sınırını aşıyor"}
+        if len(raw) > getattr(fn, "max_body", MAX_BODY):
+            return 413, {"error": "İstek gövdesi izin verilen boyutu aşıyor"}
         try:
             body, idem = self._body(method, raw)
             if principal and method != "GET" and not self.same_origin(principal, headers):
@@ -237,8 +239,9 @@ def build(config):
     for mod in loaded:
         if hasattr(mod, "register"):
             mod.register(app)
-    from . import login
+    from . import login, meta
     login.register(app)
+    meta.register(app)
     with app.database.connect() as db:
         for mod in loaded:
             if hasattr(mod, "seed"):
@@ -259,8 +262,8 @@ def handler_class(app):
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
                 return self._send(400, {"error": "Geçersiz Content-Length"})
-            if length > MAX_BODY:
-                return self._send(413, {"error": "Gövde 2 MB sınırını aşıyor"})
+            if length > MAX_UPLOAD_BODY:
+                return self._send(413, {"error": "İstek gövdesi izin verilen boyutu aşıyor"})
             raw = self.rfile.read(length) if length > 0 else b""
             self._send(*app.dispatch(self.command, self.path, self.headers, raw, self.client_address[0]))
 
@@ -275,7 +278,7 @@ def handler_class(app):
                 content_type, text = payload.content_type, payload.content
             else:
                 text = json.dumps(payload, ensure_ascii=False)
-            raw = text.encode("utf-8")
+            raw = text if isinstance(text, bytes) else text.encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(raw)))
@@ -287,7 +290,9 @@ def handler_class(app):
             if app.config.cookie_secure:
                 self.send_header("Strict-Transport-Security", "max-age=31536000")
             if isinstance(payload, Raw) and payload.filename:
-                self.send_header("Content-Disposition", f'attachment; filename="{payload.filename}"')
+                safe = re.sub(r"[^A-Za-z0-9._-]", "_", payload.filename)
+                self.send_header("Content-Disposition", f'attachment; filename="{safe}"; '
+                                 f"filename*=UTF-8''{quote(payload.filename)}")
             if content_type.startswith("text/html"):
                 def hashes(tag):
                     blocks = re.findall(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)

@@ -16,6 +16,7 @@ import re
 import sqlite3
 import threading
 import zlib
+import itertools
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
@@ -61,9 +62,27 @@ def one(db, sql, args=()):
     return dict(row) if row else None
 
 
+_SAVEPOINTS = itertools.count(1)
+
+
+class _Savepoints:
+    @contextmanager
+    def savepoint(self):
+        """Satır bazında geri alma: içerideki hata yalnızca o adımı geri alır, işlem sürer (iki motorda)."""
+        name = f"sp_{next(_SAVEPOINTS)}"
+        self.execute(f"SAVEPOINT {name}")
+        try:
+            yield
+        except BaseException:
+            self.execute(f"ROLLBACK TO SAVEPOINT {name}")
+            self.execute(f"RELEASE SAVEPOINT {name}")
+            raise
+        self.execute(f"RELEASE SAVEPOINT {name}")
+
+
 # ---------------------------------------------------------------- SQLite
 
-class SqliteConn:
+class SqliteConn(_Savepoints):
     dialect = "sqlite"
 
     def __init__(self, raw):
@@ -157,7 +176,7 @@ class PgCursor:
         return iter(self.fetchall())
 
 
-class PgConn:
+class PgConn(_Savepoints):
     dialect = "postgres"
 
     def __init__(self, raw, database):

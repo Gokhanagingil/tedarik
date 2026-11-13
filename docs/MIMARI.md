@@ -70,7 +70,7 @@ MCP anahtarı rol değildir. Yalnızca kaynağın açıkça izin verdiği işlem
 
 ## Veri aktarımı
 
-Tek hat: oku, başlıkları kanonik alanlara eşle, her satırı mevcut kayıtla eşleştir, uygula. Eşleştirme sırası: (kaynak sistem, harici kimlik), sonra VKN, sonra ad benzerliği. Ad benzerliği otomatik birleştirmez, "inceleme" olarak işaretler. `dry_run` ile önce sonuç görülür. Her aktarım ve her satırın sonucu saklanır. Excel dosyaları, MCP ve ileride konnektörler aynı hattı kullanır.
+Tek hat: oku (XLSX veya CSV), başlıkları kanonik alanlara eşle, her satırı mevcut kayıtla eşleştir, uygula. Başlıklar alan adı, Türkçe etiket veya kaynak sistem takma adıyla tanınır; seçimlerde kod veya Türkçe etiket, ilişkilerde hedef kaydın kodu verilir. Her kayıt türü için uygulama kendi şablonunu üretir (`GET /api/tdr/import/templates/<kaynak>`: "Veri" ve alan açıklamalı "Açıklama" sayfası). İçe aktarılabilenler: birimler, tedarikçi tipleri, ürün ve hizmetler, tedarikçiler, angajmanlar, sözleşmeler, SLA tanımları. Her satır kendi geri alma noktasında işlenir; hatalı satır diğerlerini bozmaz. Dışa aktarım tek kaynak (`/api/tdr/export/<kaynak>?format=xlsx|csv`) veya çok sayfalı çalışma kitabı (`/api/tdr/export`) olarak alınır; başlıklar ve seçimler Türkçe, ilişkiler kodla. Eşleştirme sırası: (kaynak sistem, harici kimlik), sonra VKN, sonra ad benzerliği. Ad benzerliği otomatik birleştirmez, "inceleme" olarak işaretler. `dry_run` ile önce sonuç görülür. Her aktarım ve her satırın sonucu saklanır. Excel dosyaları, MCP ve ileride konnektörler aynı hattı kullanır.
 
 ## Entegrasyon
 

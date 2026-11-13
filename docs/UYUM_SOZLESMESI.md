@@ -8,7 +8,7 @@ Amaç: `tedarik` ile `control` (KS GRC) ileride birleşebilsin veya tek uygulama
 | --- | --- | --- | --- |
 | Dil ve çalışma zamanı | Python 3.12, `ThreadingHTTPServer`, web çatısı yok (`app.py`) | Aynı | Uygulandı |
 | Veritabanı | SQLite, WAL, `foreign_keys=ON`, `busy_timeout=15000` (`app.connect`) | SQLite'ta aynı ayarlar; üretimde PostgreSQL (K-011). Test takımı iki motorda | Uygulandı; PostgreSQL bilinçli fark (K-011) |
-| Bağımlılıklar | `requirements.txt`: PyJWT 2.15.1, cryptography 50.0.2, cffi 2.1.1, pycparser 3.12, defusedxml 0.7.1; hash ile sabit, `--only-binary`, Linux CPython 3.12 amd64/arm64 | Kimlik paketleri KS GRC ile aynı satırlar; ek olarak psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0. Temiz ortamda `--require-hashes` ile doğrulandı. defusedxml adım 4'te | Kısmen; kalanı adım 4 |
+| Bağımlılıklar | `requirements.txt`: PyJWT 2.15.1, cryptography 50.0.2, cffi 2.1.1, pycparser 3.12, defusedxml 0.7.1; hash ile sabit, `--only-binary`, Linux CPython 3.12 amd64/arm64 | KS GRC paketleri aynı satırlarla; ek olarak psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0. Temiz ortamda `--require-hashes` ile doğrulandı | Uygulandı |
 | Tablo tanımı | `TABLES` ve `grc_plus.SCHEMA` sözlükleri, açılışta `ALTER TABLE ADD COLUMN` | `Resource` kaydı, aynı eklemeli evrim; ek olarak sürümlü göç kaydı (`tdr_schema_migrations`) ve tipli alanlar (DATE, TIMESTAMP, DECIMAL) | Uygulandı |
 | Kimlikler | Tamsayı `id`; `code` (tekil), `name`/`title` | Aynı | Uygulandı |
 | Tablo adları | Öneksiz (`controls`, `risks`, `activity_log`, ...) | `tdr_` önekli. İstisna: kimlik tabloları (`users`, `auth_sessions`, `entra_subjects`) KS GRC ile aynı ad ve yapıda (K-013) | Uygulandı |
@@ -38,12 +38,12 @@ Amaç: `tedarik` ile `control` (KS GRC) ileride birleşebilsin veya tek uygulama
 | Denetim izi | `activity_log(actor, method, object_type, object_id, description, occurred_at)`; açıklama 600 karakter; makine için `mcp` | `tdr_audit_log` aynı sütun adları, ek `auth_type` ve `changes_json`; gizli alanlar maskelenir | Uygulandı (bu adımda düzeltildi: sütun adları, maskeleme, anket yanıtında eksik kayıt) |
 | Değiştirilemez geçmiş | Risk değerlendirme ve kararlarında veritabanı tetikleyicisi | İki motorda tetikleyici: denetim izi, tekrar koruması, risk değerlendirme ve kararları, iş akışı geçmişi, aktarım satırları, anket yanıtları | Uygulandı |
 | Tarih doğrulama | `date.fromisoformat` ve gidiş-dönüş eşitliği; saat dilimli ISO 8601 | Aynı kural tüm `DATE` ve `TIMESTAMP` alanlarında; zaman UTC'ye çevrilir. Fark: yalnızca tarih verilen zaman alanı gece yarısı UTC sayılır | Uygulandı |
-| Meta veri | `/api/metadata`: Türkçe alan etiketleri ve seçim etiketleri; arayüz ve Excel başlıkları buradan | Yok | Sonraki adım: 4 ve 5 |
-| Excel | Kendi XLSX okuyucu/yazıcısı (`xlsx_io.py`, defusedxml, formül ve makro reddi, 12 MB, 5.000 satır, 60 sütun); Türkçe sayfa ve başlık; kodla ilişki (`grc_excel.py`) | CSV (UTF-8, `;`) | Sonraki adım: 4 |
+| Meta veri | `/api/metadata`: Türkçe alan etiketleri ve seçim etiketleri; arayüz ve Excel başlıkları buradan | `/api/tdr/metadata` (`labels.py`): alanlar, tipler, seçimler, ilişkiler, kişinin yazma yetkisi; her alanın etiketli olduğu testle denetlenir | Uygulandı |
+| Excel | Kendi XLSX okuyucu/yazıcısı (`xlsx_io.py`, defusedxml, formül ve makro reddi, 12 MB, 5.000 satır, 60 sütun); Türkçe sayfa ve başlık; kodla ilişki (`grc_excel.py`) | `xlsx_io.py` kopyası değiştirilmeden; Türkçe sayfa ve başlık, kodla ilişki, uygulamanın ürettiği şablon. Fark: tek hat (K-007), deneme çalıştırması, yalnızca boş alan doldurma | Uygulandı |
 | Arayüz | `ui_v2.py` kabuk + `ksgrc.js`: koyu kenar menü (244 px), sağda boyutlandırılabilir detay paneli (540 px), kartlar, CSS halka göstergeler, rozetler, `MENU`/`COLUMNS`/`FORM` tabloları | Yer tutucu sayfa | Sonraki adım: 5 |
 | Ortam değişkenleri | `CONTROL_*`; `CONTROL_AUTH_MODE` varsayılanı `local` | `TEDARIK_*`; kimlik modu zorunlu, varsayılan yok | Bilinçli fark (daha sıkı) |
 | Dağıtım | `python:3.12-alpine` özetle sabit, UID 10001, salt okunur kök, `cap_drop: ALL`, `no-new-privileges`, tmpfs, `127.0.0.1:18080`; kurumsal compose'da dosya tabanlı sırlar, `pids_limit`, `mem_limit`; nginx örneği; `backup.py` | Yok; tedarik `127.0.0.1:18090` kullanacak | Sonraki adım: 6 |
-| Testler | `unittest` (77 test), Playwright 1.57.0 duman testi, gitleaks 8.30.1, trivy 0.76.2, bandit, pip-audit, ZAP DAST | `unittest` (45 test, SQLite ve PostgreSQL'de) | Kısmen; adım 5 ve 6 |
+| Testler | `unittest` (77 test), Playwright 1.57.0 duman testi, gitleaks 8.30.1, trivy 0.76.2, bandit, pip-audit, ZAP DAST | `unittest` (52 test, SQLite ve PostgreSQL'de) | Kısmen; adım 5 ve 6 |
 | MCP sözleşmesi | `docs/MCP_CONTRACT_AND_ACCEPTANCE.md`: katalog okuma, kanıt yükleme, sonuç yazma, provenance, `collection_status` | Tedarik sözleşmesi yazılacak | Sonraki adım: 8 |
 
 ## Aktarım kuralı
@@ -54,7 +54,7 @@ KS GRC modülleri yeniden yazılmaz. `tedarik/vendor/` altına aynen kopyalanır
 
 | Dosya | Aynen kopyalanabilir mi | Not |
 | --- | --- | --- |
-| `xlsx_io.py` | Evet | Yalnızca `defusedxml` ister; veritabanına dokunmaz |
+| `xlsx_io.py` | Evet (aktarıldı) | Yalnızca `defusedxml` ister; veritabanına dokunmaz |
 | `identity.py` | Evet, sarmalayıcıyla (aktarıldı) | Çerez adları modül değişkeni (sarmalayıcı değiştirir). SQL'i SQLite'a özgü (`PRAGMA`, `?`, `lastrowid`); PostgreSQL'de veritabanı katmanının uyum bağlantısıyla çalışır. Giriş sayfaları KS GRC adını taşır; tedarik kendi sayfalarını sunar |
 | `entra_auth.py` | Küçük yamayla (aktarıldı) | Rol listesi ve `CONTROL_*` adları sabit. `configure()` ortam sözlüğü aldığı için ad çevirisi sarmalayıcıda yapılır; rol listesi için yama gerekir (K-012) |
 | `backup.py` | Hayır | Tablo adları (`audits`, `controls`, `evidence`) ve `control.db` sabit; düzen örnek alınır |

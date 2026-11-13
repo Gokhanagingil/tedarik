@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: KS GRC uyumu, PostgreSQL temeli ve kimlik tamamlandı; sıradaki iş Excel.
+Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik ve Excel tamamlandı; sıradaki iş anket motoru ve arayüz.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -50,7 +50,14 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - `/api/me`, `/api/tdr/users` (liste, açma, güncelleme, devre dışı bırakma; devre dışı hesabın oturumu hemen kapanır). Anonim sayfa isteği `/login` sayfasına yönlenir.
   - Giriş ve parola sayfaları gerçek Chromium'da içerik güvenlik politikası altında denendi.
   - Belge: `docs/KIMLIK.md` (Entra kaydı, roller, davranış).
-- Testler: 45 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
+- **Adım 4 (2026-11-13): Excel.**
+  - KS GRC `xlsx_io.py` değiştirilmeden kopyalandı; `defusedxml` aynı hashle.
+  - Tek içe aktarma hattı XLSX ve CSV okur; Türkçe başlık ve seçim etiketi anlar; ilişkileri kodla çözer; GG.AA.YYYY ve Excel tarih sayısını tanır; her satır kendi geri alma noktasında (PostgreSQL'de hatalı satır işlemi bozmaz).
+  - İçe aktarılabilenler: birimler, tedarikçi tipleri, ürün ve hizmetler, tedarikçiler (kaynak kimliği → kod → VKN → ad benzerliği), angajmanlar, sözleşmeler, SLA tanımları.
+  - Uygulamanın ürettiği şablon: "Veri" sayfası (zorunlu sütunlar `*`) ve her sütunun izin verilen değerlerini anlatan "Açıklama" sayfası.
+  - Dışa aktarım: kaynak bazında XLSX veya CSV, tüm portal tek çalışma kitabında; Türkçe başlık ve seçim, ilişkiler kodla; formül enjeksiyonu etkisizleştirilir.
+  - `/api/tdr/metadata`: Türkçe alan ve seçim etiketleri, tipler, ilişkiler, kişinin yetkisi (arayüzün tek kaynağı). Her alanın etiketli olduğu testle denetlenir.
+- Testler: 52 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
@@ -58,20 +65,19 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **Arayüz yok.** Yalnızca API ve yer tutucu sayfa var.
 - **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
 - **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
-- **XLSX yok.** İçe ve dışa aktarma şimdilik CSV (UTF-8, `;` ayraçlı; Excel doğrudan açar).
-- **İçe aktarma yalnızca tedarikçi ana verisi için.** Angajman, katalog, sözleşme aktarımları yok.
+- **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Kullanıcı yönetimi ekranı yok** (API var; arayüz adım 5).
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
 - **Dağıtım dosyaları yok** (Dockerfile, compose, yedekleme).
 - **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
-- **Türkçe alan etiketleri yok** (KS GRC `/api/metadata` karşılığı).
 
 ## Sıradaki adımlar (sırayla)
 
 1. ~~**KS GRC'yi tam oku ve uyumu doğrula.**~~ Tamamlandı (2026-11-13).
 2. ~~**Veritabanı temeli: PostgreSQL** (K-011).~~ Tamamlandı (2026-11-13).
 3. ~~**Kimlik aktarımı.**~~ Tamamlandı (2026-11-13).
-4. **Excel.** `xlsx_io.py` aktarımı; XLSX içe ve dışa aktarma; Türkçe alan etiketleri (`/api/tdr/metadata`); uygulamanın kendi ürettiği içe aktarma şablonu; angajman, katalog ve sözleşme aktarımları; gerçek başlıklarla `ALIASES` doğrulaması.
+4. ~~**Excel.**~~ Tamamlandı (2026-11-13). Kalan: gerçek SAP/Dynamics başlıklarıyla `ALIASES` doğrulaması.
+4a. **Anket motoru** (Gökhan Bey'in önceliği): bağımsız anketler, tedarikçi memnuniyeti ve risk değerlendirme anketleri, bölümler, soru türleri, koşullu sorular, ağırlıklı puanlama, anonimlik, taslak kaydetme, sonuç analizi, risk sinyalinden risk kaydı.
 5. **Arayüz.** KS GRC'nin görsel diliyle (`ui_v2.py` + `ksgrc.js` düzeni): tedarikçi listesi ve filtreler, tedarikçi 360 paneli, angajman, performans, anket, risk ekranları, pano (satır içi SVG grafikler). Her ekran için Playwright duman testi.
 6. **Dağıtım.** KS GRC'nin Dockerfile, compose ve yedekleme düzenini PostgreSQL ile uyarla (`pg_dump` tabanlı yedek, geri yükleme denetimi); CI'a gitleaks, trivy, bandit, pip-audit ekle.
 7. **Periyodik işler.** Kritiklik seviyesine göre değerlendirme, anket ve risk gözden geçirme takvimi; geciken işler panosu.
