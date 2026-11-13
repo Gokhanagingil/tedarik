@@ -1,0 +1,249 @@
+"""HTTP katmanı: yönlendirici, güvenlik başlıkları, tekrar koruması. Web çatısı kullanılmaz (KS GRC ile aynı).
+
+App.dispatch saf bir işlevdir (yöntem, yol, başlıklar, gövde -> durum, yanıt); testler soket açmadan çalışır.
+"""
+import base64
+import hashlib
+import json
+import re
+import sqlite3
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import parse_qsl, urlparse
+
+from . import audit, auth as authz, crud
+from .db import connect, initialize, one, utcnow
+from .schema import RESOURCES, Resource
+
+API = "/api/tdr"   # KS GRC ile birleşmede uç nokta çakışmasını önleyen ad alanı
+MAX_BODY = 2 * 1024 * 1024
+
+Resource("idempotency", "Tekrar Koruması", {
+    "idem_key": "TEXT NOT NULL UNIQUE", "route": "TEXT NOT NULL", "body_hash": "TEXT NOT NULL",
+    "response_json": "TEXT NOT NULL", "created_at": "TEXT NOT NULL",
+}, module="core", api=(), search=())
+
+HOME = """<!doctype html><html lang="tr"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Tedarik</title>
+<style>body{margin:0;background:#f5f7fb;color:#18253b;font:15px system-ui,Arial}
+main{max-width:640px;margin:12vh auto;padding:0 24px}h1{font-size:25px}code{background:#e8effb;padding:2px 6px;border-radius:5px}</style>
+<main><h1>Tedarik</h1><p>API çalışıyor. Arayüz bir sonraki aşamada eklenecek.</p>
+<p>Sağlık kontrolü: <code>/api/health</code> · Kaynaklar: <code>/api/tdr/suppliers</code></p></main></html>"""
+
+
+class Raw:
+    """JSON dışı yanıt (ör. CSV dışa aktarımı)."""
+
+    def __init__(self, content, content_type, filename=None):
+        self.content, self.content_type, self.filename = content, content_type, filename
+
+
+class Ctx:
+    def __init__(self, app, db, principal, params, query, body):
+        self.app, self.db, self.principal = app, db, principal
+        self.params, self.query, self.body = params, query, body or {}
+
+
+class App:
+    def __init__(self, config):
+        self.config = config
+        self.auth = authz.Auth(config)
+        self.routes = []
+
+    def enabled(self, module):
+        return module in self.config.modules
+
+    def route(self, method, pattern, fn):
+        """pattern örneği: /api/tdr/suppliers/{id}/context (süslü parantezli parçalar tamsayıdır)."""
+        regex = re.compile("^" + re.sub(r"\{(\w+)\}", r"(?P<\1>\\d+)", pattern) + "$")
+        self.routes.append((method, regex, fn))
+
+    def dispatch(self, method, target, headers=None, raw=b""):
+        headers = headers if headers is not None else {}
+        url = urlparse(target)
+        if url.path == "/api/health":
+            return 200, {"status": "ok"}
+        try:
+            principal = self.auth.resolve(headers)
+        except authz.Unauthenticated:
+            return 401, {"error": "Oturum açılması gerekiyor"}
+        fn = match = None
+        for verb, regex, candidate in self.routes:
+            match = regex.match(url.path) if verb == method else None
+            if match:
+                fn = candidate
+                break
+        if not fn:
+            return 404, {"error": "Bulunamadı"}
+        if len(raw) > MAX_BODY:
+            return 413, {"error": "Gövde 2 MB sınırını aşıyor"}
+        try:
+            body, idem = self._body(method, raw)
+            if method != "GET" and not self._same_origin(principal, headers):
+                return 403, {"error": "Güvenlik doğrulaması başarısız"}
+            with connect(self.config.db) as db:
+                if idem:
+                    seen = one(db, "SELECT * FROM tdr_idempotency WHERE idem_key=?", (idem[0],))
+                    if seen:
+                        if seen["route"] != url.path or seen["body_hash"] != idem[1]:
+                            raise crud.Conflict("Aynı idempotency_key farklı içerikle kullanılamaz")
+                        return 200, {**json.loads(seen["response_json"]), "replayed": True}
+                params = {k: int(v) for k, v in match.groupdict().items()}
+                result = fn(Ctx(self, db, principal, params, dict(parse_qsl(url.query)), body))
+                status, payload = result if isinstance(result, tuple) else (200, result)
+                if idem and isinstance(payload, dict):
+                    db.execute("INSERT INTO tdr_idempotency (idem_key, route, body_hash, response_json, created_at) "
+                               "VALUES (?,?,?,?,?)",
+                               (idem[0], url.path, idem[1], json.dumps(payload, ensure_ascii=False), utcnow()))
+                return status, payload
+        except crud.NotFound as exc:
+            return 404, {"error": str(exc) or "Kayıt bulunamadı"}
+        except crud.Forbidden as exc:
+            return 403, {"error": str(exc)}
+        except crud.Conflict as exc:
+            return 409, {"error": str(exc)}
+        except sqlite3.IntegrityError:
+            return 409, {"error": "Kayıt çakışması veya geçersiz ilişki"}
+        except KeyError as exc:
+            return 400, {"error": f"Eksik veya geçersiz alan: {exc.args[0]}"}
+        except (ValueError, TypeError, sqlite3.Error) as exc:
+            return 400, {"error": str(exc)}
+
+    @staticmethod
+    def _body(method, raw):
+        if method == "GET":
+            return None, None
+        if not raw:
+            raise crud.Invalid("JSON gövdesi gerekli")
+        body = json.loads(raw)
+        if not isinstance(body, dict):
+            raise crud.Invalid("JSON nesnesi gerekli")
+        idem = None
+        if method == "POST" and "idempotency_key" in body:
+            key = body.pop("idempotency_key")
+            if not isinstance(key, str) or not 8 <= len(key) <= 200:
+                raise crud.Invalid("idempotency_key 8-200 karakter olmalı")
+            digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+            idem = (key, digest)
+        return body, idem
+
+    def _same_origin(self, principal, headers):
+        """Tarayıcı oturumuyla yapılan değişiklikler yalnızca aynı kökenden kabul edilir."""
+        if principal.auth_type == "api_key":
+            return True
+        origin = headers.get("Origin")
+        if origin is None:
+            return principal.auth_type == "dev"   # yerel geliştirmede curl ve testler
+        scheme = "https" if self.config.cookie_secure else "http"
+        return origin == f"{scheme}://{headers.get('Host')}"
+
+
+def guard_readonly(res, body):
+    blocked = set(body) & res.readonly
+    if blocked:
+        raise crud.Invalid("Bu alanlar sunucu tarafından yazılır: " + ", ".join(sorted(blocked)))
+
+
+def resource_routes(app, res):
+    base = f"{API}/{res.name}"
+
+    def listing(c):
+        authz.check(c.principal, res, "read")
+        return crud.listing(c.db, res, c.query)
+
+    def get(c):
+        authz.check(c.principal, res, "read")
+        return crud.get(c.db, res, c.params["id"])
+
+    def create(c):
+        authz.check(c.principal, res, "write")
+        guard_readonly(res, c.body)
+        record_id = crud.insert(c.db, res, c.body, c.principal)
+        audit.log(c.db, c.principal, "CREATE", res.name, record_id, c.body)
+        return 201, {"id": record_id}
+
+    def update(c):
+        authz.check(c.principal, res, "write")
+        guard_readonly(res, c.body)
+        record = crud.update(c.db, res, c.params["id"], c.body, c.principal)
+        audit.log(c.db, c.principal, "UPDATE", res.name, c.params["id"], c.body)
+        return record
+
+    for action, method, pattern, fn in (("list", "GET", base, listing), ("get", "GET", base + "/{id}", get),
+                                        ("create", "POST", base, create), ("update", "PATCH", base + "/{id}", update)):
+        if action in res.api:
+            app.route(method, pattern, fn)
+
+
+def build(config):
+    """Uygulamayı kurar: modülleri yükler, tabloları açar, uç noktaları kaydeder, başlangıç verisini ekler."""
+    from . import modules
+    app = App(config)
+    loaded = modules.load(config)
+    initialize(config.db, config.modules)
+    for res in RESOURCES.values():
+        if res.module in config.modules:
+            resource_routes(app, res)
+    for mod in loaded:
+        if hasattr(mod, "register"):
+            mod.register(app)
+    with connect(config.db) as db:
+        for mod in loaded:
+            if hasattr(mod, "seed"):
+                mod.seed(db)
+    return app
+
+
+def handler_class(app):
+    class Handler(BaseHTTPRequestHandler):
+        def version_string(self):
+            return "Tedarik"
+
+        def log_request(self, code="-", size="-"):
+            self.log_message("%s %s %s", self.command, self.path.partition("?")[0], code)   # sorgu dizgisi yazılmaz
+
+        def _run(self):
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send(400, {"error": "Geçersiz Content-Length"})
+            if length > MAX_BODY:
+                return self._send(413, {"error": "Gövde 2 MB sınırını aşıyor"})
+            raw = self.rfile.read(length) if length > 0 else b""
+            if self.command == "GET" and urlparse(self.path).path in ("/", "/index.html"):
+                return self._send(200, Raw(HOME, "text/html; charset=utf-8"))
+            self._send(*app.dispatch(self.command, self.path, self.headers, raw))
+
+        do_GET = do_POST = do_PATCH = _run
+
+        def _send(self, status, payload):
+            content_type = "application/json; charset=utf-8"
+            if isinstance(payload, Raw):
+                content_type, text = payload.content_type, payload.content
+            else:
+                text = json.dumps(payload, ensure_ascii=False)
+            raw = text.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(raw)))
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+            if app.config.cookie_secure:
+                self.send_header("Strict-Transport-Security", "max-age=31536000")
+            if isinstance(payload, Raw) and payload.filename:
+                self.send_header("Content-Disposition", f'attachment; filename="{payload.filename}"')
+            if content_type.startswith("text/html"):
+                def hashes(tag):
+                    blocks = re.findall(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL | re.IGNORECASE)
+                    return " ".join("'sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode() + "'"
+                                    for b in blocks)
+                self.send_header("Content-Security-Policy", (
+                    "default-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; "
+                    "connect-src 'self'; img-src 'self' data:; style-src 'self' " + hashes("style") + "; "
+                    "style-src-attr 'none'; script-src 'self' " + hashes("script") + "; object-src 'none'"))
+            self.end_headers()
+            self.wfile.write(raw)
+
+    return Handler

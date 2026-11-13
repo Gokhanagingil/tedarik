@@ -1,0 +1,2 @@
+# Bilerek boş: uygulama yalnızca Python 3.12 standart kütüphanesini kullanır.
+# Kimlik ve XLSX aktarımıyla KS GRC'deki paketler aynı sürüm ve hash ile buraya eklenecek.
