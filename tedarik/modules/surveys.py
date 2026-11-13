@@ -76,6 +76,7 @@ def submit(c):
         raise crud.Invalid("Zorunlu soruların tamamı yanıtlanmalı")
     c.db.execute("UPDATE tdr_survey_invitations SET status='answered', answered_at=? WHERE id=?",
                  (utcnow(), invite["id"]))
+    audit.log(c.db, c.principal, "ANSWER", "survey_invitations", invite["id"], {"answers": len(seen)})
     return 201, {"invitation_id": invite["id"], "answers": len(seen)}
 
 

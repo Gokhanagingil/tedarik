@@ -6,6 +6,7 @@ Her karar: bağlam, karar, sonuç. Yeni karar sona eklenir; eskisi değişirse "
 **Bağlam.** İlk öneri NestJS, React ve PostgreSQL idi. KS GRC ise Python 3.12, standart kütüphane HTTP sunucusu, SQLite ve derlemesiz istemciyle çalışıyor. İki uygulamanın birleşebilmesi isteniyor.
 **Karar.** Tedarik portalı KS GRC ile aynı yığını kullanır. Yeni bağımlılık ancak yeni bir kararla eklenir.
 **Sonuç.** Birleşme mekanik bir iş olur, tedarik zinciri riski düşük kalır. Bedeli: çatıların hazır sunduğu parçalar (yönlendirme, doğrulama) küçük ortak modüller olarak elde yazıldı.
+*Veritabanı ve bağımlılık kısmının yerini aldı: K-011 (PostgreSQL).*
 
 ## K-002 Tedarikçi ve Angajman ayrımı
 **Bağlam.** Aynı tedarikçiden farklı birimler farklı şeyler alıyor; bir kısmı şirkete, bir kısmı müşteriye sunuluyor.
@@ -49,3 +50,18 @@ Her karar: bağlam, karar, sonuç. Yeni karar sona eklenir; eskisi değişirse "
 ## K-010 Derlemesiz istemci, dış kaynak yok
 **Karar.** Arayüz KS GRC gibi derleme adımı olmadan sunulur. İçerik güvenlik politikası dış betik ve stile izin vermez; grafikler satır içi SVG ile çizilir.
 **Sonuç.** Kurulum basit, tedarik zinciri riski düşük. Görsel dil KS GRC'nin `ui_v2.py` ve `ksgrc.js` dosyaları incelendikten sonra kurulacak.
+
+## K-011 PostgreSQL birinci sınıf veritabanı
+**Bağlam.** K-001 SQLite'ı KS GRC ile aynı olsun diye seçti; PostgreSQL "sonra geçilebilir" notuyla bırakıldı. Gökhan Bey (2026-11-13) portalın tüm iş birimlerine açılacağını, temelin şimdiden sağlam atılmasını istedi. SQLite tek yazıcıyla çalışır, ağ üzerinden erişilmez, çevrimiçi yedek ve satır kilidi sunmaz; sonradan geçiş, SQL'i ve veri tiplerini SQLite'a göre yazılmış bir kod tabanını yeniden elden geçirmek demektir.
+**Karar.** Üretim hedefi PostgreSQL'dir. Veritabanı katmanı iki motoru da destekler: PostgreSQL üretim ve kurumsal profil, SQLite yerel geliştirme, hızlı test ve KS GRC ile tek dosyada birleşme yolu. Uygulama kodu motor bağımsız SQL yazar; motor farkları (`?` parametresi, kimlik sütunu, eklenen kaydın kimliği, tarih işlevleri, kilit, tetikleyici) yalnızca veritabanı katmanındadır. Test takımı her iki motorda çalışır. Sürücü: `psycopg` 3 ve `psycopg-pool`; KS GRC'deki gibi sürüm ve hash ile sabitlenir.
+**Sonuç.** K-001'in "yeni bağımlılık yok" kuralının bu kapsamda yerini alır; diğer kısımları geçerlidir. Bedeli: ikinci motorun bakımı ve testi. KS GRC SQLite'ta kaldıkça tam birleşme, tedarik tablolarının KS GRC veritabanına taşınmasıyla değil KS GRC'nin de bu katmana geçmesiyle yapılır; ara aşamada iki uygulama ayrı veritabanında çalışır.
+
+## K-012 Entra uygulama rolleri ve `entra_auth.py` yaması
+**Bağlam.** KS GRC `entra_auth.verify` yalnızca `KS.GRC.Admin` ve `KS.GRC.Auditor` rollerini kabul eder; başka rolü olan tokenı reddeder. Tedarikin beş rolü vardır ve KS GRC denetçisi kayıt yazarken tedarik denetçisi salt okur.
+**Karar.** Tedarik rol değerleri: `KS.TDR.Admin`, `KS.TDR.SupplierManager`, `KS.TDR.UnitUser`, `KS.TDR.Auditor`, `KS.TDR.Viewer`. `KS.GRC.*` rolleri tedarikte yetki vermez. `entra_auth.py` kopyası tek bir işaretli yamayla alınır: kabul edilen roller modül değişkenidir, `verify` öncelik sırasındaki ilk rolü döndürür. Yama `tedarik/vendor/PATCHES.md` içinde satır satır belgelenir ve KS GRC'ye öneri olarak verilir (UYUM_SOZLESMESI, "KS GRC'ye öneriler" 1).
+**Sonuç.** "Kopya dosya değiştirilmez" kuralının tek istisnasıdır. KS GRC öneriyi alırsa yama kalkar. Rollerin aynı Entra uygulama kaydına mı ayrı kayda mı ekleneceği Gökhan Bey'in kararını bekler; kod iki durumda da çalışır.
+
+## K-013 Kimlik tabloları KS GRC ile ortak
+**Bağlam.** `identity.py` öneksiz `users`, `auth_sessions`, `entra_subjects` tablolarını kullanır. Tedarikte her tablo `tdr_` önekli olmalıydı (K-003).
+**Karar.** Bu üç tablo KS GRC şemasıyla aynı adla ve aynı yapıyla açılır; tam birleşmede ortak kullanıcı tablosu olurlar. Tedarik rolleri ve birim kapsamı ayrı `tdr_user_roles` tablosundadır; KS GRC'nin `roles` ve `user_roles` tablolarına yazılmaz.
+**Sonuç.** K-003'ün tek istisnasıdır. Ortak kullanıcı tablosu, iki uygulamanın aynı kişiyi aynı kimlikle görmesini sağlar.

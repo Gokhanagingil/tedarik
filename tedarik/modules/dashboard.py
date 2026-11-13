@@ -41,14 +41,15 @@ def summary(c):
             WHERE occurred_at >= date('now', '-3 months') GROUP BY event_type ORDER BY count DESC""")
     if c.app.enabled("risks"):
         data["risks"] = {
-            "open": one(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE status IN ('open','treating')")["n"],
+            "open": one(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks "
+                            "WHERE status IN ('open','in_treatment')")["n"],
             "above_appetite": one(db, """SELECT COUNT(*) AS n FROM tdr_supplier_risks r
-                WHERE r.status IN ('open','treating') AND r.appetite < (SELECT a.residual FROM tdr_risk_assessments a
-                WHERE a.risk_id=r.id ORDER BY a.id DESC LIMIT 1)""")["n"],
+                JOIN tdr_risk_assessments a ON a.id=(SELECT MAX(x.id) FROM tdr_risk_assessments x WHERE x.risk_id=r.id)
+                WHERE r.status IN ('open','in_treatment') AND a.residual > a.appetite""")["n"],
             "unassessed": one(db, """SELECT COUNT(*) AS n FROM tdr_supplier_risks r WHERE r.status='open'
                 AND NOT EXISTS (SELECT 1 FROM tdr_risk_assessments a WHERE a.risk_id=r.id)""")["n"],
             "review_overdue": one(db, """SELECT COUNT(*) AS n FROM tdr_supplier_risks
-                WHERE status IN ('open','treating','accepted') AND review_due < date('now')""")["n"],
+                WHERE status IN ('open','in_treatment','accepted') AND review_date < date('now')""")["n"],
         }
     if c.app.enabled("surveys"):
         data["surveys"] = one(db, """SELECT COUNT(*) AS invited, COALESCE(SUM(status='answered'), 0) AS answered

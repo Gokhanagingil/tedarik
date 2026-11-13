@@ -94,6 +94,45 @@ class Guvenlik(Base):
         self.assertEqual(again[1]["id"], first[1]["id"])
         changed = self.call("POST", "/org_units", {"code": "B", "name": "B", "idempotency_key": "istek-0001"})
         self.assertEqual(changed[0], 409)
+        for bad in ("kisa", "bosluk içeren anahtar", "x" * 161):
+            self.assertEqual(self.call("POST", "/org_units", {"code": "C", "name": "C", "idempotency_key": bad})[0], 400)
+
+    def test_eszamanli_tekrarlar_tek_kayit_uretir(self):
+        from concurrent.futures import ThreadPoolExecutor
+        body = {"code": "P", "name": "Paralel", "idempotency_key": "paralel-0001"}
+        with ThreadPoolExecutor(8) as pool:
+            results = list(pool.map(lambda _: self.call("POST", "/org_units", dict(body)), range(8)))
+        self.assertEqual(sorted(r[0] for r in results), [200] * 7 + [201])
+        self.assertEqual(len({r[1]["id"] for r in results}), 1)
+
+    def test_saglik_kimlik_ister_ve_hata_ayrintisi_sizdirilmaz(self):
+        self.assertEqual(self.app.dispatch("GET", "/api/health", {"X-API-Key": "yanlis"})[0], 401)
+        self.assertEqual(self.app.dispatch("GET", "/api/health", {"X-API-Key": KEY})[0], 200)
+
+        def broken(c):
+            c.db.execute("SELECT * FROM olmayan_tablo")
+        self.app.route("GET", "/api/tdr/bozuk", broken)
+        status, payload = self.call("GET", "/bozuk")
+        self.assertEqual((status, payload), (500, {"error": "Beklenmeyen işlem hatası"}))
+
+    def test_birden_fazla_origin_reddedilir(self):
+        from email.message import Message
+        headers = Message()
+        headers["Host"] = "127.0.0.1:8090"
+        headers["Origin"] = "http://127.0.0.1:8090"
+        self.assertEqual(self.call("POST", "/org_units", {"code": "A", "name": "A"}, headers=headers)[0], 201)
+        headers["Origin"] = "http://127.0.0.1:8090"
+        self.assertEqual(self.call("POST", "/org_units", {"code": "B", "name": "B"}, headers=headers)[0], 403)
+
+    def test_denetim_izi_ks_grc_alanlari(self):
+        self.ok("POST", "/org_units", {"code": "A", "name": "A"})
+        entry = self.ok("GET", "/audit_log")[0]
+        self.assertEqual({k: entry[k] for k in ("actor", "method", "object_type", "object_id")},
+                         {"actor": "dev", "method": "CREATE", "object_type": "org_units", "object_id": "1"})
+        self.assertTrue(entry["occurred_at"].endswith("+00:00"))
+        self.ok("POST", "/import/suppliers", {"source_system": "sap", "filename": "a.csv", "dry_run": True,
+                                              "content_base64": base64.b64encode(b"name\r\nA\r\n").decode()})
+        self.assertNotIn("QQ", json.dumps(self.ok("GET", "/audit_log")))
 
 
 class Cekirdek(Base):
@@ -161,39 +200,100 @@ class Performans(Base):
 
 
 class Risk(Base):
-    def new_risk(self, supplier, appetite=6):
-        return self.ok("POST", "/supplier_risks", {"code": "R1", "title": "Tek tedarikçiye bağımlılık",
-                                                   "supplier_id": supplier, "category": "concentration",
-                                                   "owner": "ayse", "appetite": appetite})["id"]
+    STATEMENT = {"cause": "Kritik hizmette alternatif tedarikçi olmadığı için",
+                 "risk_event": "tedarikçi kesintisi hizmeti durdurabilir",
+                 "consequence": "müşteriye taahhüt edilen süre aşılabilir"}
+
+    def new_risk(self, supplier, appetite=6, **extra):
+        body = {"code": "R1", "title": "Tek tedarikçiye bağımlılık", "supplier_id": supplier,
+                "category": "concentration", "owner": "ayse", "appetite": appetite, "likelihood": 4, "impact": 5,
+                "review_date": "2099-01-01", **self.STATEMENT, **extra}
+        return self.ok("POST", "/supplier_risks", body)["id"]
+
+    def assess(self, risk, mitigations=(), app=None):
+        return self.ok("POST", f"/supplier_risks/{risk}/assessments",
+                       {"rationale": "Alternatif yok", "mitigations": list(mitigations)}, app=app)
 
     def test_puanlama_ks_grc_ile_ayni(self):
         *_, supplier, _ = self.base_data()
         risk = self.new_risk(supplier)
-        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"status": "accepted"})[0], 409)
-        result = self.ok("POST", f"/supplier_risks/{risk}/assessments", {
-            "likelihood": 4, "impact": 5, "rationale": "Alternatif yok",
-            "mitigations": [{"weight": "medium"}, {"weight": "low", "effectiveness": "partial"}]})
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"status": "accepted"})[0], 400)
+        result = self.assess(risk, [{"weight": "medium"}, {"weight": "low", "effectiveness": "partial"}])
         self.assertEqual((result["inherent"], result["residual"], result["above_appetite"]), (20, 10.0, True))
-        self.assertEqual(self.call("POST", f"/supplier_risks/{risk}/assessments",
-                                   {"likelihood": 6, "impact": 1, "rationale": "x"})[0], 400)
+        full = self.assess(risk, [{"weight": "high"}, {"weight": "high"}])     # katkı %100 ile sınırlı
+        self.assertEqual(full["residual"], 0.0)
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"likelihood": 6})[0], 400)
         self.assertEqual(self.call("POST", "/supplier_risks", {"code": "R2", "title": "t", "supplier_id": supplier,
                                                                "category": "exit", "owner": "a", "appetite": 30})[0], 400)
-        self.assertEqual(len(self.ok("GET", f"/supplier_risks/{risk}/context")["assessments"]), 1)
-        self.assertEqual(self.ok("GET", "/dashboard/summary")["risks"]["above_appetite"], 1)
+        self.assertEqual(self.call("POST", "/supplier_risks", {"code": "R3", "title": "t", "supplier_id": supplier,
+                                                               "category": "exit", "owner": "a", "appetite": 5,
+                                                               "cause": "yalnız neden"})[0], 400)
+        context = self.ok("GET", f"/supplier_risks/{risk}/context")
+        self.assertEqual(len(context["assessments"]), 2)
+        self.assertEqual(context["assessments"][1]["snapshot"]["likelihood"], 4)
+        self.assertEqual(self.call("PATCH", f"/risk_assessments/{full['id']}", {"residual": 1})[0], 404)
+        summary = self.ok("GET", "/dashboard/summary")["risks"]
+        self.assertEqual((summary["above_appetite"], summary["open"]), (0, 1))
+
+    def test_karar_kurallari(self):
+        *_, supplier, _ = self.base_data()
+        risk = self.new_risk(supplier, appetite=12)
+        first = self.assess(risk, [{"weight": "medium"}])                      # 20 × 0,6 = 12, iştah içinde
+        accept = {"status": "accepted", "response_strategy": "accept", "decision_rationale": "İş kararı"}
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", accept)[0], 409)   # değerlendirme seçilmedi
+        self.ok("PATCH", f"/supplier_risks/{risk}", {"appetite": 13})
+        stale = self.call("PATCH", f"/supplier_risks/{risk}", {**accept, "assessment_id": first["id"]})
+        self.assertEqual(stale[0], 409)
+        self.assertIn("yeniden değerlendirin", stale[1]["error"])
+        second = self.assess(risk, [{"weight": "medium"}])
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}",
+                                   {**accept, "assessment_id": second["id"], "exception_rationale": "x"})[0], 400)
+        self.ok("PATCH", f"/supplier_risks/{risk}", {**accept, "assessment_id": second["id"]})
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"title": "Yeni ad"})[0], 409)
+        self.assertEqual(self.call("POST", f"/supplier_risks/{risk}/assessments", {"rationale": "x"})[0], 409)
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"status": "open"})[0], 400)
+        self.ok("PATCH", f"/supplier_risks/{risk}", {"status": "open", "decision_rationale": "Kapsam değişti"})
+        again = self.call("PATCH", f"/supplier_risks/{risk}", {**accept, "assessment_id": second["id"]})
+        self.assertIn("yeni değerlendirme", again[1]["error"])
+        decisions = self.ok("GET", f"/supplier_risks/{risk}/context")["decisions"]
+        self.assertEqual([d["to_status"] for d in decisions], ["open", "accepted"])
 
     def test_istah_ustu_kabul_farkli_yonetici_ister(self):
         *_, supplier, _ = self.base_data()
         risk = self.new_risk(supplier)
-        self.ok("POST", f"/supplier_risks/{risk}/assessments", {"likelihood": 5, "impact": 5, "rationale": "x"})
-        from tedarik.modules.risks import _risk_rules
-        change = {"status": "accepted", "decision_rationale": "İş kararı"}
-        with connect(self.path) as db:
+        assessor = self.make(role="ADMIN", user="ayse")
+        assessed = self.assess(risk, app=assessor)
+        accept = {"status": "accepted", "response_strategy": "accept", "decision_rationale": "İş kararı",
+                  "assessment_id": assessed["id"]}
+        from tedarik.modules.risks import decide
+        with connect(self.path) as db:   # oturumlu kullanıcı: değerlendirmeyi yapan kişi kendi istisnasını onaylayamaz
             current = one(db, "SELECT * FROM tdr_supplier_risks WHERE id=?", (risk,))
-            with self.assertRaises(Forbidden):   # değerlendirmeyi yapan kişi
-                _risk_rules(db, dict(change), current, Principal("dev", "ADMIN", "session"))
-            with self.assertRaises(Forbidden):   # yetkisi yetmeyen kişi
-                _risk_rules(db, dict(change), current, Principal("can", "UNIT_USER", "session"))
-            _risk_rules(db, dict(change), current, Principal("zeynep", "SUPPLIER_MANAGER", "session"))
+            details = {k: accept[k] for k in ("decision_rationale", "assessment_id")} | {"exception_rationale": "x"}
+            with self.assertRaises(Forbidden):
+                decide(db, current, {**current, **accept}, details, Principal("ayse", "ADMIN", "session"))
+        manager = self.make(role="SUPPLIER_MANAGER", user="zeynep")
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", accept, app=manager)[0], 403)
+        admin = self.make(role="ADMIN", user="mert")
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", accept, app=admin)[0], 400)   # istisna yok
+        self.ok("PATCH", f"/supplier_risks/{risk}", {**accept, "exception_rationale": "Geçiş dönemi"}, app=admin)
+        decision = self.ok("GET", f"/supplier_risks/{risk}/context")["decisions"][0]
+        self.assertEqual((decision["actor"], decision["actor_role"], decision["exception_rationale"]),
+                         ("mert", "ADMIN", "Geçiş dönemi"))
+
+    def test_kapanis_acik_faaliyetle_olmaz(self):
+        *_, supplier, _ = self.base_data()
+        risk = self.new_risk(supplier, appetite=25)
+        action = self.ok("POST", "/risk_actions", {"code": "A1", "risk_id": risk, "title": "İkinci tedarikçi",
+                                                   "owner": "ayse", "due_date": "2027-01-01"})["id"]
+        assessed = self.assess(risk)
+        close = {"status": "closed", "decision_rationale": "Tamamlandı", "assessment_id": assessed["id"]}
+        self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", close)[0], 409)
+        done = self.ok("PATCH", f"/risk_actions/{action}", {"status": "completed", "resolution": "Sözleşme imzalandı"})
+        self.assertIsNotNone(done["closed_at"])
+        self.ok("PATCH", f"/supplier_risks/{risk}", close)
+        self.assertEqual(self.call("PATCH", f"/risk_actions/{action}", {"status": "open"})[0], 409)
+        self.assertEqual(self.call("POST", "/risk_actions", {"code": "A2", "risk_id": risk, "title": "x",
+                                                            "owner": "a", "due_date": "2027-01-01"})[0], 409)
 
 
 class Anket(Base):
@@ -215,6 +315,7 @@ class Anket(Base):
         self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers",
                                    {"answers": [{"question_id": q2, "text_value": "eksik"}]})[0], 400)
         self.ok("POST", f"/survey_invitations/{invites[0]}/answers", answers)
+        self.assertEqual(self.ok("GET", "/audit_log?object_type=survey_invitations")[0]["method"], "ANSWER")
         self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers", answers)[0], 409)
         other = self.make(role="UNIT_USER", user="mehmet")
         self.assertEqual(self.call("POST", f"/survey_invitations/{invites[1]}/answers", answers, app=other)[0], 403)

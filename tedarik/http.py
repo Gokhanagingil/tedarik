@@ -5,6 +5,7 @@ App.dispatch saf bir işlevdir (yöntem, yol, başlıklar, gövde -> durum, yan�
 import base64
 import hashlib
 import json
+import logging
 import re
 import sqlite3
 from http.server import BaseHTTPRequestHandler
@@ -16,6 +17,8 @@ from .schema import RESOURCES, Resource
 
 API = "/api/tdr"   # KS GRC ile birleşmede uç nokta çakışmasını önleyen ad alanı
 MAX_BODY = 2 * 1024 * 1024
+IDEMPOTENCY_KEY = re.compile(r"[A-Za-z0-9_.:-]{8,160}")   # KS GRC execution_service.record ile aynı
+LOG = logging.getLogger("tedarik")
 
 Resource("idempotency", "Tekrar Koruması", {
     "idem_key": "TEXT NOT NULL UNIQUE", "route": "TEXT NOT NULL", "body_hash": "TEXT NOT NULL",
@@ -60,12 +63,12 @@ class App:
     def dispatch(self, method, target, headers=None, raw=b""):
         headers = headers if headers is not None else {}
         url = urlparse(target)
-        if url.path == "/api/health":
-            return 200, {"status": "ok"}
         try:
             principal = self.auth.resolve(headers)
         except authz.Unauthenticated:
             return 401, {"error": "Oturum açılması gerekiyor"}
+        if url.path == "/api/health":      # KS GRC gibi kimlik ister; anonim istek 401 alır
+            return 200, {"status": "ok"}
         fn = match = None
         for verb, regex, candidate in self.routes:
             match = regex.match(url.path) if verb == method else None
@@ -82,10 +85,13 @@ class App:
                 return 403, {"error": "Güvenlik doğrulaması başarısız"}
             with connect(self.config.db) as db:
                 if idem:
+                    # KS GRC gibi: alındıyı okumadan önce yazıcıları sırala; eşzamanlı tekrar ikinci kayıt üretmez.
+                    if not db.in_transaction:
+                        db.execute("BEGIN IMMEDIATE")
                     seen = one(db, "SELECT * FROM tdr_idempotency WHERE idem_key=?", (idem[0],))
                     if seen:
                         if seen["route"] != url.path or seen["body_hash"] != idem[1]:
-                            raise crud.Conflict("Aynı idempotency_key farklı içerikle kullanılamaz")
+                            raise crud.Conflict("Bu işlem anahtarı farklı bir istek için zaten kullanılmış")
                         return 200, {**json.loads(seen["response_json"]), "replayed": True}
                 params = {k: int(v) for k, v in match.groupdict().items()}
                 result = fn(Ctx(self, db, principal, params, dict(parse_qsl(url.query)), body))
@@ -105,8 +111,11 @@ class App:
             return 409, {"error": "Kayıt çakışması veya geçersiz ilişki"}
         except KeyError as exc:
             return 400, {"error": f"Eksik veya geçersiz alan: {exc.args[0]}"}
-        except (ValueError, TypeError, sqlite3.Error) as exc:
-            return 400, {"error": str(exc)}
+        except (ValueError, TypeError) as exc:
+            return 400, {"error": str(exc)[:350]}
+        except Exception:   # noqa: BLE001 — SQL, dosya yolu veya gizli bilgi sızdırılmaz (KS GRC _error)
+            LOG.exception("Beklenmeyen hata: %s %s", method, url.path)
+            return 500, {"error": "Beklenmeyen işlem hatası"}
 
     @staticmethod
     def _body(method, raw):
@@ -120,16 +129,19 @@ class App:
         idem = None
         if method == "POST" and "idempotency_key" in body:
             key = body.pop("idempotency_key")
-            if not isinstance(key, str) or not 8 <= len(key) <= 200:
-                raise crud.Invalid("idempotency_key 8-200 karakter olmalı")
-            digest = hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
-            idem = (key, digest)
+            if not isinstance(key, str) or not IDEMPOTENCY_KEY.fullmatch(key):
+                raise crud.Invalid("idempotency_key 8–160 güvenli karakter olmalı")
+            canonical = json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+            idem = (key, hashlib.sha256(canonical.encode()).hexdigest())
         return body, idem
 
     def _same_origin(self, principal, headers):
         """Tarayıcı oturumuyla yapılan değişiklikler yalnızca aynı kökenden kabul edilir."""
         if principal.auth_type == "api_key":
             return True
+        getter = getattr(headers, "get_all", None)
+        if getter and len(getter("Origin", [])) > 1:      # KS GRC: tek Origin başlığı
+            return False
         origin = headers.get("Origin")
         if origin is None:
             return principal.auth_type == "dev"   # yerel geliştirmede curl ve testler

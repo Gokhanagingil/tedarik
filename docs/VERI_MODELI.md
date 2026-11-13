@@ -57,13 +57,16 @@ Temel amaçların karşılığı:
 
 ## Risk
 
+Model ve kurallar KS GRC ile aynıdır (ayrıntı: `UYUM_SOZLESMESI.md`).
+
 | Kaynak | Amaç |
 | --- | --- |
-| `supplier_risks` | Risk kaydı; `category`, `owner`, `appetite` (1-25), `strategy`, `review_due`, `control_risk_ref` (KS GRC risk kaydına bağlantı) |
-| `risk_assessments` | Değiştirilemez değerlendirme geçmişi: olasılık × etki, azaltıcı katkı, artık skor, gerekçe, kim yaptı |
-| `risk_actions` | İşleme faaliyeti: sahip, hedef tarih, durum |
+| `supplier_risks` | Risk kaydı: tedarikçi ve isteğe bağlı angajman; risk ifadesi `cause`, `risk_event`, `consequence`; `likelihood`, `impact` (1-5), `appetite` (1-25), `owner`, `status` (open, in_treatment, accepted, closed), `response_strategy` (mitigate, avoid, transfer, accept), `treatment`, `review_date`, `control_risk_ref` (KS GRC `risks.code`) |
+| `risk_assessments` | Değiştirilemez değerlendirme: `assessor`, `rationale`, `inherent`, `mitigation_pct`, `residual`, o anki `appetite` ve riskin anlık görüntüsü (`snapshot`, azaltıcı önlemler dahil) |
+| `risk_decisions` | Değiştirilemez karar: kabul, kapanış, yeniden açma; kim, hangi rolle, hangi değerlendirmeye dayanarak, gerekçe ve iştah istisnası gerekçesi |
+| `risk_actions` | İşleme faaliyeti: `code`, sahip, hedef tarih, öncelik, durum (open, in_progress, validation, completed, cancelled), çözüm, kapanış zamanı |
 
-Hesap KS GRC ile aynıdır: içsel = olasılık × etki; katkı düşük %20, orta %40, yüksek %60, kısmen etkili önlem yarısı, toplam en çok %100; artık = içsel × (1 − katkı). Kabul ve kapanış güncel değerlendirme ve gerekçe ister. İştah üstü kabulü, değerlendirmeyi yapandan farklı bir yönetici onaylar.
+Hesap: içsel = olasılık × etki; katkı düşük %20, orta %40, yüksek %60, kısmen etkili önlem yarısı, toplam en çok %100; artık = içsel × (1 − katkı). Kabul ve kapanış `PATCH /api/tdr/supplier_risks/{id}` ile `assessment_id` (güncel değerlendirme) ve `decision_rationale` ister; değerlendirmeden sonra risk veya iştah değiştiyse yeniden değerlendirme gerekir. İştah üstü kabulü, değerlendirmeyi yapandan farklı bir Yönetici `exception_rationale` ile onaylar. Kabul edilmiş veya kapalı risk yalnızca gerekçeyle yeniden açılır ve yeni değerlendirme ister. Açık faaliyeti olan risk kapatılamaz.
 
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
@@ -80,4 +83,4 @@ Varsayılan akış: Taslak → Aday İnceleme → (mevcut tedarikçi seçildiyse
 
 ## Destek tabloları
 
-`audit_log` (denetim izi), `idempotency` (tekrar koruması), `import_batches` ve `import_rows` (aktarım geçmişi).
+`audit_log` (denetim izi; KS GRC `activity_log` ile aynı sütun adları), `idempotency` (tekrar koruması), `import_batches` ve `import_rows` (aktarım geçmişi).
