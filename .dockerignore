@@ -1,0 +1,6 @@
+# Yalnızca uygulama ve sabitlenmiş bağımlılıklar derleme bağlamına girer.
+**
+!/app.py
+!/requirements.txt
+!/tedarik/
+**/__pycache__

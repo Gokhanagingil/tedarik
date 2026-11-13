@@ -1,0 +1,59 @@
+name: Deploy Tedarik (isolated)
+# Yalnızca elle başlatılır. Önce testler, sonra kaynak arşivi SSH ile sunucuya gider ve deploy/deploy.sh çalışır.
+# Gerekli gizli değerler (Settings -> Secrets and variables -> Actions veya "tedarik" ortamı):
+#   TEDARIK_SSH_HOST, TEDARIK_SSH_USER, TEDARIK_SSH_KEY (özel anahtar), TEDARIK_SSH_KNOWN_HOSTS (ssh-keyscan çıktısı)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tedarik-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    environment: tedarik
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Tests before touching the server
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
+          python -m unittest discover -s tests
+          node --check tedarik/static/app.js
+          sh -n deploy/deploy.sh && sh -n deploy/backup.sh
+      - name: Verify deployment secrets
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+          KEY: ${{ secrets.TEDARIK_SSH_KEY }}
+          KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
+        run: |
+          for v in HOST USER KEY KNOWN; do eval "test -n \"\$$v\"" || { echo "Eksik gizli değer: TEDARIK_SSH_$v"; exit 1; }; done
+      - name: Deploy over SSH (only /opt/tedarik and the "tedarik" compose project)
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+          KEY: ${{ secrets.TEDARIK_SSH_KEY }}
+          KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          git archive --format=tar.gz -o tedarik.tar.gz HEAD
+          OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          scp $OPTS tedarik.tar.gz "$USER@$HOST:/tmp/tedarik-$GITHUB_SHA.tar.gz"
+          ssh $OPTS "$USER@$HOST" "set -eu
+            S=''; [ \$(id -u) = 0 ] || S='sudo -n'
+            R=/opt/tedarik/releases/$GITHUB_SHA
+            \$S mkdir -p \$R && \$S chmod 0700 /opt/tedarik
+            \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
+            \$S ln -sfn \$R /opt/tedarik/current
+            cd /opt/tedarik/current && \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} sh deploy/deploy.sh"
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

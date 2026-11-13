@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik, Excel, anket motoru ve arayüz tamamlandı; sıradaki iş dağıtım.
+Son güncelleme: 2026-11-13 · Aşama: uygulama ve dağıtım dosyaları hazır; sunucuya kurulum için GitHub'a SSH gizli değerleri bekleniyor.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -73,6 +73,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Aktarım sihirbazı (tür → dosya → deneme → uygula, sürükle-bırak, şablon indirme), dışa aktarım, kullanıcı yönetimi (geçici parola bir kez gösterilir).
   - Klavye: `/` arama, `Esc` panel ve pencere kapatma, satırlarda Enter. Dar ekran düzeni.
   - `scripts/browser_smoke.py`: gerçek Chromium'da her ekran ve ana akışlar; konsol hatası kabul edilmez. CI'da ayrı iş.
+- **Adım 6 (2026-11-13): Dağıtım.** `Dockerfile` (KS GRC düzeni), `deploy/compose.yaml` (PostgreSQL 16 iç ağda, uygulama yalnızca 127.0.0.1:18090, kaynak sınırları, salt okunur, root olmayan), `deploy/deploy.sh` (sırları sunucuda üretir, önce yedek, ilk yönetici, sağlık denetimi, diğer konteynerlerin değişmediğini doğrular), `deploy/backup.sh` (günlük pg_dump, özet, 14 gün), `.github/workflows/deploy.yml` (elle başlatılır, önce testler). Yan yana çalışan ilgisiz bir konteynerle prova edildi: kurulum, güncelleme, yedek, geri yükleme, Docker yeniden başlatması. Belge: `docs/DAGITIM.md`.
 - Testler: 60 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
@@ -82,7 +83,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
-- **Dağıtım dosyaları yok** (Dockerfile, compose, yedekleme).
+- **Sunucuya henüz kurulmadı.** Bu çalışma ortamından sunucuya SSH kapalı; kurulum GitHub Actions ile yapılacak (gizli değerler eklenince).
+- **Dışarıya erişim kararı bekleniyor** (alan adı ve TLS); şimdilik yalnızca SSH port yönlendirmesiyle erişilir.
+- **CI güvenlik kapıları eksik** (gitleaks, trivy, bandit, pip-audit).
 - **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
 
 ## Sıradaki adımlar (sırayla)
@@ -93,7 +96,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 4. ~~**Excel.**~~ Tamamlandı (2026-11-13). Kalan: gerçek SAP/Dynamics başlıklarıyla `ALIASES` doğrulaması.
 4a. ~~**Anket motoru**~~ Tamamlandı (2026-11-13). Not: anket tabloları değişti; eski iskelet veritabanı varsa silinip yeniden açılmalı (üretim verisi yok).
 5. ~~**Arayüz.**~~ Tamamlandı (2026-11-13).
-6. **Dağıtım.** KS GRC'nin Dockerfile, compose ve yedekleme düzenini PostgreSQL ile uyarla (`pg_dump` tabanlı yedek, geri yükleme denetimi); CI'a gitleaks, trivy, bandit, pip-audit ekle.
+6. ~~**Dağıtım.**~~ Tamamlandı (2026-11-13). Kalan: CI'a gitleaks, trivy, bandit, pip-audit; kalıcı alan adı ve TLS.
 7. **Periyodik işler.** Kritiklik seviyesine göre değerlendirme, anket ve risk gözden geçirme takvimi; geciken işler panosu.
 8. **MCP sözleşmesi.** `docs/MCP_SOZLESMESI.md`; KS GRC'ye kanıt akışı için örnek otomatik kontroller.
 9. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
@@ -104,4 +107,5 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Tedarikçi tipleri ve iş birimleri listesi.
 - Yeni rollerin (`KS.TDR.*`) KS GRC'nin Entra uygulama kaydına mı, ayrı bir kayda mı ekleneceği.
 - `tedarik` ve `control` repolarının görünürlüğü (şu an ikisi de herkese açık).
-- Üretim PostgreSQL'inin nerede çalışacağı: kurumun yönetilen PostgreSQL hizmeti mi, aynı sunucuda konteyner mi; sürüm (öneri 16 veya üzeri) ve yedekleme sorumlusu.
+- Sunucu (204.168.247.101) için GitHub'da `tedarik` ortamına SSH gizli değerleri (docs/DAGITIM.md) ve kalıcı erişim kararı (alan adı, TLS).
+- Üretim PostgreSQL'inin nerede çalışacağı (şimdilik aynı sunucuda yalıtılmış konteyner): kurumun yönetilen PostgreSQL hizmeti mi, aynı sunucuda konteyner mi; sürüm (öneri 16 veya üzeri) ve yedekleme sorumlusu.
