@@ -1,6 +1,6 @@
 """Pano özeti: arayüzdeki kartların ve grafiklerin tek veri kaynağı. Kapalı modülün bölümü yanıtta yer almaz."""
 from .. import auth as authz
-from ..db import one, rows
+from ..db import one, rows, today
 from ..http import API
 from ..schema import RESOURCES
 
@@ -31,14 +31,14 @@ def summary(c):
                                  "AND status='active'")["n"],
     }
     data["contracts_ending_90d"] = one(db, """SELECT COUNT(*) AS n FROM tdr_contracts WHERE status='active'
-        AND end_date BETWEEN date('now') AND date('now', '+90 days')""")["n"]
+        AND end_date BETWEEN ? AND ?""", (today(), today(days=90)))["n"]
     if c.app.enabled("performance"):
         sla = one(db, """SELECT COUNT(*) AS total, COALESCE(SUM(met), 0) AS met FROM tdr_sla_measurements
-            WHERE period_start >= date('now', '-3 months')""")
+            WHERE period_start >= ?""", (today(months=-3),))
         sla["rate"] = round(100 * sla["met"] / sla["total"], 1) if sla["total"] else None
         data["sla_90d"] = sla
         data["events_90d"] = rows(db, """SELECT event_type AS key, COUNT(*) AS count FROM tdr_performance_events
-            WHERE occurred_at >= date('now', '-3 months') GROUP BY event_type ORDER BY count DESC""")
+            WHERE occurred_at >= ? GROUP BY event_type ORDER BY count DESC""", (today(months=-3),))
     if c.app.enabled("risks"):
         data["risks"] = {
             "open": one(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks "
@@ -49,10 +49,10 @@ def summary(c):
             "unassessed": one(db, """SELECT COUNT(*) AS n FROM tdr_supplier_risks r WHERE r.status='open'
                 AND NOT EXISTS (SELECT 1 FROM tdr_risk_assessments a WHERE a.risk_id=r.id)""")["n"],
             "review_overdue": one(db, """SELECT COUNT(*) AS n FROM tdr_supplier_risks
-                WHERE status IN ('open','in_treatment','accepted') AND review_date < date('now')""")["n"],
+                WHERE status IN ('open','in_treatment','accepted') AND review_date < ?""", (today(),))["n"],
         }
     if c.app.enabled("surveys"):
-        data["surveys"] = one(db, """SELECT COUNT(*) AS invited, COALESCE(SUM(status='answered'), 0) AS answered
+        data["surveys"] = one(db, """SELECT COUNT(*) AS invited, COALESCE(SUM(CASE WHEN status='answered' THEN 1 ELSE 0 END), 0) AS answered
             FROM tdr_survey_invitations""")
     return data
 

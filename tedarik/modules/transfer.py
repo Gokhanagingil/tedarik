@@ -13,13 +13,12 @@ import json
 import re
 
 from .. import audit, auth as authz, crud
-from ..db import one, rows, utcnow
+from ..db import fold as fold_letters, one, rows, utcnow
 from ..http import API, Raw
 from ..schema import RESOURCES, Resource, fk
 
 M = "transfer"
 SOURCES = ("sap", "crm", "outsourcing", "servicenow", "manual")
-FOLD = str.maketrans("çğıöşüÇĞİÖŞÜ", "cgiosuCGIOSU")
 
 # Kanonik alan -> kabul edilen kaynak başlıkları (katlanmış: küçük harf, Türkçe karaktersiz).
 # SAP (LFA1) ve Dynamics başlıkları varsayımdır; gerçek dışa aktarımlarla doğrulanacak.
@@ -38,17 +37,17 @@ LOOKUP = {alias: field for field, names in ALIASES.items() for alias in names}
 
 BATCHES = Resource("import_batches", "İçe Aktarım Kayıtları", {
     "kind": "TEXT NOT NULL", "source_system": "TEXT NOT NULL", "filename": "TEXT NOT NULL",
-    "status": "TEXT NOT NULL", "summary_json": "TEXT", "created_by": "TEXT NOT NULL", "created_at": "TEXT NOT NULL"},
+    "status": "TEXT NOT NULL", "summary_json": "TEXT", "created_by": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL"},
     module=M, api=("list", "get"), search=("filename", "source_system"))
 
 Resource("import_rows", "İçe Aktarım Satırları", {
     "batch_id": fk("import_batches", cascade=True), "row_no": "INTEGER NOT NULL", "payload_json": "TEXT NOT NULL",
     "action": "TEXT NOT NULL", "message": "TEXT", "target_id": "INTEGER"},
-    module=M, api=("list",), search=("action", "message"))
+    module=M, api=("list",), search=("action", "message"), immutable=True)
 
 
 def fold(text):
-    return " ".join(str(text or "").translate(FOLD).lower().split())
+    return " ".join(fold_letters(text).split())
 
 
 def norm_name(name):

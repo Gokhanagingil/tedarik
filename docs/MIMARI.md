@@ -26,7 +26,8 @@ Tarayıcı (derlemesiz istemci)      MCP uygulaması (ServiceNow, Dynamics)     
                                         |
         Ortak kayıt işlemleri (crud.py) · denetim izi (audit.py) · şema kaydı (schema.py)
                                         |
-                              SQLite, WAL (db.py), tdr_ önekli tablolar
+             Veritabanı katmanı (db.py) · şema ve göçler (migrate.py), tdr_ önekli tablolar
+                    PostgreSQL (üretim)  |  SQLite, WAL (geliştirme, test)
 ```
 
 ## Modüller
@@ -95,4 +96,10 @@ Derleme gerektirmeyen tarayıcı istemcisi, KS GRC'nin görsel diliyle: solda me
 
 ## Ölçek ve sınırlar
 
-SQLite tek yazıcıyla çalışır; kurum içi kullanım için yeterlidir, yoğun eşzamanlı yazmada ölçülmelidir. Veri erişimi `db.py` ve `schema.py` içinde toplandığı için PostgreSQL'e geçiş bu iki dosyayla sınırlı kalır. Listeler sayfa başına en çok 1000 kayıt döner.
+Üretim veritabanı PostgreSQL'dir (K-011): eşzamanlı yazıcılar, bağlantı havuzu (`TEDARIK_DB_POOL_SIZE`), yerel tipler (DATE, TIMESTAMPTZ, NUMERIC, BIGINT kimlik), yabancı anahtar dizinleri, değişmez tablolar için tetikleyici, aynı kayıt için danışma kilidi (`db.lock`). SQLite yerel geliştirme ve test içindir; tek yazıcıyla çalışır.
+
+Motor bağımsızlık kuralları (CLAUDE.md'de de yazılı): SQL'de parametre `?`; tarih hesabı Python'da (`db.today()`), SQL'de `date('now')` yok; çakışmada `ON CONFLICT DO NOTHING`; metin arama `tdr_fold()` ile (Türkçe harf katlama); toplamda `SUM(CASE WHEN ...)`; birleştirmede `db.group_concat()`. Tarih ve zaman alanları uygulamada doğrulanır ve UTC ISO 8601 metnine normalleşir; iki motorun JSON çıktısı aynıdır.
+
+Şema iki katmanlıdır (`migrate.py`): `Resource` tanımlarından bildirimsel eşitleme (yeni tablo, yeni boş bırakılabilir alan, dizin, tetikleyici) ve veri dönüştüren adımlar için sürümlü göç kaydı (`tdr_schema_migrations`). Zorunlu veya tekil yeni alan kendiliğinden eklenmez; açık göç ister. Açılış kilit altında yapılır; birden çok süreç aynı anda başlayabilir.
+
+Listeler sayfa başına en çok 1000 kayıt döner.

@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: KS GRC uyumu doğrulandı; sıradaki iş veritabanı temeli (PostgreSQL).
+Son güncelleme: 2026-11-13 · Aşama: KS GRC uyumu doğrulandı, PostgreSQL temeli kuruldu; sıradaki iş kimlik aktarımı.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -34,15 +34,23 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Risk: KS GRC alan adları ve kodları (`in_treatment`, `response_strategy`, `review_date`), risk ifadesi (neden, olay, etki), olasılık ve etki risk kaydında, değerlendirme anlık görüntüsü ve o anki iştah, ayrı ve değişmez `risk_decisions` tablosu, değişen riskte yeniden değerlendirme, yeniden açma kuralları, açık faaliyetle kapanış yasağı, iştah üstü kabulü yalnızca farklı bir Yönetici. Faaliyetler KS GRC `actions` yapısında.
   - Hata yanıtı: beklenmeyen hata ve SQL hatası 500 ile, ayrıntı sızdırılmadan.
   - `/api/health` kimlik ister (KS GRC gibi). Birden fazla `Origin` başlığı reddedilir.
-- Testler: 24 uçtan uca test, tamamı geçiyor (`python -m unittest discover -s tests -v`).
+- **Adım 2 (2026-11-13): Veritabanı temeli, PostgreSQL** (K-011).
+  - `db.py`: motor bağımsız katman. PostgreSQL için bağlantı havuzu (`psycopg-pool`), UTC oturum saati, 30 saniye sorgu sınırı, isteğe bağlı şema (`TEDARIK_DB_SCHEMA`); `?` parametre çevirisi, `RETURNING id` ile eklenen kimlik, danışma kilidi (`db.lock`), ortak hata türleri, iki motorda aynı JSON çıktısı.
+  - `schema.py`: tipli alanlar (`DATE`, `TIMESTAMP`, `DECIMAL`); PostgreSQL'de yerel tipler (DATE, TIMESTAMPTZ, NUMERIC(18,2), BIGINT kimlik), SQLite'ta KS GRC ile aynı tipler. Yabancı anahtar dizinleri kendiliğinden.
+  - `migrate.py`: bildirimsel eşitleme + sürümlü göç kaydı (`tdr_schema_migrations`), açılış kilit altında, bağımlılık sırasıyla tablo açma; değişmez tablolarda iki motorda tetikleyici; KS GRC ile ortak kimlik tabloları (K-013).
+  - Tüm tarih ve zaman alanları doğrulanır, zamanlar UTC'ye çevrilir. SQLite'a özgü SQL kaldırıldı.
+  - Türkçe arama düzeltildi: `Örnek`, `ÖRNEK`, `ornek` aynı sonucu verir (önceden ASCII dışı büyük harfle başlayan arama iki motorda da boş dönüyordu). `%` ve `_` artık joker sayılmıyor.
+  - `requirements.txt`: psycopg 3.3.9, psycopg-binary 3.3.9, psycopg-pool 3.3.3, typing-extensions 4.16.0; hash ile sabit, temiz ortamda doğrulandı.
+  - CI: SQLite (ek paketsiz) ve PostgreSQL 16 matrisi.
+- Testler: 30 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
 
 - **Arayüz yok.** Yalnızca API ve yer tutucu sayfa var.
 - **Oturum sağlayıcısı yok.** Yalnızca yerel `dev` modu ve MCP anahtarı çalışır; `local` ve `entra` modları açılışta durur.
-- **PostgreSQL yok.** Kod SQLite'a özgü SQL içeriyor (`date('now')`, `GROUP_CONCAT`, `INSERT OR IGNORE`, `PRAGMA`).
-- **Tarih alanları doğrulanmıyor** (risk gözden geçirme tarihi hariç).
+- **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
+- **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **XLSX yok.** İçe ve dışa aktarma şimdilik CSV (UTF-8, `;` ayraçlı; Excel doğrudan açar).
 - **İçe aktarma yalnızca tedarikçi ana verisi için.** Angajman, katalog, sözleşme aktarımları yok.
 - **Birim bazlı yazma kapsamı yok.** Birim Kullanıcısı tüm angajmanları değiştirebilir.
@@ -53,7 +61,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 ## Sıradaki adımlar (sırayla)
 
 1. ~~**KS GRC'yi tam oku ve uyumu doğrula.**~~ Tamamlandı (2026-11-13).
-2. **Veritabanı temeli: PostgreSQL** (K-011). Motor bağımsız veritabanı katmanı (bağlantı havuzu, `?` çevirisi, eklenen kimlik, kilit, hata türleri); tipli alan tanımları ve tarih doğrulaması; sürümlü göç kaydı; değişmez tablolarda tetikleyici; SQLite'a özgü SQL'in kaldırılması; test takımının iki motorda çalışması; CI'da PostgreSQL servisi.
+2. ~~**Veritabanı temeli: PostgreSQL** (K-011).~~ Tamamlandı (2026-11-13).
 3. **Kimlik aktarımı.** `identity.py` ve `entra_auth.py` dosyalarını `tedarik/vendor/` altına al (K-012, K-013); `local` ve `entra` modlarını aç; rolleri Entra uygulama rollerine bağla; birim bazlı yazma kapsamını ekle; giriş hız sınırı; `/api/me`.
 4. **Excel.** `xlsx_io.py` aktarımı; XLSX içe ve dışa aktarma; Türkçe alan etiketleri (`/api/tdr/metadata`); uygulamanın kendi ürettiği içe aktarma şablonu; angajman, katalog ve sözleşme aktarımları; gerçek başlıklarla `ALIASES` doğrulaması.
 5. **Arayüz.** KS GRC'nin görsel diliyle (`ui_v2.py` + `ksgrc.js` düzeni): tedarikçi listesi ve filtreler, tedarikçi 360 paneli, angajman, performans, anket, risk ekranları, pano (satır içi SVG grafikler). Her ekran için Playwright duman testi.

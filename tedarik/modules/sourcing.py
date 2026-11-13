@@ -17,8 +17,8 @@ FLOW = "sourcing_default"
 
 NEEDS = Resource("needs", "İş İhtiyaçları", {
     "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "description": "TEXT", "org_unit_id": fk("org_units"),
-    "catalog_item_id": fk("catalog_items", False), "requester": "TEXT NOT NULL", "needed_by": "TEXT",
-    "workflow_instance_id": fk("workflow_instances", False), "created_at": "TEXT NOT NULL", "updated_at": "TEXT"},
+    "catalog_item_id": fk("catalog_items", False), "requester": "TEXT NOT NULL", "needed_by": "DATE",
+    "workflow_instance_id": fk("workflow_instances", False), "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", api=("list", "get", "update"), search=("code", "title"),
     readonly=("requester", "workflow_instance_id"))
 
@@ -29,8 +29,8 @@ Resource("need_candidates", "Aday Tedarikçiler", {
     enums={"origin": ("existing", "new")})
 
 Resource("quotes", "Teklifler", {
-    "need_id": fk("needs"), "supplier_id": fk("suppliers"), "amount": "REAL NOT NULL",
-    "currency": "TEXT NOT NULL DEFAULT 'TRY'", "received_at": "TEXT NOT NULL", "valid_until": "TEXT",
+    "need_id": fk("needs"), "supplier_id": fk("suppliers"), "amount": "DECIMAL NOT NULL",
+    "currency": "TEXT NOT NULL DEFAULT 'TRY'", "received_at": "DATE NOT NULL", "valid_until": "DATE",
     "document_ref": "TEXT", "note": "TEXT"}, module=M, write="write", search=("note",))
 
 DEFINITION = {
@@ -122,7 +122,7 @@ def register(app):
 
 
 def seed(db):
-    db.execute("INSERT OR IGNORE INTO tdr_workflow_definitions (code, name, version, definition_json) "
-               "VALUES (?,?,1,?)", (FLOW, "Kaynak Bulma (varsayılan)", json.dumps(DEFINITION, ensure_ascii=False)))
-    db.execute("INSERT OR IGNORE INTO tdr_policies (code, value_json, description) VALUES (?,?,?)",
+    db.execute("INSERT INTO tdr_workflow_definitions (code, name, version, definition_json) "
+               "VALUES (?,?,1,?) ON CONFLICT DO NOTHING", (FLOW, "Kaynak Bulma (varsayılan)", json.dumps(DEFINITION, ensure_ascii=False)))
+    db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                ("sourcing.min_quotes", "3", "Mevcut tedarikçi seçilmediğinde alınması gereken en az teklif sayısı"))

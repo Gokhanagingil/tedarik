@@ -1,2 +1,9 @@
-# Bilerek boş: uygulama yalnızca Python 3.12 standart kütüphanesini kullanır.
-# Kimlik ve XLSX aktarımıyla KS GRC'deki paketler aynı sürüm ve hash ile buraya eklenecek.
+# Linux CPython 3.12, amd64/arm64 (glibc and musl wheels only). KS GRC requirements.txt ile aynı kural:
+# yalnızca ikili paket, her sürüm hash ile sabit. Kurulum:
+#   python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
+# SQLite ile yerel geliştirme ve test ek paket istemez; bu paketler PostgreSQL içindir (K-011).
+# Kimlik (PyJWT, cryptography) ve XLSX (defusedxml) paketleri KS GRC ile aynı sürüm ve hashle sonraki adımlarda eklenir.
+psycopg==3.3.9 --hash=sha256:d2d7d04a1ce6dab4f5b27316bea3b52585cafa2f2d631e5b09dd69823f5c26f6
+psycopg-binary==3.3.9 --hash=sha256:a99f0b9a19ed7a56bf5d6776456b8f15f5364db8853b0f5d184db394a45c391d --hash=sha256:b081348d8992af26e9b252f04876c286428418a6b7845d8d4caae2044b259668 --hash=sha256:30a95cb2b00b94b4ec4fd5d41de047598c60e0db26fd43bd9154152cc380b282 --hash=sha256:b7c4b2039d82f635311e41e7d392ff1bddd94a2447f9668c6531489cc86a8ce2
+psycopg-pool==3.3.3 --hash=sha256:9b9cd6a4fcec47a410f7e82d408540e7f77b478509e91b44c1a5457a13e5ff37
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

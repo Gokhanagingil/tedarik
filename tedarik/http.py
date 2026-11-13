@@ -7,12 +7,12 @@ import hashlib
 import json
 import logging
 import re
-import sqlite3
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qsl, urlparse
 
 from . import audit, auth as authz, crud
-from .db import connect, initialize, one, utcnow
+from . import migrate
+from .db import Database, IntegrityError, one, utcnow
 from .schema import RESOURCES, Resource
 
 API = "/api/tdr"   # KS GRC ile birleşmede uç nokta çakışmasını önleyen ad alanı
@@ -22,8 +22,8 @@ LOG = logging.getLogger("tedarik")
 
 Resource("idempotency", "Tekrar Koruması", {
     "idem_key": "TEXT NOT NULL UNIQUE", "route": "TEXT NOT NULL", "body_hash": "TEXT NOT NULL",
-    "response_json": "TEXT NOT NULL", "created_at": "TEXT NOT NULL",
-}, module="core", api=(), search=())
+    "response_json": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL",
+}, module="core", api=(), search=(), immutable=True)
 
 HOME = """<!doctype html><html lang="tr"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Tedarik</title>
@@ -51,6 +51,10 @@ class App:
         self.config = config
         self.auth = authz.Auth(config)
         self.routes = []
+        self.database = Database(config)
+
+    def close(self):
+        self.database.close()
 
     def enabled(self, module):
         return module in self.config.modules
@@ -83,11 +87,10 @@ class App:
             body, idem = self._body(method, raw)
             if method != "GET" and not self._same_origin(principal, headers):
                 return 403, {"error": "Güvenlik doğrulaması başarısız"}
-            with connect(self.config.db) as db:
+            with self.database.connect() as db:
                 if idem:
                     # KS GRC gibi: alındıyı okumadan önce yazıcıları sırala; eşzamanlı tekrar ikinci kayıt üretmez.
-                    if not db.in_transaction:
-                        db.execute("BEGIN IMMEDIATE")
+                    db.lock("idempotency:" + idem[0])
                     seen = one(db, "SELECT * FROM tdr_idempotency WHERE idem_key=?", (idem[0],))
                     if seen:
                         if seen["route"] != url.path or seen["body_hash"] != idem[1]:
@@ -107,7 +110,7 @@ class App:
             return 403, {"error": str(exc)}
         except crud.Conflict as exc:
             return 409, {"error": str(exc)}
-        except sqlite3.IntegrityError:
+        except IntegrityError:
             return 409, {"error": "Kayıt çakışması veya geçersiz ilişki"}
         except KeyError as exc:
             return 400, {"error": f"Eksik veya geçersiz alan: {exc.args[0]}"}
@@ -191,14 +194,14 @@ def build(config):
     from . import modules
     app = App(config)
     loaded = modules.load(config)
-    initialize(config.db, config.modules)
+    migrate.sync(app.database, config.modules)
     for res in RESOURCES.values():
         if res.module in config.modules:
             resource_routes(app, res)
     for mod in loaded:
         if hasattr(mod, "register"):
             mod.register(app)
-    with connect(config.db) as db:
+    with app.database.connect() as db:
         for mod in loaded:
             if hasattr(mod, "seed"):
                 mod.seed(db)

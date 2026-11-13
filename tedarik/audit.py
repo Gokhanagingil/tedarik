@@ -15,11 +15,12 @@ CHANGES_LIMIT = 20000
 SECRET_FIELDS = {"content_base64", "password", "current_password", "new_password", "api_key"}
 
 Resource("audit_log", "Denetim İzi", {
-    "occurred_at": "TEXT NOT NULL", "actor": "TEXT NOT NULL", "auth_type": "TEXT NOT NULL",
+    "occurred_at": "TIMESTAMP NOT NULL", "actor": "TEXT NOT NULL", "auth_type": "TEXT NOT NULL",
     "method": "TEXT NOT NULL", "object_type": "TEXT NOT NULL", "object_id": "TEXT",
     "description": "TEXT", "changes_json": "TEXT",
 }, module="core", api=("list",), search=("object_type", "actor"),
-    read_roles={"ADMIN", "SUPPLIER_MANAGER", "AUDITOR"})
+    read_roles={"ADMIN", "SUPPLIER_MANAGER", "AUDITOR"}, immutable=True,
+    indexes=(("occurred_at",), ("object_type", "object_id")))
 
 
 def _redact(changes):

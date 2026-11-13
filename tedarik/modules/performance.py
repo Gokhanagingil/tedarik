@@ -1,6 +1,6 @@
 """Performans: SLA tanımı ve ölçümü, kriter bazlı değerlendirme (scorecard), performans olay günlüğü."""
 from .. import auth as authz, crud
-from ..db import one, rows, utcnow
+from ..db import one, rows, today, utcnow
 from ..http import API
 from ..schema import RESOURCES, Resource, fk
 
@@ -16,9 +16,9 @@ SLAS = Resource("sla_definitions", "SLA Tanımları", {
            "period": ("monthly", "quarterly", "yearly")})
 
 MEASUREMENTS = Resource("sla_measurements", "SLA Ölçümleri", {
-    "sla_id": fk("sla_definitions"), "period_start": "TEXT NOT NULL", "actual_value": "REAL NOT NULL",
+    "sla_id": fk("sla_definitions"), "period_start": "DATE NOT NULL", "actual_value": "REAL NOT NULL",
     "met": "INTEGER NOT NULL", "source": "TEXT NOT NULL DEFAULT 'manual'", "note": "TEXT",
-    "recorded_by": "TEXT NOT NULL", "recorded_at": "TEXT NOT NULL"},
+    "recorded_by": "TEXT NOT NULL", "recorded_at": "TIMESTAMP NOT NULL"},
     module=M, write="write", unique=(("sla_id", "period_start"),), search=(), machine="rw",
     readonly=("met", "recorded_by", "recorded_at"), enums={"source": ("manual", "import", "mcp")})
 
@@ -27,8 +27,8 @@ Resource("review_criteria", "Değerlendirme Kriterleri", {
     "active": "INTEGER NOT NULL DEFAULT 1"}, module=M, write="admin")
 
 Resource("performance_reviews", "Performans Değerlendirmeleri", {
-    "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "period_start": "TEXT NOT NULL",
-    "period_end": "TEXT NOT NULL", "comment": "TEXT", "reviewer": "TEXT NOT NULL", "created_at": "TEXT NOT NULL"},
+    "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "period_start": "DATE NOT NULL",
+    "period_end": "DATE NOT NULL", "comment": "TEXT", "reviewer": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL"},
     module=M, write="write", search=("comment",), readonly=("reviewer",))
 
 Resource("review_scores", "Değerlendirme Puanları", {
@@ -38,7 +38,7 @@ Resource("review_scores", "Değerlendirme Puanları", {
 
 EVENTS = Resource("performance_events", "Performans Olayları", {
     "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "event_type": "TEXT NOT NULL",
-    "severity": "TEXT NOT NULL DEFAULT 'medium'", "occurred_at": "TEXT NOT NULL", "description": "TEXT NOT NULL",
+    "severity": "TEXT NOT NULL DEFAULT 'medium'", "occurred_at": "TIMESTAMP NOT NULL", "description": "TEXT NOT NULL",
     "reference": "TEXT", "source": "TEXT NOT NULL DEFAULT 'manual'", "recorded_by": "TEXT NOT NULL"},
     module=M, write="write", search=("description", "reference"), machine="rw", readonly=("recorded_by",),
     enums={"event_type": ("sla_breach", "incident", "delivery_delay", "escalation", "praise", "other"),
@@ -90,16 +90,19 @@ def scorecard(c):
     authz.check(c.principal, RESOURCES["suppliers"], "read")
     sid = c.params["id"]
     crud.get(c.db, RESOURCES["suppliers"], sid)
+    since = today(months=-12)
     sla = one(c.db, """SELECT COUNT(*) AS total, COALESCE(SUM(m.met), 0) AS met FROM tdr_sla_measurements m
         JOIN tdr_sla_definitions d ON d.id=m.sla_id JOIN tdr_engagements e ON e.id=d.engagement_id
-        WHERE e.supplier_id=? AND m.period_start >= date('now', '-12 months')""", (sid,))
+        WHERE e.supplier_id=? AND m.period_start >= ?""", (sid, since))
     sla["rate"] = round(100 * sla["met"] / sla["total"], 1) if sla["total"] else None
-    review = one(c.db, """SELECT ROUND(SUM(s.score * k.weight) * 1.0 / SUM(k.weight), 2) AS score,
+    review = one(c.db, """SELECT SUM(s.score * k.weight) AS weighted, SUM(k.weight) AS weights,
         COUNT(DISTINCT r.id) AS reviews FROM tdr_review_scores s
         JOIN tdr_performance_reviews r ON r.id=s.review_id JOIN tdr_review_criteria k ON k.id=s.criterion_id
-        WHERE r.supplier_id=? AND r.period_end >= date('now', '-12 months')""", (sid,))
+        WHERE r.supplier_id=? AND r.period_end >= ?""", (sid, since))
+    weighted, weights = review.pop("weighted"), review.pop("weights")
+    review["score"] = round(weighted / weights, 2) if weights else None
     events = rows(c.db, """SELECT event_type, COUNT(*) AS count FROM tdr_performance_events
-        WHERE supplier_id=? AND occurred_at >= date('now', '-12 months') GROUP BY event_type""", (sid,))
+        WHERE supplier_id=? AND occurred_at >= ? GROUP BY event_type""", (sid, since))
     return {"supplier_id": sid, "sla": sla, "review": review, "events": events}
 
 
@@ -111,5 +114,5 @@ def seed(db):
     for code, name, weight in (("QUALITY", "Hizmet ve Ürün Kalitesi", 3), ("DELIVERY", "Zamanında Teslim", 3),
                                ("COMMS", "İletişim ve Çözüm Hızı", 2), ("COMMERCIAL", "Ticari Uyum", 1),
                                ("COMPLIANCE", "Güvenlik ve Uyum", 2)):
-        db.execute("INSERT OR IGNORE INTO tdr_review_criteria (code, name, weight) VALUES (?,?,?)",
+        db.execute("INSERT INTO tdr_review_criteria (code, name, weight) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, name, weight))

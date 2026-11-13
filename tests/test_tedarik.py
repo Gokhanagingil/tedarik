@@ -1,17 +1,23 @@
-"""Uçtan uca davranış testleri. Soket açılmaz; App.dispatch doğrudan çağrılır. Veri sentetiktir."""
+"""Uçtan uca davranış testleri. Soket açılmaz; App.dispatch doğrudan çağrılır. Veri sentetiktir.
+
+Varsayılan motor SQLite'tır. `TEDARIK_TEST_DATABASE_URL=postgresql://...` verilirse aynı testler
+PostgreSQL'de, her test için ayrı ve sonra silinen bir şemada çalışır (K-011).
+"""
 import base64
 import json
 import os
+import secrets
 import tempfile
 import unittest
 
 from tedarik.auth import Principal
 from tedarik.config import Config
 from tedarik.crud import Forbidden
-from tedarik.db import connect, one
+from tedarik.db import one
 from tedarik.http import build
 
 KEY = "k" * 40
+PG_URL = os.environ.get("TEDARIK_TEST_DATABASE_URL", "")
 
 
 class Base(unittest.TestCase):
@@ -19,14 +25,36 @@ class Base(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.path = os.path.join(self.tmp.name, "test.db")
+        self.schema = ""
+        if PG_URL:
+            import psycopg
+            self.schema = "t_" + secrets.token_hex(6)
+            with psycopg.connect(PG_URL, autocommit=True) as admin:
+                admin.execute(f'CREATE SCHEMA "{self.schema}"')
+
+            def drop():
+                with psycopg.connect(PG_URL, autocommit=True) as admin:
+                    admin.execute(f'DROP SCHEMA "{self.schema}" CASCADE')
+            self.addCleanup(drop)
         self.app = self.make()
 
+    def env(self, **extra):
+        env = {"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "dev", "TEDARIK_API_KEY": KEY}
+        if PG_URL:
+            env.update({"TEDARIK_DATABASE_URL": PG_URL, "TEDARIK_DB_SCHEMA": self.schema})
+        env.update(extra)
+        return env
+
     def make(self, role="ADMIN", user="dev", modules=None):
-        env = {"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "dev", "TEDARIK_DEV_ROLE": role,
-               "TEDARIK_DEV_USER": user, "TEDARIK_API_KEY": KEY}
+        extra = {"TEDARIK_DEV_ROLE": role, "TEDARIK_DEV_USER": user}
         if modules:
-            env["TEDARIK_MODULES"] = modules
-        return build(Config(env))
+            extra["TEDARIK_MODULES"] = modules
+        app = build(Config(self.env(**extra)))
+        self.addCleanup(app.close)
+        return app
+
+    def db(self):
+        return self.app.database.connect()
 
     def call(self, method, path, body=None, app=None, headers=None):
         raw = json.dumps(body).encode() if body is not None else b""
@@ -56,7 +84,7 @@ class Guvenlik(Base):
         with self.assertRaises(ValueError):
             Config({"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "dev", "TEDARIK_HOST": "0.0.0.0"})
         with self.assertRaises(RuntimeError):
-            build(Config({"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "entra"}))
+            build(Config(self.env(TEDARIK_AUTH_MODE="entra")))
 
     def test_roller(self):
         self.base_data()
@@ -112,7 +140,8 @@ class Guvenlik(Base):
         def broken(c):
             c.db.execute("SELECT * FROM olmayan_tablo")
         self.app.route("GET", "/api/tdr/bozuk", broken)
-        status, payload = self.call("GET", "/bozuk")
+        with self.assertLogs("tedarik", "ERROR"):
+            status, payload = self.call("GET", "/bozuk")
         self.assertEqual((status, payload), (500, {"error": "Beklenmeyen işlem hatası"}))
 
     def test_birden_fazla_origin_reddedilir(self):
@@ -133,6 +162,82 @@ class Guvenlik(Base):
         self.ok("POST", "/import/suppliers", {"source_system": "sap", "filename": "a.csv", "dry_run": True,
                                               "content_base64": base64.b64encode(b"name\r\nA\r\n").decode()})
         self.assertNotIn("QQ", json.dumps(self.ok("GET", "/audit_log")))
+
+
+class Veritabani(Base):
+    def test_motor_secimi_ve_yerel_tipler(self):
+        self.assertEqual(self.app.database.dialect, "postgres" if PG_URL else "sqlite")
+        if not PG_URL:
+            return
+        with self.db() as db:
+            types = {(r["table_name"], r["column_name"]): r["data_type"] for r in db.execute(
+                "SELECT table_name, column_name, data_type FROM information_schema.columns "
+                "WHERE table_schema = current_schema()").fetchall()}
+        self.assertEqual(types[("tdr_engagements", "start_date")], "date")
+        self.assertEqual(types[("tdr_suppliers", "created_at")], "timestamp with time zone")
+        self.assertEqual(types[("tdr_sla_definitions", "target_value")], "double precision")
+        self.assertEqual(types[("users", "username")], "text")          # KS GRC ile ortak kimlik tablosu
+        self.assertEqual(types[("tdr_suppliers", "id")], "bigint")
+
+    def test_tarih_ve_zaman_dogrulanir_ve_utc_ye_cevrilir(self):
+        unit, item, supplier, engagement = self.base_data()
+        body = {"code": "E9", "supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit}
+        for bad in ("2026-13-01", "13.11.2026", "2026-2-1", 20261113):
+            self.assertEqual(self.call("POST", "/engagements", {**body, "start_date": bad})[0], 400, bad)
+        self.ok("POST", "/engagements", {**body, "start_date": "2026-11-13"})
+        event = {"supplier_id": supplier, "event_type": "incident", "description": "Kesinti"}
+        self.assertEqual(self.call("POST", "/performance_events", {**event, "occurred_at": "2026-11-13T12:00"})[0], 400)
+        made = self.ok("POST", "/performance_events", {**event, "occurred_at": "2026-11-13T12:00:00+03:00"})
+        self.assertEqual(self.ok("GET", f"/performance_events/{made['id']}")["occurred_at"], "2026-11-13T09:00:00+00:00")
+        self.assertEqual(self.call("POST", "/suppliers", {"code": 5, "name": "Sayı kodlu"})[0], 400)
+        self.assertEqual(self.call("GET", "/suppliers?limit=x")[0], 400)
+
+    def test_turkce_arama_iki_motorda_ayni(self):
+        self.ok("POST", "/suppliers", {"code": "S1", "name": "Örnek Bilişim A.Ş."})
+        self.ok("POST", "/suppliers", {"code": "S2", "name": "İZMİR ÇÖZÜM LTD"})
+        self.ok("POST", "/suppliers", {"code": "S3", "name": "Yüzde%50 Ticaret"})
+        for query, expected in (("örnek", ["S1"]), ("ÖRNEK", ["S1"]), ("ornek bilisim", ["S1"]),
+                                ("izmir", ["S2"]), ("çözüm", ["S2"]), ("%", ["S3"]), ("_", [])):
+            from urllib.parse import quote
+            found = [r["code"] for r in self.ok("GET", "/suppliers?q=" + quote(query))]
+            self.assertEqual(found, expected, query)
+
+    def test_degismez_tablolar_veritabaninda_korunur(self):
+        from tedarik.db import IntegrityError
+        self.ok("POST", "/org_units", {"code": "A", "name": "A"})
+        for sql in ("UPDATE tdr_audit_log SET actor='baskasi'", "DELETE FROM tdr_audit_log"):
+            with self.assertRaises(IntegrityError):
+                with self.db() as db:
+                    db.execute(sql)
+        self.assertEqual(self.ok("GET", "/audit_log")[0]["actor"], "dev")
+
+    def test_sema_evrimi(self):
+        from tedarik import migrate
+        from tedarik.schema import RESOURCES
+        suppliers = RESOURCES["suppliers"]
+        migrate.sync(self.app.database, self.app.config.modules)          # tekrar çalıştırmak zararsız
+        self.ok("POST", "/suppliers", {"code": "S1", "name": "Önce"})
+        original = dict(suppliers.fields), dict(suppliers.columns)
+        self.addCleanup(lambda: (suppliers.fields.clear(), suppliers.fields.update(original[0]),
+                                 suppliers.columns.clear(), suppliers.columns.update(original[1])))
+        from tedarik.schema import Field
+        suppliers.fields["duns"] = "TEXT"
+        suppliers.columns["duns"] = Field("duns", "TEXT")
+        migrate.sync(self.app.database, self.app.config.modules)
+        self.ok("PATCH", "/suppliers/1", {"duns": "123456789"})
+        suppliers.fields["zorunlu"] = "TEXT NOT NULL"
+        suppliers.columns["zorunlu"] = Field("zorunlu", "TEXT NOT NULL")
+        with self.assertRaises(RuntimeError):
+            migrate.sync(self.app.database, self.app.config.modules)
+
+    def test_sayisal_ozetler_iki_motorda_ayni(self):
+        _, _, supplier, engagement = self.base_data()
+        card = self.ok("GET", f"/suppliers/{supplier}/scorecard")
+        self.assertEqual(card["sla"], {"total": 0, "met": 0, "rate": None})
+        self.assertIs(type(card["sla"]["total"]), int)
+        summary = self.ok("GET", "/dashboard/summary")
+        self.assertIs(type(summary["suppliers"]["total"]), int)
+        self.assertEqual(summary["surveys"], {"invited": 0, "answered": 0})
 
 
 class Cekirdek(Base):
@@ -266,7 +371,7 @@ class Risk(Base):
         accept = {"status": "accepted", "response_strategy": "accept", "decision_rationale": "İş kararı",
                   "assessment_id": assessed["id"]}
         from tedarik.modules.risks import decide
-        with connect(self.path) as db:   # oturumlu kullanıcı: değerlendirmeyi yapan kişi kendi istisnasını onaylayamaz
+        with self.db() as db:   # oturumlu kullanıcı: değerlendirmeyi yapan kişi kendi istisnasını onaylayamaz
             current = one(db, "SELECT * FROM tdr_supplier_risks WHERE id=?", (risk,))
             details = {k: accept[k] for k in ("decision_rationale", "assessment_id")} | {"exception_rationale": "x"}
             with self.assertRaises(Forbidden):
@@ -375,7 +480,7 @@ class KaynakBulma(Base):
         self.assertEqual(self.step(need, "select_existing")[1]["state"], "approval")
 
     def test_politika_degisince_kural_degisir(self):
-        with connect(self.path) as db:
+        with self.db() as db:
             db.execute("UPDATE tdr_policies SET value_json='1' WHERE code='sourcing.min_quotes'")
         unit, _, supplier, _ = self.base_data()
         need = self.ok("POST", "/needs", {"code": "N3", "title": "x", "org_unit_id": unit}, app=self.full)["id"]

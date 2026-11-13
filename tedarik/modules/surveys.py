@@ -18,20 +18,20 @@ Resource("survey_questions", "Anket Soruları", {
 
 CAMPAIGNS = Resource("survey_campaigns", "Anket Kampanyaları", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "template_id": fk("survey_templates"),
-    "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "period_start": "TEXT",
-    "period_end": "TEXT", "status": "TEXT NOT NULL DEFAULT 'draft'", "opened_at": "TEXT", "closed_at": "TEXT"},
+    "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "period_start": "DATE",
+    "period_end": "DATE", "status": "TEXT NOT NULL DEFAULT 'draft'", "opened_at": "TIMESTAMP", "closed_at": "TIMESTAMP"},
     module=M, readonly=("status", "opened_at", "closed_at"), enums={"status": ("draft", "open", "closed")})
 
 INVITES = Resource("survey_invitations", "Anket Davetleri", {
     "campaign_id": fk("survey_campaigns"), "respondent": "TEXT NOT NULL", "org_unit_id": fk("org_units", False),
-    "status": "TEXT NOT NULL DEFAULT 'pending'", "answered_at": "TEXT"},
+    "status": "TEXT NOT NULL DEFAULT 'pending'", "answered_at": "TIMESTAMP"},
     module=M, unique=(("campaign_id", "respondent"),), search=("respondent",),
     readonly=("status", "answered_at"), enums={"status": ("pending", "answered")})
 
 ANSWERS = Resource("survey_answers", "Anket Yanıtları", {
     "invitation_id": fk("survey_invitations"), "question_id": fk("survey_questions"), "score": "INTEGER",
     "text_value": "TEXT"}, module=M, write="write", api=("list",), search=(),
-    unique=(("invitation_id", "question_id"),))
+    unique=(("invitation_id", "question_id"),), immutable=True)
 
 
 def _set_status(c, status, stamp, allowed_from):
@@ -84,13 +84,15 @@ def results(c):
     """Soru bazında ortalama, yanıt oranı ve 0-100 ölçeğinde genel memnuniyet (1-5 ölçekli sorulardan)."""
     authz.check(c.principal, CAMPAIGNS, "read")
     campaign = crud.get(c.db, CAMPAIGNS, c.params["id"])
-    invited = one(c.db, "SELECT COUNT(*) AS total, COALESCE(SUM(status='answered'), 0) AS answered "
+    invited = one(c.db, "SELECT COUNT(*) AS total, COALESCE(SUM(CASE WHEN status='answered' THEN 1 ELSE 0 END), 0) AS answered "
                         "FROM tdr_survey_invitations WHERE campaign_id=?", (campaign["id"],))
     questions = rows(c.db, """SELECT q.id, q.position, q.text, q.kind, COUNT(a.id) AS responses,
-        ROUND(AVG(a.score), 2) AS average FROM tdr_survey_questions q
+        AVG(a.score) AS average FROM tdr_survey_questions q
         LEFT JOIN tdr_survey_answers a ON a.question_id=q.id AND a.invitation_id IN
           (SELECT id FROM tdr_survey_invitations WHERE campaign_id=?)
         WHERE q.template_id=? GROUP BY q.id ORDER BY q.position, q.id""", (campaign["id"], campaign["template_id"]))
+    for q in questions:
+        q["average"] = round(q["average"], 2) if q["average"] is not None else None
     scale = [q["average"] for q in questions if q["kind"] == "scale_1_5" and q["average"] is not None]
     satisfaction = round((sum(scale) / len(scale) - 1) / 4 * 100, 1) if scale else None
     rate = round(100 * invited["answered"] / invited["total"], 1) if invited["total"] else None

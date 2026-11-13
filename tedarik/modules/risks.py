@@ -38,8 +38,8 @@ RISKS = Resource("supplier_risks", "Tedarikçi Riskleri", {
     "cause": "TEXT", "risk_event": "TEXT", "consequence": "TEXT",
     "likelihood": "INTEGER NOT NULL DEFAULT 3", "impact": "INTEGER NOT NULL DEFAULT 3",
     "owner": "TEXT NOT NULL", "appetite": "INTEGER NOT NULL", "status": "TEXT NOT NULL DEFAULT 'open'",
-    "response_strategy": "TEXT", "treatment": "TEXT", "review_date": "TEXT", "control_risk_ref": "TEXT",
-    "created_at": "TEXT NOT NULL", "updated_at": "TEXT"},
+    "response_strategy": "TEXT", "treatment": "TEXT", "review_date": "DATE", "control_risk_ref": "TEXT",
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", api=("list", "get", "create"), search=("code", "title"), machine="r",
     enums={"category": ("continuity", "security", "compliance", "financial", "concentration", "performance",
                         "privacy", "reputation", "exit"),
@@ -47,23 +47,23 @@ RISKS = Resource("supplier_risks", "Tedarikçi Riskleri", {
            "response_strategy": ("mitigate", "avoid", "transfer", "accept")})
 
 ASSESSMENTS = Resource("risk_assessments", "Risk Değerlendirmeleri", {
-    "risk_id": fk("supplier_risks"), "assessed_at": "TEXT NOT NULL", "assessor": "TEXT NOT NULL",
+    "risk_id": fk("supplier_risks"), "assessed_at": "TIMESTAMP NOT NULL", "assessor": "TEXT NOT NULL",
     "rationale": "TEXT NOT NULL", "inherent": "INTEGER NOT NULL", "mitigation_pct": "REAL NOT NULL",
     "residual": "REAL NOT NULL", "appetite": "INTEGER NOT NULL", "snapshot": "TEXT NOT NULL"},
-    module=M, write="write", api=("list", "get"), search=(), machine="r")
+    module=M, write="write", api=("list", "get"), search=(), machine="r", immutable=True)
 
 DECISIONS = Resource("risk_decisions", "Risk Kararları", {
     "risk_id": fk("supplier_risks"), "assessment_id": fk("risk_assessments", False),
     "from_status": "TEXT NOT NULL", "to_status": "TEXT NOT NULL", "actor": "TEXT NOT NULL",
-    "actor_role": "TEXT NOT NULL", "decided_at": "TEXT NOT NULL", "rationale": "TEXT NOT NULL",
-    "exception_rationale": "TEXT", "residual": "REAL", "appetite": "INTEGER", "review_date": "TEXT"},
-    module=M, write="admin", api=("list", "get"), search=())
+    "actor_role": "TEXT NOT NULL", "decided_at": "TIMESTAMP NOT NULL", "rationale": "TEXT NOT NULL",
+    "exception_rationale": "TEXT", "residual": "REAL", "appetite": "INTEGER", "review_date": "DATE"},
+    module=M, write="admin", api=("list", "get"), search=(), immutable=True)
 
 ACTIONS = Resource("risk_actions", "Risk İşleme Faaliyetleri", {
     "code": "TEXT NOT NULL UNIQUE", "risk_id": fk("supplier_risks"), "title": "TEXT NOT NULL",
-    "description": "TEXT", "owner": "TEXT NOT NULL", "due_date": "TEXT NOT NULL",
+    "description": "TEXT", "owner": "TEXT NOT NULL", "due_date": "DATE NOT NULL",
     "priority": "TEXT NOT NULL DEFAULT 'medium'", "status": "TEXT NOT NULL DEFAULT 'open'",
-    "resolution": "TEXT", "closed_at": "TEXT", "created_at": "TEXT NOT NULL"},
+    "resolution": "TEXT", "closed_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL"},
     module=M, write="write", search=("code", "title"), readonly=("closed_at",),
     enums={"priority": ("low", "medium", "high", "critical"),
            "status": ("open", "in_progress", "validation", "completed", "cancelled")})

@@ -28,7 +28,7 @@ SUPPLIERS = Resource("suppliers", "Tedarikçiler", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "tax_id": "TEXT UNIQUE", "country": "TEXT",
     "city": "TEXT", "website": "TEXT", "status": "TEXT NOT NULL DEFAULT 'active'",
     "tier": "TEXT NOT NULL DEFAULT 'standard'", "segment": "TEXT", "owner": "TEXT", "description": "TEXT",
-    "created_at": "TEXT NOT NULL", "updated_at": "TEXT"},
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, search=("code", "name", "tax_id"), machine="r",
     enums={"status": ("prospect", "active", "suspended", "offboarding", "terminated"),
            "tier": ("critical", "important", "standard"),
@@ -45,7 +45,7 @@ Resource("supplier_contacts", "Tedarikçi İlgili Kişileri", {
 
 Resource("source_refs", "Kaynak Sistem Eşlemeleri", {
     "supplier_id": fk("suppliers"), "source_system": "TEXT NOT NULL", "external_id": "TEXT NOT NULL",
-    "external_name": "TEXT", "last_seen_at": "TEXT"},
+    "external_name": "TEXT", "last_seen_at": "TIMESTAMP"},
     module=M, unique=(("source_system", "external_id"),), search=("external_id", "external_name"), machine="r",
     enums={"source_system": ("sap", "crm", "outsourcing", "servicenow", "manual")})
 
@@ -53,8 +53,8 @@ ENGAGEMENTS = Resource("engagements", "Angajmanlar", {
     "code": "TEXT NOT NULL UNIQUE", "supplier_id": fk("suppliers"), "catalog_item_id": fk("catalog_items"),
     "org_unit_id": fk("org_units"), "beneficiary": "TEXT NOT NULL DEFAULT 'internal'", "customer_name": "TEXT",
     "business_owner": "TEXT", "criticality": "TEXT NOT NULL DEFAULT 'medium'",
-    "status": "TEXT NOT NULL DEFAULT 'active'", "start_date": "TEXT", "end_date": "TEXT", "description": "TEXT",
-    "created_at": "TEXT NOT NULL", "updated_at": "TEXT"},
+    "status": "TEXT NOT NULL DEFAULT 'active'", "start_date": "DATE", "end_date": "DATE", "description": "TEXT",
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", search=("code", "description", "customer_name"), machine="r",
     enums={"beneficiary": ("internal", "customer"), "criticality": ("critical", "high", "medium", "low"),
            "status": ("planned", "active", "ending", "ended")})
@@ -72,8 +72,8 @@ Resource("responsibilities", "Sorumluluklar", {
 
 Resource("contracts", "Sözleşme Referansları", {
     "code": "TEXT NOT NULL UNIQUE", "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False),
-    "title": "TEXT NOT NULL", "source_system": "TEXT", "external_id": "TEXT", "start_date": "TEXT",
-    "end_date": "TEXT", "notice_days": "INTEGER", "status": "TEXT NOT NULL DEFAULT 'active'"},
+    "title": "TEXT NOT NULL", "source_system": "TEXT", "external_id": "TEXT", "start_date": "DATE",
+    "end_date": "DATE", "notice_days": "INTEGER", "status": "TEXT NOT NULL DEFAULT 'active'"},
     module=M, search=("code", "title"), machine="r",
     enums={"status": ("draft", "active", "expiring", "expired", "terminated")})
 
@@ -127,7 +127,7 @@ def _replace_map(c, res, table, parent_col, child_col, key):
     ids = _ids(c.body, key)
     c.db.execute(f"DELETE FROM {table} WHERE {parent_col}=?", (parent,))
     for item in ids:
-        c.db.execute(f"INSERT OR IGNORE INTO {table} ({parent_col}, {child_col}) VALUES (?,?)", (parent, item))
+        c.db.execute(f"INSERT INTO {table} ({parent_col}, {child_col}) VALUES (?,?) ON CONFLICT DO NOTHING", (parent, item))
     audit.log(c.db, c.principal, "MAP", res.name, parent, {key: ids})
     return {"id": parent, key: ids}
 
@@ -135,10 +135,10 @@ def _replace_map(c, res, table, parent_col, child_col, key):
 def usage_report(c):
     """Hangi ürün/hizmeti kimden alıyoruz, hangi birim alıyor, hangi birimler kullanıyor, kime sunuluyor."""
     authz.check(c.principal, ENGAGEMENTS, "read")
-    return rows(c.db, """SELECT i.code AS item_code, i.name AS item_name, i.kind, s.code AS supplier_code,
+    return rows(c.db, f"""SELECT i.code AS item_code, i.name AS item_name, i.kind, s.code AS supplier_code,
         s.name AS supplier_name, s.tier, u.name AS buyer_unit, e.beneficiary, e.customer_name, e.criticality,
         e.business_owner, e.status,
-        (SELECT GROUP_CONCAT(x.name, '; ') FROM tdr_engagement_users eu JOIN tdr_org_units x ON x.id=eu.org_unit_id
+        (SELECT {c.db.group_concat('x.name', '; ')} FROM tdr_engagement_users eu JOIN tdr_org_units x ON x.id=eu.org_unit_id
           WHERE eu.engagement_id=e.id) AS user_units
         FROM tdr_engagements e JOIN tdr_catalog_items i ON i.id=e.catalog_item_id
         JOIN tdr_suppliers s ON s.id=e.supplier_id JOIN tdr_org_units u ON u.id=e.org_unit_id
@@ -161,4 +161,4 @@ STARTER_TYPES = (("HW", "Donanım"), ("SW", "Yazılım ve Lisans"), ("CLOUD", "B
 
 def seed(db):
     for code, name in STARTER_TYPES:   # başlangıç önerisi; kurumun gerçek tip listesiyle değiştirilecek
-        db.execute("INSERT OR IGNORE INTO tdr_supplier_types (code, name) VALUES (?,?)", (code, name))
+        db.execute("INSERT INTO tdr_supplier_types (code, name) VALUES (?,?) ON CONFLICT DO NOTHING", (code, name))

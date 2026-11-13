@@ -20,13 +20,13 @@ DEFINITIONS = Resource("workflow_definitions", "İş Akışı Tanımları", {
 
 INSTANCES = Resource("workflow_instances", "İş Akışı Örnekleri", {
     "definition_id": fk("workflow_definitions"), "subject_type": "TEXT NOT NULL", "subject_id": "INTEGER NOT NULL",
-    "state": "TEXT NOT NULL", "started_by": "TEXT NOT NULL", "created_at": "TEXT NOT NULL", "updated_at": "TEXT"},
+    "state": "TEXT NOT NULL", "started_by": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, api=("list", "get"), search=("subject_type", "state"))
 
 Resource("workflow_history", "İş Akışı Geçmişi", {
     "instance_id": fk("workflow_instances"), "from_state": "TEXT", "to_state": "TEXT NOT NULL",
-    "action": "TEXT NOT NULL", "actor": "TEXT NOT NULL", "at": "TEXT NOT NULL", "comment": "TEXT"},
-    module=M, api=("list",), search=("action", "actor"))
+    "action": "TEXT NOT NULL", "actor": "TEXT NOT NULL", "at": "TIMESTAMP NOT NULL", "comment": "TEXT"},
+    module=M, api=("list",), search=("action", "actor"), immutable=True)
 
 Resource("policies", "Politika Parametreleri", {
     "code": "TEXT NOT NULL UNIQUE", "value_json": "TEXT NOT NULL", "description": "TEXT"},
