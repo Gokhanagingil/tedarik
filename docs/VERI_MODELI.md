@@ -51,9 +51,22 @@ Temel amaçların karşılığı:
 | `performance_reviews`, `review_scores` | Dönemlik değerlendirme, kriter başına 1-5 puan |
 | `performance_events` | Olay günlüğü: SLA ihlali, olay, gecikme, eskalasyon, takdir |
 
-## Anket
+## Anket motoru
 
-`survey_templates` → `survey_questions` (1-5 ölçek, NPS 0-10, evet/hayır, metin) → `survey_campaigns` (tedarikçi veya angajman için, draft → open → closed) → `survey_invitations` (iç kullanıcı) → `survey_answers`. Sonuç: yanıt oranı, soru ortalamaları, 0-100 memnuniyet.
+Üç kullanım tek motordan: tedarikçi memnuniyeti, tedarikçi risk değerlendirmesi, tedarikçiden bağımsız (genel) anketler.
+
+| Kaynak | Amaç |
+| --- | --- |
+| `survey_templates` | Şablon: `purpose` (satisfaction, risk, general), giriş ve kapanış metni, `status` (draft, published, retired), `version`, `parent_id` (önceki sürüm). Yayımlanınca donar; değişiklik `POST .../copy` ile yeni sürümde |
+| `survey_sections` | Bölümler (sıra, başlık, açıklama) |
+| `survey_questions` | Soru: `kind` (scale_1_5, nps_0_10, yes_no, single_choice, multi_choice, text, number, date), `code` (S1, S2…), `required`, `weight`, `options_json` (`[{value, label, score}]`), `show_if_json` (`{"question": "S2", "equals" \| "in" \| "min" \| "max": ...}`), `risk_category`, `risk_threshold` (0–100) |
+| `survey_campaigns` | Uygulama: `subject` (none = bağımsız, supplier, engagement), `audience` (invited, all), `anonymous`, `min_responses`, dönem, açılış ve kapanış tarihi, sahip, `status` (draft, open, closed) |
+| `survey_targets` | Değerlendirilen tedarikçi veya angajman; toplu ekleme (`{"tier": "critical"}` dahil) |
+| `survey_invitations` | Kişi × hedef daveti; `pending`, `answered` |
+| `survey_responses` | Yanıt: taslak veya gönderildi, 0–100 puan. Anonimde kişi ve davet bağlantısı tutulmaz; kişi anahtarı kampanyaya özgü tuzla özetlenir |
+| `survey_answers` | Soru yanıtı ve 0–100 puanı |
+
+Puan: 1–5 ölçek (v−1)×25, tavsiye v×10, seçimler seçenek puanıyla (olumsuz soruda "Evet" düşük puan alabilir), çoklu seçimde ortalama; yanıt puanı ağırlıklı ortalama. Sonuç: yanıt oranı, genel ve bölüm puanı, soru bazında dağılım, ortalama, NPS, metin yanıtları, tedarikçi bazında puan ve risk sinyali (risk kategorili sorunun hedef ortalaması eşiğin altında). Sinyalden `POST .../risk-signals` ile tedarikçi riski açılır; `supplier_risks.origin_ref` aynı sinyalin ikinci kez risk açmasını önler. Anonim kampanyada yanıt sayısı `min_responses` altındaysa ayrıntı gösterilmez. Başlangıçta iki örnek şablon taslak olarak gelir: "Tedarikçi Memnuniyet Anketi" ve "Tedarikçi Risk Değerlendirme Anketi".
 
 ## Risk
 

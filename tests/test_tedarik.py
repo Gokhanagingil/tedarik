@@ -237,7 +237,7 @@ class Veritabani(Base):
         self.assertIs(type(card["sla"]["total"]), int)
         summary = self.ok("GET", "/dashboard/summary")
         self.assertIs(type(summary["suppliers"]["total"]), int)
-        self.assertEqual(summary["surveys"], {"invited": 0, "answered": 0})
+        self.assertEqual(summary["surveys"], {"invited": 0, "answered": 0, "open_campaigns": 0, "submitted": 0})
 
 
 class Cekirdek(Base):
@@ -399,34 +399,6 @@ class Risk(Base):
         self.assertEqual(self.call("PATCH", f"/risk_actions/{action}", {"status": "open"})[0], 409)
         self.assertEqual(self.call("POST", "/risk_actions", {"code": "A2", "risk_id": risk, "title": "x",
                                                             "owner": "a", "due_date": "2027-01-01"})[0], 409)
-
-
-class Anket(Base):
-    def test_kampanya_akisi(self):
-        *_, supplier, _ = self.base_data()
-        template = self.ok("POST", "/survey_templates", {"code": "MEMNUNIYET", "name": "Memnuniyet"})["id"]
-        q1 = self.ok("POST", "/survey_questions", {"template_id": template, "text": "Genel memnuniyet"})["id"]
-        q2 = self.ok("POST", "/survey_questions", {"template_id": template, "text": "Yorum", "kind": "text",
-                                                   "required": 0, "position": 2})["id"]
-        campaign = self.ok("POST", "/survey_campaigns", {"code": "2026-Q4", "name": "4. çeyrek",
-                                                         "template_id": template, "supplier_id": supplier})["id"]
-        invites = [self.ok("POST", "/survey_invitations", {"campaign_id": campaign, "respondent": who})["id"]
-                   for who in ("ayse", "can")]
-        answers = {"answers": [{"question_id": q1, "score": 4}, {"question_id": q2, "text_value": "İyi"}]}
-        self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers", answers)[0], 409)   # kapalı
-        self.ok("POST", f"/survey_campaigns/{campaign}/open", {})
-        self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers",
-                                   {"answers": [{"question_id": q1, "score": 7}]})[0], 400)
-        self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers",
-                                   {"answers": [{"question_id": q2, "text_value": "eksik"}]})[0], 400)
-        self.ok("POST", f"/survey_invitations/{invites[0]}/answers", answers)
-        self.assertEqual(self.ok("GET", "/audit_log?object_type=survey_invitations")[0]["method"], "ANSWER")
-        self.assertEqual(self.call("POST", f"/survey_invitations/{invites[0]}/answers", answers)[0], 409)
-        other = self.make(role="UNIT_USER", user="mehmet", units="1")
-        self.assertEqual(self.call("POST", f"/survey_invitations/{invites[1]}/answers", answers, app=other)[0], 403)
-        result = self.ok("GET", f"/survey_campaigns/{campaign}/results")
-        self.assertEqual((result["invited"], result["answered"], result["response_rate"]), (2, 1, 50.0))
-        self.assertEqual(result["satisfaction"], 75.0)
 
 
 class KaynakBulma(Base):

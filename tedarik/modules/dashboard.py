@@ -54,6 +54,10 @@ def summary(c):
     if c.app.enabled("surveys"):
         data["surveys"] = one(db, """SELECT COUNT(*) AS invited, COALESCE(SUM(CASE WHEN status='answered' THEN 1 ELSE 0 END), 0) AS answered
             FROM tdr_survey_invitations""")
+        data["surveys"]["open_campaigns"] = one(db, "SELECT COUNT(*) AS n FROM tdr_survey_campaigns "
+                                                    "WHERE status='open'")["n"]
+        data["surveys"]["submitted"] = one(db, "SELECT COUNT(*) AS n FROM tdr_survey_responses "
+                                               "WHERE status='submitted'")["n"]
     return data
 
 

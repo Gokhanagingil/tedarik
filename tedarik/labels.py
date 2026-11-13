@@ -40,6 +40,14 @@ FIELDS = {
     "template_id": "Şablon", "text": "Soru", "required": "Zorunlu", "campaign_id": "Kampanya",
     "respondent": "Yanıtlayan", "answered_at": "Yanıt zamanı", "invitation_id": "Davet", "question_id": "Soru",
     "text_value": "Metin yanıt", "opened_at": "Açılış zamanı", "target_id": "Değerlendirilen",
+    "purpose": "Amaç", "intro": "Giriş metni", "outro": "Kapanış metni", "section_id": "Bölüm", "help": "Yardım metni",
+    "options_json": "Seçenekler", "show_if_json": "Gösterim koşulu", "risk_category": "Risk kategorisi",
+    "risk_threshold": "Risk eşiği (0–100)", "subject": "Değerlendirilen", "audience": "Katılım",
+    "anonymous": "Anonim", "min_responses": "Sonuç için en az yanıt", "opens_on": "Açılış tarihi",
+    "closes_on": "Kapanış tarihi", "salt": "Anonimlik anahtarı", "response_id": "Yanıt",
+    "respondent_key": "Yanıtlayan anahtarı", "started_at": "Başlangıç", "submitted_at": "Gönderim zamanı",
+    "value_number": "Sayısal yanıt", "value_text": "Metin yanıt", "values_json": "Seçilenler", "origin_ref": "Kaynak (anket sinyali)",
+    "survey_templates.parent_id": "Önceki sürüm", "survey_targets.supplier_id": "Tedarikçi",
     # aktarım ve iz
     "filename": "Dosya adı", "summary_json": "Özet", "batch_id": "Aktarım", "row_no": "Satır",
     "payload_json": "Satır verisi", "action": "İşlem", "message": "Mesaj", "occurred_at_log": "Zaman",
@@ -92,14 +100,20 @@ CHOICES = {
                  "privacy": "Kişisel veri", "reputation": "İtibar", "exit": "Çıkış"},
     "response_strategy": {"mitigate": "Azalt", "avoid": "Kaçın", "transfer": "Devret / paylaş", "accept": "Kabul et"},
     "origin": {"existing": "Mevcut tedarikçi", "new": "Yeni tedarikçi"},
+    "purpose": {"satisfaction": "Memnuniyet", "risk": "Risk değerlendirme", "general": "Genel (bağımsız)"},
+    "subject": {"none": "Yok (bağımsız anket)", "supplier": "Tedarikçi", "engagement": "Angajman"},
+    "audience": {"invited": "Yalnızca davetliler", "all": "Tüm kullanıcılar"},
     "survey_questions.kind": {"scale_1_5": "1–5 ölçek", "nps_0_10": "Tavsiye (0–10)", "yes_no": "Evet / Hayır",
                               "single_choice": "Tek seçim", "multi_choice": "Çoklu seçim", "text": "Metin",
                               "number": "Sayı", "date": "Tarih"},
 }
 
 
-def field(name):
-    return FIELDS.get(name, name.replace("_", " ").capitalize())
+CHOICES["risk_category"] = CHOICES["category"]
+
+
+def field(name, resource=None):
+    return FIELDS.get(f"{resource}.{name}") or FIELDS.get(name) or name.replace("_", " ").capitalize()
 
 
 def choice(resource, name, value):

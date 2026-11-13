@@ -36,7 +36,7 @@ Tarayıcı (derlemesiz istemci)      MCP uygulaması (ServiceNow, Dynamics)     
 | --- | --- | --- |
 | `core` | Birimler, tedarikçi tipleri, ürün/hizmet kataloğu, tedarikçiler, angajmanlar, sorumluluklar, sözleşme referansları, kaynak sistem eşlemeleri | Açık |
 | `performance` | SLA tanımı ve ölçümü, kriter bazlı değerlendirme, performans olay günlüğü, scorecard | Açık |
-| `surveys` | Memnuniyet anketi şablonu, kampanya, davet, yanıt, sonuç | Açık |
+| `surveys` | Anket motoru: memnuniyet, risk ve bağımsız anketler; şablon sürümü, bölüm, koşullu soru, puan, anonimlik, sonuç, risk sinyali | Açık |
 | `risks` | Tedarikçi riski, değerlendirme geçmişi, işleme faaliyetleri | Açık |
 | `transfer` | İçe aktarma hattı, dışa aktarma | Açık |
 | `dashboard` | Pano özet verisi | Açık |

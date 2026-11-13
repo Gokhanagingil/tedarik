@@ -15,7 +15,7 @@ def describe(res, principal):
     fields = []
     for name, column in res.columns.items():
         target = next((r.name for r in RESOURCES.values() if r.table == column.ref), None) if column.ref else None
-        item = {"name": name, "label": field(name), "kind": column.kind, "required": name in res.required,
+        item = {"name": name, "label": field(name, res.name), "kind": column.kind, "required": name in res.required,
                 "readonly": name in res.readonly, "ref": target}
         if name in res.enums:
             item["options"] = [{"value": v, "label": choice(res.name, name, v)} for v in res.enums[name]]

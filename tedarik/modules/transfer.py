@@ -142,7 +142,7 @@ def _ref_target(res, name):
 
 def header_label(res, name):
     """Şablon ve dışa aktarım başlığı. İlişki alanında hedef kod beklendiği belirtilir."""
-    label = field(name)
+    label = field(name, res.name)
     target = _ref_target(res, name)
     if target is not None and "code" in target.fields:
         label += " (kod)"

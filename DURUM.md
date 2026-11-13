@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik ve Excel tamamlandı; sıradaki iş anket motoru ve arayüz.
+Son güncelleme: 2026-11-13 · Aşama: uyum, PostgreSQL, kimlik, Excel ve anket motoru tamamlandı; sıradaki iş arayüz.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -57,7 +57,14 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Uygulamanın ürettiği şablon: "Veri" sayfası (zorunlu sütunlar `*`) ve her sütunun izin verilen değerlerini anlatan "Açıklama" sayfası.
   - Dışa aktarım: kaynak bazında XLSX veya CSV, tüm portal tek çalışma kitabında; Türkçe başlık ve seçim, ilişkiler kodla; formül enjeksiyonu etkisizleştirilir.
   - `/api/tdr/metadata`: Türkçe alan ve seçim etiketleri, tipler, ilişkiler, kişinin yetkisi (arayüzün tek kaynağı). Her alanın etiketli olduğu testle denetlenir.
-- Testler: 52 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
+- **Adım 4a (2026-11-13): Anket motoru** (yeniden tasarlandı).
+  - Üç kullanım: tedarikçi memnuniyeti, tedarikçi risk değerlendirmesi, bağımsız (tedarikçiden bağımsız) anketler.
+  - Şablon: bölümler, 8 soru türü, ağırlık, seçenek puanı, koşullu gösterim, risk kategorisi ve eşiği; yayımlanınca donar, yeni sürüm kopyalanır; soru sırası tek istekte.
+  - Kampanya: konu (yok / tedarikçi / angajman), katılım (davetli / herkes), anonimlik, tarih aralığı; toplu hedef (kritiklik seviyesiyle) ve toplu davet. Açılış şablonu dondurur.
+  - Yanıt: "Anketlerim" listesi, taslak kaydetme, zorunlu ve koşullu soru denetimi, gönderilen yanıt değişmez.
+  - Sonuç: yanıt oranı, genel, bölüm ve tedarikçi puanı, dağılımlar, NPS, metin yanıtları; anonimlikte en az yanıt eşiği; risk sinyalinden tek adımda tedarikçi riski; tedarikçi 360 için anket geçmişi.
+  - İki örnek şablon taslak olarak gelir (öneridir, düzenlenebilir).
+- Testler: 58 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
@@ -77,7 +84,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 2. ~~**Veritabanı temeli: PostgreSQL** (K-011).~~ Tamamlandı (2026-11-13).
 3. ~~**Kimlik aktarımı.**~~ Tamamlandı (2026-11-13).
 4. ~~**Excel.**~~ Tamamlandı (2026-11-13). Kalan: gerçek SAP/Dynamics başlıklarıyla `ALIASES` doğrulaması.
-4a. **Anket motoru** (Gökhan Bey'in önceliği): bağımsız anketler, tedarikçi memnuniyeti ve risk değerlendirme anketleri, bölümler, soru türleri, koşullu sorular, ağırlıklı puanlama, anonimlik, taslak kaydetme, sonuç analizi, risk sinyalinden risk kaydı.
+4a. ~~**Anket motoru**~~ Tamamlandı (2026-11-13). Not: anket tabloları değişti; eski iskelet veritabanı varsa silinip yeniden açılmalı (üretim verisi yok).
 5. **Arayüz.** KS GRC'nin görsel diliyle (`ui_v2.py` + `ksgrc.js` düzeni): tedarikçi listesi ve filtreler, tedarikçi 360 paneli, angajman, performans, anket, risk ekranları, pano (satır içi SVG grafikler). Her ekran için Playwright duman testi.
 6. **Dağıtım.** KS GRC'nin Dockerfile, compose ve yedekleme düzenini PostgreSQL ile uyarla (`pg_dump` tabanlı yedek, geri yükleme denetimi); CI'a gitleaks, trivy, bandit, pip-audit ekle.
 7. **Periyodik işler.** Kritiklik seviyesine göre değerlendirme, anket ve risk gözden geçirme takvimi; geciken işler panosu.
