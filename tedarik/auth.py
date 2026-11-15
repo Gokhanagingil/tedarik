@@ -83,6 +83,9 @@ class Auth:
                 return Principal("mcp", "MACHINE", "api_key", "MCP")
             raise Unauthenticated()
         collector = headers.get("X-Collector-Key", "")
+        bearer = headers.get("Authorization", "")
+        if not collector and bearer.startswith("Bearer tdrc_"):     # OpenLineage HTTP aktarımı (api_key)
+            collector = bearer[7:].strip()
         if collector:
             return self._collector(collector)
         if self.config.auth_mode == "dev":

@@ -61,7 +61,8 @@ SOURCES = Resource("data_sources", "Veri Kaynakları", {
     "environment": "TEXT NOT NULL DEFAULT 'production'", "description": "TEXT", "domain_id": fk("data_domains", False),
     "ci_id": fk("cmdb_cis", False), "supplier_id": fk("suppliers", False), "location": "TEXT", "owner": "TEXT",
     "steward": "TEXT", "custodian": "TEXT", "status": "TEXT NOT NULL DEFAULT 'active'", "last_import_at": "TIMESTAMP",
-    "change_notice": "TEXT NOT NULL DEFAULT 'all'", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    "change_notice": "TEXT NOT NULL DEFAULT 'all'", "lineage_namespace": "TEXT", "created_at": "TIMESTAMP NOT NULL",
+    "updated_at": "TIMESTAMP"},
     module=M, code_prefix="VK", write="manage", readonly=("last_import_at",), search=("code", "name", "location"),
     enums={"platform": PLATFORMS, "environment": ("production", "test", "development"), "status": ("active", "retired"),
            "change_notice": ("all", "important", "none")})
@@ -2011,7 +2012,8 @@ def health_checks(db, check, count, readable=lambda name: True):
               rows(db, """SELECT id, code, name AS title FROM tdr_glossary_terms WHERE (status='in_review' AND submitted_at < ?)
               OR (pending_json IS NOT NULL AND pending_at < ?) ORDER BY code""", (stale, stale)), "glossary_terms",
               population=count(db, "SELECT COUNT(*) AS n FROM tdr_glossary_terms WHERE status<>'retired'")),
-    ] + privacy.health_checks(db, check, count, readable) + collection.health_checks(db, check, count, readable)
+    ] + privacy.health_checks(db, check, count, readable) + collection.health_checks(db, check, count, readable) + \
+        lineage.health_checks(db, check, count, readable)
 
 
 # ------------------------------------------------------------------ kayıt
@@ -2043,6 +2045,7 @@ def register(app):
     app.route("POST", API + "/glossary_terms/{id}/related", term_related)
     privacy.register(app)
     collection.register(app)
+    lineage.register(app)
 
 
 def seed(db):
@@ -2050,6 +2053,8 @@ def seed(db):
     collection.seed(db)
 
 
-# Aynı modülün parçaları; tanımlar yukarıdakilere dayanır. Faz 2: KVKK ve sınıflandırma, Faz 3: otomatik toplama.
+# Aynı modülün parçaları; tanımlar yukarıdakilere dayanır. Faz 2: KVKK ve sınıflandırma, Faz 3: otomatik toplama,
+# Faz 4: soy kütüğü ve etki analizi.
 from . import privacy  # noqa: E402
 from . import collection  # noqa: E402
+from . import lineage  # noqa: E402

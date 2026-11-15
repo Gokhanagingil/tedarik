@@ -164,6 +164,24 @@ python3 tedarik-toplayici.pyz gonder --ayar toplayici.json --eklenti envanter.py
 `object_type`: `table`, `view`, `entity`, `semantic_model`, `report`, `file`, `collection`, `other`. Aynı sözleşme
 kaynağın ekranından dosya olarak da yüklenebilir.
 
+## OpenLineage alıcısı (K-031)
+
+Soy kütüğü olayları için program kurulmaz: toplayıcı eklerken "OpenLineage alıcısı" seçilir, anahtar Airflow, Spark, dbt
+veya Flink'in OpenLineage HTTP aktarımına verilir:
+
+```yaml
+transport:
+  type: http
+  url: https://grc.ornek.com.tr
+  endpoint: api/tdr/collector/openlineage
+  auth:
+    type: api_key
+    apiKey: <toplayıcı anahtarı>
+```
+
+Veri setleri kataloğa, kaynağın "Soy kütüğü ad alanı" alanındaki değerle (ör. `postgres://dwh-prod:5432`) eşlenir. Olayın
+yalnızca veri seti adları ve kolon eşlemesi (`columnLineage`) saklanır.
+
 ## Platform uç noktaları (toplayıcı anahtarıyla)
 
 | Uç nokta | İş |
@@ -171,5 +189,6 @@ kaynağın ekranından dosya olarak da yüklenebilir.
 | `GET /api/tdr/collector/whoami` | Toplayıcı, kaynak, merkezî ayarlar ve kaynağın hazır sorguları |
 | `POST /api/tdr/collector/catalog` | `{filename, content_base64, compressed: "gzip", scope?, dry_run?, sample_stats?, client}` |
 | `POST /api/tdr/collector/status` | `{result: "error", message, client}`: yerel hatayı bildirir |
+| `POST /api/tdr/collector/openlineage` | OpenLineage RunEvent (veya `{events: [...]}`); yalnızca OpenLineage alıcısı türündeki toplayıcı |
 
 Gövde en çok 18 MB'tır (sıkıştırılmış katalog ~13 MB). Daha büyük kaynakları şemalara bölüp birden çok toplayıcı tanımlayın.

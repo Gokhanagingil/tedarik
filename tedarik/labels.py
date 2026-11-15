@@ -436,7 +436,8 @@ FIELDS.update({
     "data_tables.retention_rule_id": "Saklama ve imha kuralı",
 })
 CHOICES.update({
-    "pii_suggestions.method": {"name": "Kolon adı", "description": "Açıklama", "term": "Sözlük terimi", "sample": "Örnek değer"},
+    "pii_suggestions.method": {"name": "Kolon adı", "description": "Açıklama", "term": "Sözlük terimi", "sample": "Örnek değer",
+                               "lineage": "Soy kütüğü"},
     "pii_suggestions.status": {"pending": "Karar bekliyor", "accepted": "Kabul edildi", "rejected": "Reddedildi"},
     "period_unit": {"day": "Gün", "month": "Ay", "year": "Yıl"},
     "disposal_method": {"deletion": "Silme", "destruction": "Yok etme", "anonymization": "Anonim hale getirme"},
@@ -526,6 +527,32 @@ CHOICES.update({
     "last_result": {"ok": "Başarılı", "error": "Hata", "rejected": "Reddedildi"},
     "collector_events.kind": {"push": "Gönderim", "preview": "Ön izleme", "error": "Hata", "rejected": "Reddedildi"},
 })
+# Soy kütüğü ve etki analizi (K-031)
+FIELDS.update({
+    "lineage_namespace": "Soy kütüğü ad alanı (OpenLineage)", "source_table_id": "Kaynak tablo", "source_column_id": "Kaynak kolon",
+    "target_table_id": "Hedef tablo", "target_column_id": "Hedef kolon", "transformation": "Dönüşüm", "job_id": "Veri akış işi",
+    "lineage_edges.kind": "Bağlantı türü", "lineage_edges.method": "Kaynağı", "lineage_edges.status": "Durum",
+    "lineage_edges.note": "Not", "last_seen_at": "Son görülme", "system": "Sistem / araç", "namespace": "Ad alanı",
+    "schedule_note": "Çalışma zamanı", "last_run_at": "Son çalışma", "last_run_state": "Son çalışma durumu",
+    "lineage_jobs.name": "İş adı", "lineage_jobs.owner": "İş sahibi", "lineage_jobs.process_id": "İlgili süreç",
+    "event_type": "Olay türü", "event_time": "Olay zamanı", "run_id": "Çalıştırma kimliği", "job_namespace": "İş ad alanı",
+    "job_name": "İş", "producer": "Üretici", "datasets_json": "Veri setleri", "edges_new": "Yeni bağlantı",
+    "edges_seen": "Görülen bağlantı", "unresolved_json": "Eşlenemeyen veri setleri", "control_id": "Kontrol",
+})
+CHOICES.update({
+    "lineage_edges.kind": {"direct": "Doğrudan aktarım", "transform": "Dönüşüm", "aggregate": "Toplama / özet",
+                           "indirect": "Dolaylı (filtre, birleştirme)", "other": "Diğer"},
+    "lineage_edges.method": {"manual": "Elle", "excel": "Excel / CSV", "openlineage": "OpenLineage", "dbt": "dbt manifesti"},
+    "lineage_edges.status": {"active": "Etkin", "removed": "Kaldırıldı"},
+    "system": {"airflow": "Apache Airflow", "spark": "Apache Spark", "dbt": "dbt (data build tool)", "flink": "Apache Flink",
+               "ssis": "SQL Server Integration Services", "adf": "Azure Data Factory", "sap_ds": "SAP Data Services",
+               "informatica": "Informatica", "power_bi": "Power BI veri akışı", "script": "Betik / zamanlanmış görev",
+               "manual": "Elle tanımlı", "other": "Diğer"},
+    "lineage_jobs.status": {"active": "Etkin", "retired": "Kullanımdan kalktı"},
+    "last_run_state": {"START": "Başladı", "RUNNING": "Çalışıyor", "COMPLETE": "Tamamlandı", "FAIL": "Başarısız",
+                       "ABORT": "Durduruldu", "OTHER": "Diğer"},
+})
+CHOICES["connector"]["openlineage"] = "OpenLineage alıcısı (Airflow, Spark, dbt)"
 CHOICES["risk_category"] = CHOICES["category"]
 
 

@@ -65,7 +65,7 @@ SUGGESTIONS = Resource("pii_suggestions", "Kişisel Veri Önerileri", {
     "method": "TEXT NOT NULL", "evidence": "TEXT", "status": "TEXT NOT NULL DEFAULT 'pending'", "decided_by": "TEXT",
     "decided_at": "TIMESTAMP", "decision_note": "TEXT", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, api=("list", "get"), unique=(("column_id", "category_id"),), search=("evidence",), write="manage",
-    enums={"method": ("name", "description", "term", "sample"), "status": ("pending", "accepted", "rejected")})
+    enums={"method": ("name", "description", "term", "sample", "lineage"), "status": ("pending", "accepted", "rejected")})
 
 RETENTION = Resource("retention_rules", "Saklama ve İmha Kuralları", {
     "code": "TEXT UNIQUE", "name": "TEXT NOT NULL", "category_id": fk("personal_data_categories", False),
@@ -342,6 +342,16 @@ def discover(db, source_id=None):
                 best[cat["id"]] = (cat, conf, method, evidence)
         for cat, conf, method, evidence in best.values():
             _upsert_suggestion(db, column_id, cat["id"], conf, method, evidence, now, counts)
+    # Soy kütüğü (K-031): kategorisi belli kolondan doğrudan veya dönüşümle beslenen kolon aynı kategoride önerilir.
+    lineage_where = "AND tt.source_id=?" if source_id else ""
+    for r in rows(db, f"""SELECT e.target_column_id, cc.category_id, sc.name AS source_column, st.name AS source_table
+            FROM tdr_lineage_edges e JOIN tdr_column_categories cc ON cc.column_id=e.source_column_id
+            JOIN tdr_data_columns sc ON sc.id=e.source_column_id JOIN tdr_data_tables st ON st.id=e.source_table_id
+            JOIN tdr_data_columns tc ON tc.id=e.target_column_id JOIN tdr_data_tables tt ON tt.id=e.target_table_id
+            WHERE e.status='active' AND e.kind IN ('direct','transform') AND tc.status='active' {lineage_where}""",
+                  (source_id,) if source_id else ()):
+        _upsert_suggestion(db, r["target_column_id"], r["category_id"], 0.9, "lineage",
+                           f"Soy kütüğü: {r['source_table']}.{r['source_column']} kolonundan geliyor", now, counts)
     return {"scanned_columns": len(cols), "new": counts["new"], "updated": counts["updated"]}
 
 

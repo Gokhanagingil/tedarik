@@ -202,6 +202,17 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `catalog_imports.collector_id` | İçe aktarımı yapan toplayıcı | Dosya yüklemesinde boş |
 | `data_sources.change_notice` | Şema değişikliği bildirimi: tümü, yalnızca önemli, yok | Varsayılan tümü |
 
+## Soy kütüğü ve etki analizi (K-031)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `lineage_edges` | Kaynak tablo[.kolon] → hedef tablo[.kolon]; tür, dönüşüm, iş, kaynağı (elle, Excel, OpenLineage, dbt) | İki uçta kolon birlikte veya hiç; aynı bağlantı tekil; kapsam hedef tablonun biriminden; otomatik bağlantı `last_seen_at` ile izlenir, silinmez |
+| `lineage_jobs` | Veri akış işleri (ETL, Airflow görevi, dbt projesi) | Kod sunucuda (AKS-); ad alanı + ad tekil |
+| `lineage_events` | OpenLineage olayları: yalnızca veri seti adları ve kolon eşlemesi | Değiştirilemez; eşlenemeyen veri setleri yeniden işlenebilir |
+| `data_table_controls` | Veri varlığına bağlı kontroller | Etki analizinde listelenir |
+| `data_sources.lineage_namespace` | OpenLineage ad alanları (virgülle) | Veri seti eşlemesi |
+| `data_collectors.connector = openlineage` | OpenLineage alıcısı (toplayıcı anahtarı, `Authorization: Bearer`) | Yalnızca `/api/tdr/collector/openlineage` |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

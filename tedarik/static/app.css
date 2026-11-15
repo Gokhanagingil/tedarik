@@ -440,3 +440,24 @@ ul.mini li strong,ul.mini li a{overflow-wrap:anywhere}
 .dg-collect{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;width:100%;margin:0 0 12px;padding:9px 12px;border:1px solid var(--stroke);border-radius:10px;background:#fafbfc;text-align:left;cursor:pointer;font:inherit;color:inherit}
 .dg-collect:hover{border-color:var(--stroke2);background:#f3f5f8}.dg-collect strong{font-size:13px}
 .control.inline{display:flex;gap:8px;align-items:center}.control.inline input{flex:1;min-width:0}
+/* Soy kütüğü ve etki analizi (K-031) */
+.flow-tools{flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:12px}
+.field.inline{display:inline-flex;align-items:center;gap:8px;margin:0}.field.inline select{min-width:150px}
+.flow-legend{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+.flow-legend .lg{display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid var(--stroke2);background:#fff;margin-left:8px}
+.flow-legend .lg-focus{border:2px solid var(--accent)}.flow-legend .lg-report{background:#efeafd;border-color:#b9a7f0}
+.flow-legend .lg-personal{background:var(--warn-soft);border-color:#e9c27a}.flow-legend .lg-removed{background:#f3f4f6;border-style:dashed}
+.flow-legend .lg-col,.flow-legend .lg-table{height:0;border-radius:0;border-width:2px 0 0 0;border-color:#3346a8;width:18px}
+.flow-legend .lg-table{border-color:#9aa3af}
+.flow-wrap{overflow:auto;padding:12px}svg.flow{display:block;max-width:none}
+.flow-node{cursor:pointer}.flow-node rect{fill:#fff;stroke:#c9cdd4;stroke-width:1.2}.flow-node:hover rect,.flow-node:focus rect{stroke:var(--ink);stroke-width:1.8}
+.flow-node:focus{outline:none}.flow-node.focus rect{stroke:var(--accent);stroke-width:2.4}
+.flow-node.report rect{fill:#f6f3ff;stroke:#b9a7f0}.flow-node.personal rect{fill:#fffaf0}
+.flow-node.removed rect{fill:#f3f4f6;stroke-dasharray:4 3}.flow-node.removed text{fill:var(--muted)}
+.flow-node .fn-title{font-size:13px;font-weight:700;fill:var(--text)}.flow-node .fn-sub{font-size:11px;fill:var(--muted)}
+.flow-node .fn-cols{font-size:10.5px;fill:#3346a8}.flow-node .fn-dot{fill:#e0a020}
+.flow-link{fill:none;stroke:#9aa3af;stroke-width:1.6;cursor:pointer}.flow-link.column{stroke:#3346a8;stroke-width:2}
+.flow-link.indirect{stroke-dasharray:5 4}.flow-link:hover,.flow-link:focus{stroke:var(--accent);stroke-width:2.6;outline:none}
+.flow-detail{min-height:60px}
+.lin-panel .choice-group{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin:4px 0 8px}
+.flow-detail .toolbar,.lin-panel .panel-title .toolbar{justify-content:flex-start;margin:10px 0 0}

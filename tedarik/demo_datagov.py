@@ -310,7 +310,7 @@ def pbi_columns():
     return "\n".join(lines) + "\n"
 
 
-DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"))
+DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"), ("lineage", "datagov"))
 
 
 class DatagovSections:
@@ -493,6 +493,95 @@ class DatagovSections:
                     created_at) VALUES (?,?,?,?,?,?,?)""", (cid, "error", message, connector, "1.0", host, ago(2)))
                 db.execute("UPDATE tdr_data_collectors SET last_result='error', last_message=?, last_seen_at=? WHERE id=?",
                            (message, ago(2), cid))
+
+    # -------------------------------------------------------------- soy kütüğü ve etki analizi (K-031)
+    def lineage(self):
+        """Sentetik veri ambarı; SAP → ambar (elle tanımlı iş), CRM eşitlemesi, dbt modeli (OpenLineage olayıyla), ambar →
+        Power BI. Bir mutabakat kontrolü satış olgu tablosuna ve Power BI modeline bağlanır."""
+        from . import crud
+        from .auth import Principal
+        from .modules import collection as C, datagov as D, lineage as L
+        from .schema import RESOURCES
+        db = self.db
+        if one(db, "SELECT id FROM tdr_lineage_edges LIMIT 1"):
+            return
+        sap = one(db, "SELECT * FROM tdr_data_sources WHERE name=?", ("SAP S/4HANA Üretim",))
+        pbi = one(db, "SELECT * FROM tdr_data_sources WHERE name=?", ("Power BI — Satış Performans Modeli",))
+        crm = one(db, "SELECT * FROM tdr_data_sources WHERE name=?", ("Dynamics 365 CRM",))
+        if not (sap and pbi):
+            return
+        domain = one(db, "SELECT id FROM tdr_data_domains WHERE name=?", ("Satış ve Sipariş",))
+        dwh_id = self.add("data_sources", {"name": "Kurumsal Veri Ambarı", "platform": "postgresql", "environment": "production",
+                                           "domain_id": domain["id"] if domain else None, "owner": "kerem.aksoy",
+                                           "custodian": "deniz.koc", "location": "dwh-prod.demo.local:5432/dwh",
+                                           "lineage_namespace": DWH_NS,
+                                           "description": "Raporlama veri ambarı (staging → dwh → mart). Toplayıcıyla toplanır; "
+                                                          "dbt modelleri OpenLineage olayı gönderir."})
+        dwh = crud.get(db, D.SOURCES, dwh_id)
+        D.apply_structure(db, dwh, D.parse_catalog("dwh.json", json.dumps(DWH).encode("utf-8")), scope="full",
+                          principal=ADMIN, filename="postgresql.json")
+        ids = {}
+        for src in (sap, dwh, pbi) + ((crm,) if crm else ()):
+            for t in db.execute("SELECT id, name FROM tdr_data_tables WHERE source_id=?", (src["id"],)).fetchall():
+                ids[t["name"]] = t["id"]
+                for c in db.execute("SELECT id, name FROM tdr_data_columns WHERE table_id=?", (t["id"],)).fetchall():
+                    ids[f"{t['name']}.{c['name']}"] = c["id"]
+
+        def job(name, system, owner, note):
+            return crud.insert(db, L.JOBS, {"name": name, "system": system, "owner": owner, "schedule_note": note,
+                                            "status": "active"}, None)
+
+        def link(pairs, job_id, method="manual"):
+            for item in pairs:
+                src, dst, kind, text = (item + ("direct", None))[:4] if len(item) == 2 else item
+                st, sc = src.split(".")
+                tt, tc = dst.split(".")
+                if ids.get(src) and ids.get(dst):
+                    L.upsert_edge(db, ids[st], ids[src], ids[tt], ids[dst], kind=kind, transformation=text, job_id=job_id,
+                                  method=method, principal=ADMIN)
+        sap_job = job("SAP → Veri ambarı gece yüklemesi", "sap_ds", "deniz.koc", "Her gece 02:00")
+        link(SAP_DWH, sap_job, "excel")
+        pbi_job = job("Power BI veri kümesi yenilemesi", "power_bi", "kerem.aksoy", "Her sabah 06:30")
+        link(DWH_PBI, pbi_job)
+        if crm and ids.get("account.industrycode"):
+            crm_job = job("CRM → Veri ambarı eşitlemesi", "adf", "deniz.koc", "Saatte bir")
+            link([("account.industrycode", "dim_musteri.segment", "transform", "Sektör kodu → müşteri segmenti eşleme tablosu"),
+                  ("account.accountnumber", "dim_musteri.musteri_no", "indirect", "SAP müşteri numarasıyla eşleşen firmalar")], crm_job)
+        cid = crud.insert(db, C.COLLECTORS, {"name": "Veri ambarı OpenLineage alıcısı", "source_id": dwh_id, "connector": "openlineage",
+                                             "schedule": "manual", "scope": "tables", "status": "active", "created_by": "deniz.koc"}, None)
+        C._new_key(db, cid, ADMIN)
+        col = one(db, "SELECT * FROM tdr_data_collectors WHERE id=?", (cid,))
+        who = Principal(f"toplayici:{col['code']}", "COLLECTOR", "collector", col["name"], collector_id=cid)
+        fields = {"net_tutar_toplam": [("dwh.fct_satis", "net_tutar", "AGGREGATION")], "musteri_key": [("dwh.fct_satis", "musteri_key", "IDENTITY")],
+                  "siparis_adedi": [("dwh.fct_satis", "belge_no", "AGGREGATION")], "yil": [("dwh.fct_satis", "tarih", "TRANSFORMATION")],
+                  "ay": [("dwh.fct_satis", "tarih", "TRANSFORMATION")]}
+        for state in ("START", "COMPLETE"):
+            L.ingest(db, col, {"eventType": state, "eventTime": utcnow(), "producer": "https://github.com/OpenLineage/OpenLineage/tree/1.24.0/integration/dbt",
+                               "run": {"runId": "01936d2e-demo-0001"}, "job": {"namespace": "dbt://analitik", "name": "analitik.satis_ozet_aylik"},
+                               "inputs": [{"namespace": DWH_NS, "name": "dwh.dwh.fct_satis"}, {"namespace": DWH_NS, "name": "dwh.dwh.dim_musteri"}],
+                               "outputs": [{"namespace": DWH_NS, "name": "dwh.mart.satis_ozet_aylik", "facets": {"columnLineage": {"fields": {
+                                   out: {"inputFields": [{"namespace": DWH_NS, "name": n, "field": f, "transformations": [
+                                       {"type": "DIRECT", "subtype": sub}]} for n, f, sub in ins]} for out, ins in fields.items()}}}}]}, who)
+        L.ingest(db, col, {"eventType": "COMPLETE", "eventTime": utcnow(), "producer": "https://github.com/apache/airflow/tree/providers-openlineage/1.14.0",
+                           "run": {"runId": "01936d2e-demo-0002"}, "job": {"namespace": "airflow-prod", "name": "kampanya_yukleme.yukle"},
+                           "inputs": [{"namespace": "s3://ham-veri-demo", "name": "pazarlama/kampanya_katilimcilari"}],
+                           "outputs": [{"namespace": DWH_NS, "name": "dwh.staging.sap_kna1"}]}, who)
+        db.execute("UPDATE tdr_data_collectors SET last_push_at=?, last_seen_at=?, last_result='ok', last_message=? WHERE id=?",
+                   (utcnow(), utcnow(), "OpenLineage: 3 olay", cid))
+        if self.enabled("grc"):
+            control = crud.insert(db, RESOURCES["controls"], {
+                "name": "Satış raporu ile ERP net satış mutabakatı", "description": "Power BI satış modelindeki aylık net satış toplamı, "
+                "SAP VBAK net değeriyle (TRY'ye çevrilmiş) karşılaştırılır; %0,5 üzeri fark incelenir.", "execution_mode": "manual",
+                "nature": "detective", "frequency": "monthly", "criticality": "high", "method_type": "query", "owner": "Ayla Çetin",
+                "active": 1}, None)
+            for table in ("fct_satis", "FactSatis"):
+                if ids.get(table):
+                    db.execute("INSERT INTO tdr_data_table_controls (table_id, control_id, created_by, created_at) VALUES (?,?,?,?)",
+                               (ids[table], control, "selin.aydin", utcnow()))
+            process = one(db, "SELECT id FROM tdr_processes WHERE name=?", ("Satış ve Sipariş Yönetimi",))
+            if process:
+                db.execute("INSERT INTO tdr_control_processes (control_id, process_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                           (control, process["id"]))
 
     # -------------------------------------------------------------- KVKK ve sınıflandırma (K-029)
     def privacy(self):
@@ -697,6 +786,50 @@ COLLECTORS = [  # kaynak, ad, bağlayıcı, sıklık, kapsam, örnek satır, son
      "dosya01"),
     ("ServiceNow ITSM", "ServiceNow sözlük dışa aktarımı", "file", "daily", "tables", 0, None, None, None, None),
 ]
+
+
+DWH_NS = "postgres://dwh-prod.demo.local:5432"
+DWH = {"format": "tedarik.catalog.v1", "tables": [
+    {"schema": "staging", "name": "sap_kna1", "description": "SAP KNA1 ham kopyası (gece)", "row_count": 48200, "columns": [
+        {"name": "KUNNR", "data_type": "varchar(10)", "primary_key": True}, {"name": "NAME1", "data_type": "varchar(35)"},
+        {"name": "ORT01", "data_type": "varchar(35)"}, {"name": "STCD1", "data_type": "varchar(16)"},
+        {"name": "yuklenme_zamani", "data_type": "timestamp"}]},
+    {"schema": "dwh", "name": "dim_musteri", "description": "Müşteri boyutu (SAP + CRM)", "row_count": 47950, "columns": [
+        {"name": "musteri_key", "data_type": "bigint", "primary_key": True}, {"name": "musteri_no", "data_type": "varchar(10)"},
+        {"name": "musteri_adi", "data_type": "varchar(80)"}, {"name": "sehir", "data_type": "varchar(35)"},
+        {"name": "vergi_no", "data_type": "varchar(16)"}, {"name": "segment", "data_type": "varchar(20)"}]},
+    {"schema": "dwh", "name": "dim_urun", "description": "Ürün boyutu", "row_count": 12400, "columns": [
+        {"name": "urun_key", "data_type": "bigint", "primary_key": True}, {"name": "malzeme_no", "data_type": "varchar(40)"},
+        {"name": "urun_adi", "data_type": "varchar(40)"}, {"name": "urun_grubu", "data_type": "varchar(9)"}]},
+    {"schema": "dwh", "name": "fct_satis", "description": "Satış olgu tablosu (kalem düzeyi)", "row_count": 3100000, "columns": [
+        {"name": "satis_key", "data_type": "bigint", "primary_key": True}, {"name": "belge_no", "data_type": "varchar(10)"},
+        {"name": "musteri_key", "data_type": "bigint", "references": "dwh.dim_musteri.musteri_key"},
+        {"name": "urun_key", "data_type": "bigint", "references": "dwh.dim_urun.urun_key"}, {"name": "tarih", "data_type": "date"},
+        {"name": "net_tutar", "data_type": "numeric(18,2)"}, {"name": "miktar", "data_type": "numeric(15,3)"}]},
+    {"schema": "mart", "name": "satis_ozet_aylik", "object_type": "view", "description": "Aylık müşteri satış özeti (dbt)", "columns": [
+        {"name": "yil", "data_type": "integer"}, {"name": "ay", "data_type": "integer"},
+        {"name": "musteri_key", "data_type": "bigint"}, {"name": "net_tutar_toplam", "data_type": "numeric(18,2)"},
+        {"name": "siparis_adedi", "data_type": "integer"}]}]}
+SAP_DWH = [  # (kaynak tablo.kolon, hedef tablo.kolon, tür, dönüşüm)
+    ("KNA1.KUNNR", "sap_kna1.KUNNR", "direct", None), ("KNA1.NAME1", "sap_kna1.NAME1", "direct", None),
+    ("KNA1.ORT01", "sap_kna1.ORT01", "direct", None), ("KNA1.STCD1", "sap_kna1.STCD1", "direct", None),
+    ("sap_kna1.KUNNR", "dim_musteri.musteri_no", "direct", None),
+    ("sap_kna1.NAME1", "dim_musteri.musteri_adi", "transform", "Boşluklar kırpılır, baş harfler büyük"),
+    ("sap_kna1.ORT01", "dim_musteri.sehir", "transform", "İl adı standart listeye eşlenir"),
+    ("sap_kna1.STCD1", "dim_musteri.vergi_no", "direct", None),
+    ("VBAK.VBELN", "fct_satis.belge_no", "direct", None),
+    ("VBAK.NETWR", "fct_satis.net_tutar", "transform", "WAERK para birimiyle günlük kurdan TRY'ye çevrilir"),
+    ("VBAK.KUNNR", "fct_satis.musteri_key", "indirect", "dim_musteri üzerinden vekil anahtar araması"),
+    ("VBAP.KWMENG", "fct_satis.miktar", "direct", None), ("VBAP.MATNR", "fct_satis.urun_key", "indirect", "dim_urun üzerinden anahtar"),
+    ("MARA.MATNR", "dim_urun.malzeme_no", "direct", None), ("MAKT.MAKTX", "dim_urun.urun_adi", "direct", None),
+    ("MARA.MATKL", "dim_urun.urun_grubu", "direct", None)]
+DWH_PBI = [("dim_musteri.musteri_key", "DimMusteri.MusteriKey"), ("dim_musteri.musteri_no", "DimMusteri.MusteriNo"),
+           ("dim_musteri.musteri_adi", "DimMusteri.MusteriAdi"), ("dim_musteri.sehir", "DimMusteri.Sehir"),
+           ("dim_musteri.segment", "DimMusteri.Segment"), ("dim_urun.urun_key", "DimUrun.UrunKey"),
+           ("dim_urun.malzeme_no", "DimUrun.MalzemeNo"), ("dim_urun.urun_adi", "DimUrun.UrunAdi"),
+           ("dim_urun.urun_grubu", "DimUrun.UrunGrubu"), ("fct_satis.musteri_key", "FactSatis.MusteriKey"),
+           ("fct_satis.urun_key", "FactSatis.UrunKey"), ("fct_satis.tarih", "FactSatis.Tarih"),
+           ("fct_satis.net_tutar", "FactSatis.NetTutar"), ("fct_satis.miktar", "FactSatis.Miktar")]
 
 
 def RESOURCES_COLUMNS():

@@ -31,6 +31,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   veri talepleri, ilgili kişi başvuruları (30 gün), VKED, ihlal ↔ veri varlığı (K-029).
 - Veri yönetişimi Faz 3: kurum ağında çalışan toplayıcı meta veriyi iter (platform kaynağa bağlanmaz, parola tutmaz); kaynak başına
   tek seferlik gösterilen anahtar; bağlayıcı geliştirme kiti; gecikme/hata ve şema değişikliği bildirimi; toplu kaldırma eşiği (K-030).
+- Veri yönetişimi Faz 4: tablo/kolon düzeyi soy kütüğü (elle, Excel, dbt, OpenLineage), etki analizi ve planlanan değişiklik
+  bildirimi, akış şeması, kişisel verinin soy kütüğü boyunca önerilmesi (K-031).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -204,6 +206,26 @@ Ayrıntı `docs/KARARLAR.md` içinde.
     bekleyen (ServiceNow) toplayıcılar.
   - Testler: 162 uçtan uca test (SQLite ve PostgreSQL 16; PostgreSQL bağlayıcısı gerçek katalogla), indirilen .pyz ayrı süreçte
     çalıştırılır; tarayıcı duman testi gerçek toplayıcıyı HTTP üzerinden çalıştırıp ekranda "Çalışıyor" durumunu doğrular.
+  - Test sunucusuna dağıtıldı (commit `d8cb865`): demo verisine toplayıcı bölümü eklendi; canlı kabul testi geçti (GitHub Actions
+    çalıştırması 43765676486, 2026-11-15); CI yeşil.
+- **Veri yönetişimi Faz 4 — soy kütüğü ve etki analizi (2026-11-15, K-031).** Power BI soy kütüğü (erişim) ve SQL ayrıştırma
+  (sqlglot onayı) atlandı; yol haritasında "Bilgi bekleniyor".
+  - *Model:* kaynak tablo[.kolon] → hedef tablo[.kolon]; tür (doğrudan, dönüşüm, toplama, dolaylı), dönüşüm açıklaması, veri akış
+    işi (AKS-); kaynağı elle, Excel/CSV, OpenLineage veya dbt; aynı bağlantı tekil; otomatik bağlantı son görülme ile izlenir.
+  - *Tanım yolları:* katalog aramalı "+ Bağlantı" penceresi (tablo ve kolon seçimi); Excel/CSV içe aktarım (ön izleme, satır
+    hataları, şablon ve dışa aktarım); dbt manifest.json (bağımlılıklar, kaldırılan dbt bağlantısı, açıklama doldurma);
+    OpenLineage alıcısı (toplayıcı anahtarı, `Authorization: Bearer`; columnLineage kolon düzeyi; eşlenemeyen veri setleri ve
+    yeniden işleme; yalnızca veri seti adları saklanır).
+  - *Etki analizi:* tablo veya kolon için aşağı akış (döngüye dayanıklı, kolon düzeyinde daralan); etkilenen tablolar ve yol,
+    raporlar/anlamsal modeller, sistemler, BİA süreçleri, işleme faaliyetleri, kontroller (veri varlığına bağlanabilir), terimler,
+    açık riskler, bildirilecek kişiler; CSV etki raporu; sahiplere "planlanan değişiklik" bildirimi.
+  - *Akış şeması:* odak tablo veya kolon, 1–6 adım derinlik, katmanlı SVG; kutuya/bağlantıya tıklayınca ayrıntı (kolon eşlemeleri,
+    işler). Tablo sayfasında "Soy kütüğü" bölümü (besleyen/beslediği, kontroller), kolon panelinde kaynak/hedef kolonlar.
+  - *Bağlantılar:* şema değişikliği bildiriminde aşağı akışı olan kaldırma/tip değişikliği "önemli"; kaldırılan nesneye bağlı
+    kopuk bağlantı sağlık kontrolünde; kategorisi belli kolondan beslenen kolon keşifte aynı kategoride önerilir.
+  - Demo: sentetik "Kurumsal Veri Ambarı" (staging → dwh → mart), SAP → ambar (Excel ile), CRM eşitlemesi, dbt modeli (OpenLineage
+    olaylarıyla), ambar → Power BI modeli (kolon düzeyinde), mutabakat kontrolü, eşlenemeyen bir S3 veri seti.
+  - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
@@ -251,8 +273,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi Faz 4–6 yok:** soy kütüğü, veri kalitesi, yapay zekâ yönetişimi (yol haritası uygulamada: Yönetim → Yol
-  Haritası). Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
+- **Veri yönetişimi Faz 5–6 yok:** veri kalitesi, mevzuat boşluk analizi, yapay zekâ yönetişimi (yol haritası uygulamada:
+  Yönetim → Yol Haritası). Soy kütüğünde SQL'den kolon çıkarımı (sqlglot onayı) ve Power BI rapor soy kütüğü (Scanner API) yok. Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
   denenmedi (sentetik dosyalar, SQLite ve PostgreSQL ile test edildi). ServiceNow, Dynamics ve Power BI'ya doğrudan API bağlantısı yok.
 
 ## Sıradaki adımlar (sırayla)
@@ -273,7 +295,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10b. ~~**Veri yönetişimi Faz 0–1:** yol haritası, veri sözlüğü ve katalog.~~ Tamamlandı (2026-11-15, K-028).
 10d. ~~**Veri yönetişimi Faz 2 — KVKK ve sınıflandırma**~~ Tamamlandı (2026-11-15, K-029).
 10e. ~~**Veri yönetişimi Faz 3 — otomatik toplama**~~ Gökhan Bey'den bilgi beklemeyen kısmı tamamlandı (2026-11-15, K-030).
-     Sıradaki: Faz 4 (soy kütüğü ve etki analizi; Power BI soy kütüğü erişim bekliyor, SQL ayrıştırma sqlglot onayı bekliyor).
+10f. ~~**Veri yönetişimi Faz 4 — soy kütüğü ve etki analizi**~~ Bilgi/onay beklemeyen kısmı tamamlandı (2026-11-15, K-031).
+     Sıradaki: Faz 5 (profilleme, kalite kural motoru — başarısız kural bulgu/DÖF açar, skor kartları); toplayıcı aynı itme
+     modeliyle yalnızca istatistik gönderebilir.
      Eski not: kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
      öneri → veri yöneticisi onayı), VERBİS uyumlu işleme envanteri (amaç, hukuki sebep, kategori, ilgili kişi grubu, alıcılar,
      yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim
@@ -287,6 +311,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 - Veri yönetişimi Faz 1'in gerçek kaynakla denenmesi: SAP (HANA kataloğu veya ABAP sözlüğü sorgusu), ServiceNow sys_dictionary,
   Dynamics EntityDefinitions ve Power BI `INFO.VIEW.COLUMNS()` çıktıları (yalnızca meta veri, veri içeriği yok).
+- Faz 4 için: SQL ayrıştırıcı bağımlılığı (sqlglot, saf Python) onayı — dbt modelleri ve görünümlerden kolon düzeyi soy kütüğü;
+  Power BI Scanner API izni (rapor ← anlamsal model ← kaynak).
 - Faz 3 gerçek bağlantılar için: salt okunur SAP HANA kullanıcısı ve toplayıcı makinesine hdbcli kurulumu (toplayıcı hazır;
   `sql` bağlayıcısı ve `hana_catalog`/`sap_ddic` hazır sorguları); Power BI yönetici API izni ve hizmet sorumlusu; Dataverse'te
   salt okunur uygulama kullanıcısı (Entra uygulama kaydı); ServiceNow salt okunur hizmet hesabı. Toplayıcının çalışacağı sunucu

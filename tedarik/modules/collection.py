@@ -37,7 +37,7 @@ from .core import policy
 from .datagov import EFF_COLS, EFFECTIVE, M, QUERIES, SCOPES, SOURCES, _notify, _payload, apply_structure, parse_catalog
 
 SCHEDULES = {"hourly": 1, "daily": 24, "weekly": 168, "monthly": 24 * 31, "manual": None}
-CONNECTORS = ("postgresql", "sqlite", "sql", "files", "file", "custom")
+CONNECTORS = ("postgresql", "sqlite", "sql", "files", "file", "custom", "openlineage")
 EVENT_KINDS = ("push", "preview", "error", "rejected")
 KEY_PREFIX = "tdrc_"
 MAX_SAMPLE_TABLES = 2000
@@ -327,6 +327,9 @@ def collector_create(c):
     data = {k: c.body.get(k) for k in ("name", "connector", "scope", "schedule", "max_removal_pct", "sample_rows",
                                        "description") if c.body.get(k) not in (None, "")}
     data.setdefault("name", f"{source['name']} toplayıcısı")
+    if data.get("connector") == "openlineage":
+        data.setdefault("schedule", "manual")          # olaylar iş çalıştıkça gelir; beklenen sıklık yok
+        data["name"] = c.body.get("name") or f"{source['name']} OpenLineage alıcısı"
     data.update(source_id=source["id"], created_by=c.principal.username, status="active")
     cid = crud.insert(c.db, COLLECTORS, data, c.principal)
     key = _new_key(c.db, cid, c.principal)
@@ -378,15 +381,34 @@ CONNECTOR_NOTES = {
     "file": "Kaynak sistemin kendi zamanlanmış dışa aktarımını (CSV, Excel, JSON) olduğu gibi gönderir: "
             "'dosya-gonder' komutuyla kullanılır.",
     "custom": "Kurumun yazdığı bağlayıcı (Connector sınıfı) --eklenti ile yüklenir; sözleşme belgede (docs/TOPLAYICI.md).",
+    "openlineage": "Airflow, Spark, dbt ve Flink'in OpenLineage HTTP aktarımı bu adrese olay gönderir; toplayıcı programı gerekmez. "
+                   "Anahtar 'api_key' kimlik doğrulamasıyla (Authorization: Bearer) gider. Veri setleri kataloğa kaynağın "
+                   "'Soy kütüğü ad alanı' (ör. postgres://db-prod:5432) değeriyle eşlenir.",
 }
 CRON = {"hourly": "0 * * * *", "daily": "30 2 * * *", "weekly": "30 2 * * 1", "monthly": "30 2 1 * *"}
 SCHTASKS = {"hourly": "/sc hourly", "daily": "/sc daily /st 02:30", "weekly": "/sc weekly /d MON /st 02:30",
             "monthly": "/sc monthly /d 1 /st 02:30"}
 
 
+def _openlineage_setup(origin):
+    base = origin or "https://<platform-adresi>"
+    yml = ("transport:\n  type: http\n  url: " + base + "\n  endpoint: api/tdr/collector/openlineage\n  auth:\n"
+           "    type: api_key\n    apiKey: <toplayıcı anahtarı>")
+    env = (f"OPENLINEAGE_URL={base}\nOPENLINEAGE_ENDPOINT=api/tdr/collector/openlineage\n"
+           "OPENLINEAGE_API_KEY=$(cat /etc/tedarik/anahtar)")
+    spark = (f"spark.openlineage.transport.type=http\nspark.openlineage.transport.url={base}\n"
+             "spark.openlineage.transport.endpoint=api/tdr/collector/openlineage\n"
+             "spark.openlineage.transport.auth.type=api_key\nspark.openlineage.transport.auth.apiKey=<toplayıcı anahtarı>")
+    return {"config": yml, "note": CONNECTOR_NOTES["openlineage"], "env": env, "spark": spark,
+            "check": f"curl -s -H \"Authorization: Bearer $(cat /etc/tedarik/anahtar)\" {base}/api/tdr/collector/whoami",
+            "run": "", "windows": ""}
+
+
 def setup(col, origin):
     """Kurulum yönergesi: ayar dosyası, komutlar ve zamanlama satırları. Anahtar içermez."""
     connector = col["connector"]
+    if connector == "openlineage":
+        return _openlineage_setup(origin)
     config = {"platform": origin or "https://<platform-adresi>", "key_file": "/etc/tedarik/anahtar",
               "connector": connector if connector not in ("file", "custom") else (
                   "file" if connector == "file" else CONFIG_SETTINGS["custom"]["name"]),
@@ -512,6 +534,9 @@ def significance(db, changes):
                                                (r["terms"], "sözlük terimi bağlı"), (r["certified"], "onaylı veri seti")) if ok]
             if reasons:
                 flags[("table", r["id"])] = reasons
+    from .lineage import downstream_flags
+    for key, reason in downstream_flags(db, changes).items():
+        flags.setdefault(key, []).append(reason)
     return flags
 
 

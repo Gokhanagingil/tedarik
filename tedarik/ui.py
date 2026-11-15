@@ -11,7 +11,7 @@ TYPES = {"app.js": "application/javascript; charset=utf-8", "pages.js": "applica
          "grc.js": "application/javascript; charset=utf-8", "admin.js": "application/javascript; charset=utf-8",
          "assurance.js": "application/javascript; charset=utf-8", "ops.js": "application/javascript; charset=utf-8",
          "datagov.js": "application/javascript; charset=utf-8", "privacy.js": "application/javascript; charset=utf-8",
-         "collect.js": "application/javascript; charset=utf-8",
+         "collect.js": "application/javascript; charset=utf-8", "lineage.js": "application/javascript; charset=utf-8",
          "app.css": "text/css; charset=utf-8"}
 
 SHELL = """<!doctype html>
@@ -55,6 +55,7 @@ SHELL = """<!doctype html>
 <script src="/static/datagov.js" defer></script>
 <script src="/static/privacy.js" defer></script>
 <script src="/static/collect.js" defer></script>
+<script src="/static/lineage.js" defer></script>
 </body></html>"""
 
 

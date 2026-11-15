@@ -13,7 +13,8 @@ const COLLECT = {
     ['sqlite', 'SQLite', 'Veritabanı dosyası salt okunur açılır; ek paket gerekmez.'],
     ['files', 'CSV klasörü', 'Paylaşımdaki her CSV bir tablo, başlık satırı kolonlardır; tipler yerelde örnekten çıkarılır.'],
     ['file', 'Hazır dışa aktarım', 'Kaynak sistemin kendi zamanlanmış dışa aktarımı (CSV, Excel, JSON) olduğu gibi gönderilir.'],
-    ['custom', 'Kurumun bağlayıcısı', 'Python ile yazılan tek bir Connector sınıfı (bağlayıcı geliştirme kiti, docs/TOPLAYICI.md).']],
+    ['custom', 'Kurumun bağlayıcısı', 'Python ile yazılan tek bir Connector sınıfı (bağlayıcı geliştirme kiti, docs/TOPLAYICI.md).'],
+    ['openlineage', 'OpenLineage alıcısı', 'Airflow, Spark, dbt ve Flink iş çalıştıkça soy kütüğü olayı gönderir; program kurulmaz.']],
 };
 function collectorPill(st) { return pill(st.label, COLLECT.tone[st.state] || 'neutral'); }
 function agoText(v) {
@@ -44,7 +45,7 @@ function collectorDialog(s) {
   const save = async () => {
     const connector = (document.querySelector('input[name=tplConnector]:checked') || {}).value;
     try {
-      const r = await api(`data_sources/${s.id}/collectors`, {method: 'POST', body: {name: name.value.trim(), connector, schedule: schedule.value, scope: scope.value,
+      const r = await api(`data_sources/${s.id}/collectors`, {method: 'POST', body: {name: name.value.trim(), connector, schedule: connector === 'openlineage' ? 'manual' : schedule.value, scope: scope.value,
         sample_rows: Number(sample.value || 0)}});
       // Ekran değişince açık pencere kapanır: anahtar, toplayıcı ekranı çizildikten sonra gösterilir.
       COLLECT.pending = {id: r.collector.id, col: r.collector, key: r.key, title: 'Toplayıcı oluşturuldu'};
@@ -104,7 +105,7 @@ PAGES.collector = async function collectorPage(parts) {
     await api(`data_collectors/${c.id}/revoke`, {method: 'POST', body: {}}); toast('Toplayıcı iptal edildi'); invalidate('data_collectors'); reload();
   };
   setPage(c.name, `${c.code} · ${c.source.name} · ${META.option('data_collectors', 'connector', c.connector)}`, [
-    btn('Toplayıcıyı indir (.pyz)', downloadCollector, 'secondary'),
+    c.connector !== 'openlineage' ? btn('Toplayıcıyı indir (.pyz)', downloadCollector, 'secondary') : null,
     c.can_manage && active ? btn('Düzenle', () => recordForm('data_collectors', c, {only: ['name', 'schedule', 'scope', 'sample_rows', 'max_removal_pct', 'connector', 'description'], onsaved: reload}), 'ghost') : null,
     c.can_manage && active ? btn('Anahtarı yenile', rotate, 'ghost') : null,
     c.can_manage && active ? btn('İptal et', revoke, 'ghost') : null], [['Veri Yönetişimi', 'datagov'], ['Toplayıcılar', 'collectors'], [c.source.name, 'datasource/' + c.source.id]]);
@@ -124,7 +125,13 @@ PAGES.collector = async function collectorPage(parts) {
     ['Anahtar', `${c.key_hint || '—'} · ${fmt.datetime(c.key_created_at)}`], ['Teknik sorumlu', personText(c.source.custodian)]]);
   const su = c.setup;
   const step = (n, title, ...body) => h('div', {class: 'wiz-step'}, h('span', {class: 'dg-num', text: String(n)}), h('div', {}, h('strong', {text: title}), ...body));
-  const setup = h('div', {class: 'wizard'},
+  const setup = c.connector === 'openlineage' ? h('div', {class: 'wizard'},
+    step(1, 'Anahtarı kaydedin', h('p', {class: 'small muted', text: `Anahtar oluşturulurken bir kez gösterildi (${c.key_hint || '…'}). OpenLineage istemcisinin çalıştığı makinede /etc/tedarik/anahtar dosyasına yazın (chmod 600). Elinizde yoksa "Anahtarı yenile".`})),
+    step(2, 'OpenLineage aktarımını yapılandırın', h('p', {class: 'small muted', text: su.note}), codeBlock(su.config, 'openlineage.yml (Airflow, dbt, Python istemcisi)'),
+      codeBlock(su.env, 'veya ortam değişkenleri'), codeBlock(su.spark, 'Apache Spark (spark-defaults.conf veya --conf)')),
+    step(3, 'Bağlantıyı sınayın', codeBlock(su.check, 'Anahtar ve adres doğru mu?')),
+    step(4, 'Veri setlerini kataloğa eşleyin', h('p', {class: 'small muted', text: 'Olaydaki veri seti ad alanını (ör. postgres://dwh-prod:5432) ilgili veri kaynağının "Soy kütüğü ad alanı" alanına yazın; tablolar katalogda değilse önce içe aktarın. Eşlenemeyenler Soy Kütüğü sayfasında listelenir.'}),
+      h('div', {class: 'toolbar'}, btn('Soy Kütüğü', () => Router.go('lineage'), 'secondary small')))) : h('div', {class: 'wizard'},
     step(1, 'Toplayıcıyı indirin', h('p', {class: 'small muted', text: 'Tek dosya; Python 3.9 veya üstü yeterli, ek paket gerekmez. Kaynağa erişebilen bir sunucuya kopyalayın (ör. /opt/tedarik/ veya C:\\tedarik\\). Kaynağın Python sürücüsü (gerekiyorsa) aynı makineye kurulur.'}),
       h('div', {class: 'toolbar'}, btn('tedarik-toplayici.pyz indir', downloadCollector, 'secondary small'))),
     step(2, 'Anahtarı kaydedin', h('p', {class: 'small muted', text: `Anahtar oluşturulurken bir kez gösterildi (${c.key_hint || '…'}). /etc/tedarik/anahtar dosyasına yazın; yalnızca toplayıcıyı çalıştıran hesap okuyabilsin (chmod 600). Elinizde yoksa "Anahtarı yenile".`})),

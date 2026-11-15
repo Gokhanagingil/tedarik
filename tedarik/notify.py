@@ -45,6 +45,7 @@ EVENTS = {   # olay: (Türkçe ad, varsayılan e-posta, varsayılan Teams)
     "catalog.changed": ("Veri kaynağında şema değişikliği (sahip ve veri yöneticisine)", True, False),
     "collector.overdue": ("Toplayıcı beklenen sürede veri göndermedi", True, True),
     "collector.failed": ("Toplayıcı hata bildirdi veya gönderimi reddedildi", True, True),
+    "catalog.impact": ("Planlanan veri değişikliği: aşağı akıştaki sahiplere etki bildirimi", True, False),
 }
 
 
