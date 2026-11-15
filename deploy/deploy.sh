@@ -88,6 +88,18 @@ if [ "$out" != "ACCOUNT_ALREADY_EXISTS" ]; then
   echo "İlk yönetici oluşturuldu; geçici parola: $BASE/.first-login (yalnızca root okur)"
 fi
 
+# Demo verisi (yalnızca istenirse ve veritabanında demo dışı tedarikçi yoksa). Demo kullanıcıların geçici
+# parolaları yalnızca root'un okuyabildiği dosyaya yazılır; CI günlüğüne basılmaz.
+if [ "${TEDARIK_SEED_DEMO:-0}" = 1 ] || [ "${TEDARIK_SEED_DEMO:-}" = true ]; then
+  demo=$($COMPOSE exec -T app python -m tedarik.demo)
+  if [ "$demo" != "DEMO_ALREADY_LOADED" ]; then
+    (umask 077; printf '%s\n' "$demo" > "$BASE/.demo-users")
+    echo "Demo verisi yüklendi; demo kullanıcıların geçici parolaları: $BASE/.demo-users (yalnızca root okur)"
+  else
+    echo "Demo verisi zaten yüklü"
+  fi
+fi
+
 status=$(docker run --rm --network host python:3.12-alpine@sha256:213242b537a1c166a0c53e903461fc18d5518e7196c93dbecda452660a848918 \
   python -c "import urllib.request,urllib.error
 try: urllib.request.urlopen('http://127.0.0.1:$PORT/api/health', timeout=5); print(200)
