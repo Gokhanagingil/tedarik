@@ -60,7 +60,8 @@ CLAUSES = Resource("clauses", "Maddeler", {
     module=M, unique=(("standard_id", "code"),), search=("code", "title"), write_roles=LIBRARY)
 
 OBJECTIVES = Resource("objectives", "Kontrol Hedefleri", {
-    "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT"},
+    "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT",
+    "process_id": fk("processes", False), "owner": "TEXT"},
     module=M, code_prefix="KHD", write_roles=LIBRARY)
 
 CONTROLS = Resource("controls", "Kontroller", {
@@ -87,13 +88,18 @@ for _name, (_table, _col, _target) in LINKS.items():
     Resource(_table, "Kontrol eşlemesi", {"control_id": fk("controls", cascade=True), _col: fk(_target, cascade=True)},
              module=M, unique=(("control_id", _col),), api=(), search=())
 
+Resource("objective_risks", "Kontrol hedefinin ele aldığı riskler", {
+    "objective_id": fk("objectives", cascade=True), "risk_id": fk("supplier_risks", cascade=True)},
+    module=M, unique=(("objective_id", "risk_id"),), api=(), search=())
+
 Resource("document_clauses", "Dokümanın karşıladığı maddeler", {
     "document_id": fk("documents", cascade=True), "clause_id": fk("clauses", cascade=True)},
     module=M, unique=(("document_id", "clause_id"),), api=(), search=())
 
 AUDITS = Resource("audits", "Denetimler", {
     "code": "TEXT UNIQUE", "name": "TEXT NOT NULL", "kind": "TEXT NOT NULL DEFAULT 'internal'",
-    "supplier_id": fk("suppliers", False), "audit_objective": "TEXT", "scope": "TEXT",
+    "supplier_id": fk("suppliers", False), "company_id": fk("companies", False), "audit_objective": "TEXT",
+    "scope": "TEXT",
     "planned_start": "DATE", "planned_end": "DATE", "actual_start": "DATE", "actual_end": "DATE",
     "lead_auditor": "TEXT", "auditors": "TEXT", "auditees": "TEXT", "status": "TEXT NOT NULL DEFAULT 'planned'",
     "conclusion": "TEXT", "opinion": "TEXT", "revision": "INTEGER NOT NULL DEFAULT 0",
@@ -153,6 +159,8 @@ Resource("execution_evidence", "Çalışmaya bağlı kanıt sürümleri", {
 FINDINGS = Resource("findings", "Bulgular", {
     "code": "TEXT UNIQUE", "title": "TEXT NOT NULL", "control_id": fk("controls", False),
     "execution_id": fk("executions", False), "audit_id": fk("audits", False), "supplier_id": fk("suppliers", False),
+    "source": "TEXT NOT NULL DEFAULT 'audit'", "clause_id": fk("clauses", False), "process_id": fk("processes", False),
+    "risk_id": fk("supplier_risks", False), "company_id": fk("companies", False),
     "description": "TEXT", "severity": "TEXT NOT NULL DEFAULT 'medium'", "status": "TEXT NOT NULL DEFAULT 'open'",
     "owner": "TEXT", "due_date": "DATE", "root_cause": "TEXT", "closure_note": "TEXT",
     "recurrence": "INTEGER NOT NULL DEFAULT 1", "last_seen_at": "TIMESTAMP", "closed_at": "TIMESTAMP",
@@ -160,7 +168,8 @@ FINDINGS = Resource("findings", "Bulgular", {
     module=M, code_prefix="BLG", code_yearly=True, search=("code", "title"), write_roles=ASSURANCE,
     readonly=("execution_id", "recurrence", "last_seen_at", "closed_at", "created_by"),
     enums={"severity": ("low", "medium", "high", "critical"),
-           "status": ("open", "in_progress", "closed", "accepted")})
+           "status": ("open", "in_progress", "closed", "accepted"),
+           "source": ("audit", "control_test", "exercise", "self_assessment", "external", "incident")})
 
 ACTIONS = Resource("grc_actions", "Düzeltici Faaliyetler", {
     "code": "TEXT UNIQUE", "title": "TEXT NOT NULL", "finding_id": fk("findings", False),
@@ -534,8 +543,8 @@ def record_execution(db, principal, data, source=None):
             due = (date.today() + timedelta(days={"critical": 15, "high": 30, "medium": 60, "low": 90}[severity]))
             finding_id = db.execute(
                 "INSERT INTO tdr_findings (code, title, control_id, execution_id, audit_id, description, severity, "
-                "status, owner, due_date, recurrence, last_seen_at, created_by, created_at) "
-                "VALUES (?,?,?,?,?,?,?,'open',?,?,1,?,?,?)",
+                "status, owner, due_date, recurrence, last_seen_at, created_by, created_at, source) "
+                "VALUES (?,?,?,?,?,?,?,'open',?,?,1,?,?,?,'control_test')",
                 (crud.next_code(db, FINDINGS), f"{control['name']} — test başarısız",
                  control["id"], execution_id, audit_id, data.get("details") or "", severity, control["owner"],
                  due.isoformat(), now, "system" if source == "system" else principal.username if not machine else "mcp",
