@@ -32,6 +32,7 @@ from playwright.sync_api import expect, sync_playwright
 BASE = os.environ["TDR_BASE"].rstrip("/")
 RUN = os.environ.get("GITHUB_RUN_ID") or str(int(time.time()))
 RESULTS, TIMINGS = [], []
+STATE = {"page": None, "out": None}
 HTTPS = BASE.startswith("https://")      # yerel prova HTTP ile yapılabilir; TLS'e özgü denetimler atlanır
 
 
@@ -95,8 +96,15 @@ def check(name, fn):
         RESULTS.append({"name": name, "ok": True, "detail": detail or "", "ms": round((time.perf_counter() - started) * 1000)})
         print(f"GEÇTİ  {name}" + (f" — {detail}" if detail else ""))
     except Exception as exc:   # noqa: BLE001 — her senaryo bağımsız raporlanır
-        RESULTS.append({"name": name, "ok": False, "detail": f"{type(exc).__name__}: {exc}"[:600]})
-        print(f"KALDI  {name} — {type(exc).__name__}: {str(exc)[:300]}")
+        seen = ""
+        if STATE["page"] is not None:
+            try:
+                STATE["page"].screenshot(path=str(STATE["out"] / f"hata-{len(RESULTS) + 1:02d}.png"), full_page=True)
+                seen = " | ekranda: " + " ".join(STATE["page"].locator("#main").inner_text(timeout=3000).split())[:400]
+            except Exception:   # noqa: BLE001
+                pass
+        RESULTS.append({"name": name, "ok": False, "detail": f"{type(exc).__name__}: {exc}"[:600] + seen})
+        print(f"KALDI  {name} — {RESULTS[-1]['detail'][:900]}")
 
 
 def expect_status(client, method, path, status, body=None, **kw):
@@ -169,6 +177,7 @@ def main():
     pw = sync_playwright().start()
     browser = pw.chromium.launch(**({"executable_path": os.environ["PLAYWRIGHT_CHROMIUM"]} if os.environ.get("PLAYWRIGHT_CHROMIUM") else {}))
     page = browser.new_page(viewport={"width": 1440, "height": 900}, locale="tr-TR")
+    STATE.update(page=page, out=out)
     console = []
     dialogs = []
     page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)
