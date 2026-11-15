@@ -38,6 +38,7 @@ services:
     environment:
       TEDARIK_AUTH_MODE: ${TEDARIK_AUTH_MODE:-local}
       TEDARIK_COOKIE_SECURE: ${TEDARIK_COOKIE_SECURE:-0}
+      TEDARIK_TRUST_PROXY: ${TEDARIK_TRUST_PROXY:-0}
       TEDARIK_DATABASE_URL_FILE: /run/secrets/database_url
       TEDARIK_API_KEY_FILE: /run/secrets/mcp_api_key
       TEDARIK_DB_POOL_SIZE: "10"

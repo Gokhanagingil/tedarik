@@ -108,6 +108,15 @@ class YerelOturum(Base):
                                                              "password": self.admin_password})[0], 429)
         self.login("tdradmin", self.admin_password, client="10.0.0.2")    # başka adres etkilenmez
 
+    def test_vekil_arkasinda_istemci_adresi(self):
+        from tedarik.http import client_ip
+        from tedarik.config import Config
+        headers = {"X-Forwarded-For": "198.51.100.7, 203.0.113.9"}
+        self.assertEqual(client_ip(Config(self.env()), "172.18.0.3", headers), "172.18.0.3")       # varsayılan: güvenme
+        trusted = Config(self.env(TEDARIK_TRUST_PROXY="1"))
+        self.assertEqual(client_ip(trusted, "172.18.0.3", headers), "203.0.113.9")               # vekilin eklediği
+        self.assertEqual(client_ip(trusted, "172.18.0.3", {}), "172.18.0.3")
+
     def test_koken_denetimi_oturumda_zorunlu(self):
         cookie = self.ready("tdradmin", self.admin_password)
         body = {"code": "BT", "name": "Bilgi Teknolojileri"}

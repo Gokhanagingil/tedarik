@@ -39,7 +39,7 @@ if [ -f "$SETTINGS" ]; then
 fi
 if [ -n "${TEDARIK_DOMAIN:-}" ]; then
   case "$TEDARIK_DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı: $TEDARIK_DOMAIN" >&2; exit 1;; esac
-  export COMPOSE_PROFILES=tls TEDARIK_COOKIE_SECURE=1
+  export COMPOSE_PROFILES=tls TEDARIK_COOKIE_SECURE=1 TEDARIK_TRUST_PROXY=1
   if command -v ss >/dev/null 2>&1 && ss -ltn "sport = :443" | grep -q LISTEN && \
      ! docker ps --filter label=com.docker.compose.project=$PROJECT --format '{{.Ports}}' 2>/dev/null | grep -q ':443->'; then
     echo "443. port başka bir uygulama tarafından kullanılıyor; TLS ters vekili başlatılamaz" >&2

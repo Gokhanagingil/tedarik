@@ -17,6 +17,10 @@ on:
         description: "Sunucuda Docker yoksa Ubuntu paketlerinden kur (docker.io, docker-compose-v2)"
         type: boolean
         default: false
+      acceptance:
+        description: "Kurulumdan sonra canlı kabul testini çalıştır (scripts/acceptance.py; KABUL işaretli kayıt yazar)"
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -93,3 +97,61 @@ jobs:
       - name: Clean up key
         if: always()
         run: rm -f ~/.ssh/id_deploy
+
+  acceptance:
+    # Canlı kabul testi: geçici bir kabul yöneticisi (kabul.yonetici) açılır/sıfırlanır; parola ve MCP anahtarı
+    # günlükte maskelenir, yalnızca bu işin belleğinde kalır. Test sonunda kabul yöneticisinin parolası yeniden
+    # rastgele yapılır (kimse bilmez); test hesapları test içinde devre dışı bırakılır.
+    needs: deploy
+    if: inputs.acceptance && inputs.domain != ''
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: tedarik
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install browser
+        run: |
+          pip install playwright==1.57.0
+          python -m playwright install --with-deps chromium
+      - name: Acceptance credentials (masked, never written to disk)
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+          KEY: ${{ secrets.TEDARIK_SSH_KEY }}
+          KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          OUT=$(ssh $OPTS "$USER@$HOST" "sudo -n docker exec tedarik-app-1 python -m tedarik.bootstrap reset kabul.yonetici --force")
+          PASS=$(printf '%s\n' "$OUT" | sed -n 's/^Gecici parola: //p')
+          test -n "$PASS"
+          echo "::add-mask::$PASS"
+          MCP=$(ssh $OPTS "$USER@$HOST" "sudo -n cat /opt/tedarik/secrets/mcp_api_key")
+          echo "::add-mask::$MCP"
+          { echo "TDR_ADMIN_PASS=$PASS"; echo "TDR_MCP_KEY=$MCP"; } >> "$GITHUB_ENV"
+      - name: Live acceptance test
+        env:
+          TDR_BASE: https://${{ inputs.domain }}
+          TDR_ADMIN_USER: kabul.yonetici
+        run: python scripts/acceptance.py kabul
+      - name: Lock the acceptance administrator (random password nobody knows)
+        if: always()
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+        run: |
+          OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          ssh $OPTS "$USER@$HOST" "sudo -n docker exec tedarik-app-1 python -m tedarik.bootstrap reset kabul.yonetici --force >/dev/null" || true
+          rm -f ~/.ssh/id_deploy
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: kabul-${{ github.run_id }}
+          path: kabul/
+          retention-days: 30

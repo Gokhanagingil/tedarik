@@ -26,6 +26,7 @@ class Config:
             raise ValueError("TEDARIK_DEV_UNITS birim kimliklerinin virgülle ayrılmış listesi olmalı")
         self.dev_units = tuple(int(u) for u in units.split(",") if u.strip())
         self.cookie_secure = env.get("TEDARIK_COOKIE_SECURE", "0") == "1"
+        self.trust_proxy = env.get("TEDARIK_TRUST_PROXY", "0") == "1"      # yalnızca kendi TLS vekilimiz önündeyse
         names = [m.strip() for m in env.get("TEDARIK_MODULES", DEFAULT_MODULES).split(",") if m.strip()]
         self.modules = ["core"] + [m for m in names if m != "core"]
         self.api_key = self._secret(env)

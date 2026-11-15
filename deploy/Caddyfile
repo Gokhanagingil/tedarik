@@ -20,6 +20,7 @@
 	}
 	reverse_proxy app:8090 {
 		header_up X-Forwarded-Proto https
+		header_up X-Forwarded-For {remote_host}
 		transport http {
 			read_timeout 60s
 		}

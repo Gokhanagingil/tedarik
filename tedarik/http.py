@@ -250,6 +250,15 @@ def build(config):
     return app
 
 
+def client_ip(config, peer, headers):
+    """İstemci adresi (giriş hız sınırı). TLS vekili arkasında (TEDARIK_TRUST_PROXY=1) vekilin eklediği son
+    X-Forwarded-For değeri kullanılır; vekil gelen başlığa güvenmediği için bu değer gerçek istemcidir."""
+    if not config.trust_proxy:
+        return peer
+    forwarded = (headers.get("X-Forwarded-For") or "").split(",")[-1].strip()
+    return forwarded[:64] if forwarded else peer
+
+
 def handler_class(app):
     class Handler(BaseHTTPRequestHandler):
         def version_string(self):
@@ -266,7 +275,8 @@ def handler_class(app):
             if length > MAX_UPLOAD_BODY:
                 return self._send(413, {"error": "İstek gövdesi izin verilen boyutu aşıyor"})
             raw = self.rfile.read(length) if length > 0 else b""
-            self._send(*app.dispatch(self.command, self.path, self.headers, raw, self.client_address[0]))
+            self._send(*app.dispatch(self.command, self.path, self.headers, raw,
+                                     client_ip(app.config, self.client_address[0], self.headers)))
 
         do_GET = do_POST = do_PATCH = _run
 
