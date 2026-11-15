@@ -226,6 +226,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Demo: sentetik "Kurumsal Veri Ambarı" (staging → dwh → mart), SAP → ambar (Excel ile), CRM eşitlemesi, dbt modeli (OpenLineage
     olaylarıyla), ambar → Power BI modeli (kolon düzeyinde), mutabakat kontrolü, eşlenemeyen bir S3 veri seti.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
+  - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
+    çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
