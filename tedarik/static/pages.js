@@ -420,12 +420,12 @@ DETAILS.supplier_risks = async function riskDetail(id, tab) {
         intro: 'Bu riskten etkilenen uygulama ve sunucuları seçin. CMDB kuralının bağladıkları otomatik korunur.'});
       if (ids) { await api(`supplier_risks/${id}/cis`, {method: 'POST', body: {ci_ids: ids}}); toast('Bağlantılar kaydedildi'); reload('cis'); }
     }, 'secondary small')) : null);
-  const items = [{key: 'summary', label: 'Özet', render: summary}, {key: 'assess', label: 'Değerlendirmeler', count: r.assessments.length, render: assessments},
+  const history = () => h('div', {}, section('Değerlendirmeler', assessments()), section('Kararlar (değiştirilemez)', decisions()));
+  const items = [{key: 'summary', label: 'Özet', render: summary}, {key: 'assess', label: 'Değerlendirme ve kararlar', count: r.assessments.length + r.decisions.length, render: history},
     {key: 'actions', label: 'İşleme', count: r.actions.length, render: actions}];
   if (META.def('kris')) items.push({key: 'kris', label: 'KRİ', count: r.kris.length, render: kris});
   if (hasModule('grc')) items.push({key: 'controls', label: 'Kontroller', count: r.controls.length, render: controls});
   if (hasModule('cmdb')) items.push({key: 'cis', label: 'Varlıklar', count: r.cis.length, render: cis});
-  items.push({key: 'decisions', label: 'Kararlar', count: r.decisions.length, render: decisions});
   for (const t of (typeof RISK_TABS === 'undefined' ? [] : RISK_TABS)) items.push({key: t.key, label: t.label, render: () => t.render(r, reload)});
   const body = h('div', {}, h('div', {class: 'chips'}, levelPill(r.risk_level), display('supplier_risks', 'status', r.status), display('supplier_risks', 'category', r.category),
     r.risk_type === 'opportunity' ? pill('Fırsat', 'good') : null, r.source && r.source !== 'manual' ? pill(META.option('supplier_risks', 'source', r.source), 'purple') : null), h('br'), tabs(items, tab));

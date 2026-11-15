@@ -79,6 +79,30 @@ Entra uygulama kaydı ve Koşullu Erişim ayarları `docs/KIMLIK.md` içindedir.
 4. Entra modunda parola girişi kapalıdır; canlı kabul testi (`acceptance`) yerel parolalı hesaplarla çalıştığından bu
    modda kullanılmaz. Yerel moda dönmek için `entra.env` dosyasını kaldırıp kurulumu yeniden çalıştırın.
 
+### Entra ayarlarını arayüzden tanımlama (K-024)
+
+`entra.env` dosyası yerine ayarlar Yönetim → Entegrasyonlar → "Entra ID ile giriş ve MFA" kartında da tanımlanabilir
+(kiracı, istemci, MFA bağlamı; istemci sırrı şifreli saklanır). Önce yerel modda tanımlayıp "Sına" ile doğrulayın,
+sonra kurulum işini `auth_mode=entra` ile çalıştırın; seçim sunucuda `/opt/tedarik/auth.env` dosyasında saklanır.
+Tanım eksikse uygulama Entra modunda açılmaz ve kurulum sağlık denetiminde durur; yerel moda dönmek için `auth_mode=local`.
+
+## Entegrasyon sırları, bildirimler ve standart kütüphanesi (K-023 – K-025)
+
+- **Sır anahtarı:** kurulum betiği `/opt/tedarik/secrets/app_secret_key` (Fernet anahtarı) üretir; arayüzden girilen
+  parola, belirteç ve web kancaları bu anahtarla şifrelenip veritabanında saklanır. Anahtar yedeğe girmez; yedekten
+  geri yüklemede aynı anahtar korunmazsa sırlar arayüzden yeniden girilir.
+- **Uygulama adresi:** `TEDARIK_PUBLIC_URL=https://<alan adı>` bildirim bağlantıları ve Entra dönüş adresi için
+  kurulumda kendiliğinden ayarlanır.
+- **Bildirimler:** `/etc/cron.d/tedarik-notify` 10 dakikada bir kuyruğu gönderir (`python -m tedarik.notify deliver`),
+  her sabah 07:41'de (TSİ) iş özeti ve hatırlatmaları oluşturur (`... digest`). E-posta ve Teams Yönetim →
+  Entegrasyonlar'da tanımlanır; olay → kanal eşlemesi Yönetim → Bildirimler'dedir.
+- **Standart kütüphanesi:** her kurulumda `python -m tedarik.standards_cli install` NIST SP 800-53 Rev. 5.2.0 ve
+  NIST CSF 2.0 paketlerini kurar veya günceller; kurumun uygulanabilirlik kararları ve eşlemeleri korunur.
+- **ServiceNow görev eşlemesi (isteğe bağlı):** Sistem parametrelerinde `servicenow.tasks` (`enabled`, `table`,
+  `assignment_group`). Hizmet hesabının yalnızca görev tablosuna yazma yetkisi olmalı; CMDB'ye yazılmaz.
+- **Yapay zekâ:** Claude SDK paketi (`anthropic`) requirements.txt'e onayla eklenecek; o zamana kadar kural tabanlı
+  öneriler çalışır.
+
 ## Demo verisi ve kabul testi
 
 - `seed_demo` işaretlenirse sentetik demo verisi yüklenir (`python -m tedarik.demo`; yalnızca boş ya da yalnızca demo verisi içeren veritabanına). Önceki sürümle yüklenmiş demoya yeni sürümün bölümleri (şirketler, süreç haritası, kurumsal risk, dokümanlar, CMDB, iş sürekliliği) kullanıcılara ve mevcut kayıtlara dokunmadan eklenir. Demo kullanıcılarının geçici parolaları `/opt/tedarik/.demo-users` dosyasındadır (yalnızca root). Yönetici, Kullanıcılar ekranında "Geçici parola ver" ile yeni parola da üretebilir.

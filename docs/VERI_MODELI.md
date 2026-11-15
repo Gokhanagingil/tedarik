@@ -138,6 +138,28 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `bc_exercises`, `bc_exercise_findings` | Tatbikatlar (8.5) | Tamamlanınca sonuç ve alınan dersler zorunlu; hedef aşıldıysa "başarılı" olamaz |
 | `documents`, `document_revisions`, `document_files`, `document_clauses` | Dokümante edilmiş bilgi (ISO 9001 7.5) | taslak → onayda → yayımlandı → geçersiz; her yayın değişmez bir revizyon |
 
+## Standartlar, güvence, uyum, olay ve entegrasyon (K-023 – K-027)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `clause_links` | Standartlar arası madde ilişkisi (eşdeğer, alt küme, üst küme, kesişir, ilgili) | Yönsüz, çift başına tek kayıt; silinmez, pasifleşir; resmî ilişkinin türü değişmez |
+| `standards` (+ `library_key`, `license`, `source_sha256`) ve `clauses` (+ `clause_type`, `guidance`, `assessment`, `tags`, `position`) | Kütüphane paketleri ve lisanslı metin içe aktarımı | Kütüphaneden kurulan başvuru amaçlıdır (`active=0`) |
+| `evidence_requests` | Kanıt talepleri (PBC) | Kontrol başına tek açık talep; teslim eden inceleyemez |
+| `workpapers` | Çalışma kâğıtları | Hazırlayan gözden geçiremez; gözden geçirilmiş kâğıt değişmez |
+| `audit_universe`, `audit_plans`, `audit_plan_items` | Risk bazlı yıllık plan | Hazırlayan onaylayamaz; plan kaleminden denetim açılır |
+| `certifications` | Belgelendirme ve gözetim denetimleri | Bitişten 90 gün önce hatırlatma |
+| `obligations`, `obligation_controls`, `obligation_clauses` | Mevzuat ve sözleşme yükümlülükleri | Durum kontrollerin son sonucundan türetilir |
+| `policy_exceptions` | Politika istisnaları | Süreli (≤ 365 gün), dört göz, süresi dolan kapanır |
+| `attestation_campaigns`, `attestation_units`, `attestations` | Okundu beyanı | Beyanı kişi verir, değişmez; kapanışta kanıt üretilir |
+| `user_access`, `user_audits` | Süreli hesap ve dış denetçi kapsamı | Süresi dolan oturum açamaz |
+| `loss_events` | Kayıp olayları | Net kayıp sunucuda hesaplanır |
+| `privacy_breaches` | Kişisel veri ihlalleri | 72 saat; karar gerekçeli; gecikmede gerekçe zorunlu |
+| `rcsa_campaigns`, `rcsa_items` | Risk ve kontrol öz değerlendirmesi | Yanıtı atanan kişi verir |
+| `risk_quant_runs` | Nicel risk analizleri (Monte Carlo) | Değiştirilemez |
+| `access_reviews`, `access_review_items` | Erişim gözden geçirme | Kişi kendi erişimine karar veremez |
+| `bc_incidents`, `bc_incident_plans`, `bc_incident_tasks`, `bc_incident_log` | Kriz yönetimi | Günlük değiştirilemez; kapanışta gerçek olay tatbikatı |
+| `integrations`, `notifications` | Entegrasyon tanımları ve bildirim kutusu | Sırlar Fernet ile şifreli, API'den dönmez |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

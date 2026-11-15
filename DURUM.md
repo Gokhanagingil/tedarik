@@ -22,6 +22,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - İş sürekliliği ISO 22301'e, doküman yönetimi ISO 9001 7.5'e göre (K-020).
 - Portal ServiceNow MCP sunucusuna standart MCP istemcisiyle bağlanabilir (K-021).
 - Kısıtlı kanıt yalnızca Yönetici, Denetçi ve yükleyene açık; denetim arşivi (K-022).
+- Standart kütüphanesi (yalnızca tam metniyle dağıtılabilenler: NIST), madde ilişkileri, bulgu etkisi, entegre denetim (K-023).
+- Entegrasyonlar arayüzden tanımlanır, sırlar şifreli; bildirimler kuyrukla gider (K-024). Yapay zekâ insan onaylı, SDK isteğe bağlı (K-025).
+- Güvence ve uyum iş akışları (K-026); olay, kayıp, KVKK ihlali, RCSA, nicel risk, erişim gözden geçirme, kriz, ServiceNow görev (K-027).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -127,6 +130,30 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 107 uçtan uca test (SQLite ve PostgreSQL 16, Entra testleri dahil), tarayıcı smoke testi.
   - Test sunucusuna dağıtıldı (commit `a9e2dd2`); canlı kabul testi 23/23 geçti, 55 ekran hatasız, görüntüleyici kısıtlı
     kanıtları göremiyor (GitHub Actions çalıştırması 43738880070, 2026-11-15).
+- **Standartlar, entegrasyonlar ve GRC yol haritası (2026-11-15, K-023 – K-027).** Gökhan Bey'in 3 maddelik isteği:
+  1. *Yol haritası maddeleri:* kanıt talepleri (kontrol başına tek talep, mevcut kanıtın yeniden kullanımı, kabul/iade),
+     çalışma kâğıtları ve ikinci denetçi gözden geçirmesi, yönetim yanıtı, yazdırılabilir denetim raporu (yönetici özeti
+     taslağı), risk bazlı denetim evreni ve yıllık plan, sertifikalar, süreli ve kapsamlı salt okunur dış denetçi hesabı,
+     yükümlülük envanteri (KVKK/BDDK/TCMB/sözleşme), politika istisnaları, okundu beyanı, SoA raporu, RCSA, kayıp
+     olayları, KVKK ihlal kaydı (72 saat geri sayımı), nicel risk (Monte Carlo, TL), erişim gözden geçirme, kriz modu
+     (plan adımlarından görevler, günlük, gerçek olay tatbikatı), DÖF → ServiceNow görev, insan onaylı yapay zekâ
+     (risk ifadesi, kanıt → kontrol, rapor özeti). Yönetim → Entegrasyonlar: e-posta (SMTP), Teams (Workflows web
+     kancası), Entra ID + MFA, ServiceNow Table API, ServiceNow MCP, Claude; şifreli sırlar ve "Sına". Bildirim kutusu,
+     olay → kanal tablosu, günlük iş özeti ve hatırlatmalar (zamanlanmış görev).
+  2. *Standartlar:* NIST SP 800-53 Rev. 5.2.0 (1034 madde; 800-53A değerlendirme yöntemleri, 800-53B temel düzeyleri,
+     2660 resmî ilişki) ve NIST CSF 2.0 (134 madde) tam metniyle kütüphanede; her kurulumda güncellenir. ISO ailesi,
+     TS EN 50600 ve PCI DSS telif/lisans nedeniyle, CIS Controls kayıtlı lisans nedeniyle tam metin olarak bulunamadı ve
+     isteğe uygun olarak hiç yüklenmedi; kurumun lisanslı kopyası Excel/CSV/JSON ile içe aktarılır. Madde ilişkileri
+     (eşdeğer, alt küme, üst küme, kesişir, ilgili), çapraz eşleme içe aktarımı, metin benzerliğine dayalı öneri ve eşleme
+     çalışma alanı; bulgunun başka standartlarda kesin/olası etkilediği maddeler; madde ekranında "ilişkili maddeler,
+     ortak kontroller ve bu maddeyi etkileyen açık bulgular"; entegre denetim test planı (kontrol başına tek test ve tek
+     kanıt; kontrolsüz ilişkili maddeler tek soru grubu → ortak kontrol). Demo: ISO/IEC 27001, 20000-1, CIS ve NIST
+     arasında 36 örnek eşleme ve entegre bir denetim.
+  3. *Sadeleştirme:* menü Uyum ve Denetim olarak ayrıldı, tedarikçi ve performans tek grupta; denetim çalışma alanı
+     sekmeli (Özet, Test planı, Kanıt talepleri, Çalışma kâğıtları, Bulgular, Kanıtlar, Geçmiş); binlerce maddeye göre
+     ağaçlı ve aranabilir madde seçici; büyük referanslarda aranarak seçim; İşlerim'e yeni iş türleri; takvime 8 yeni
+     olay türü; sağlık kontrolüne 3 yeni kural; etkin kriz ve KVKK süresi için üst uyarı bandı.
+  - Testler: 138 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi (89 denetim).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
@@ -140,7 +167,12 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **KS GRC verisinin taşınması yapılmadı:** iş modeli taşındı; KS GRC'deki gerçek kayıtları (standart eşlemeleri, kontroller, denetimler, kanıt dosyaları) aktaracak içe aktarım henüz yok.
 - **Konteyner imajı taraması (trivy) yok;** bandit, pip-audit ve sır taraması CI'da.
 - **ServiceNow bağlantısı gerçek kurumda denenmedi:** bağlayıcı sahte sunucuyla test edildi; özel alan adları (`u_os_end_of_support` vb.) kurumun CMDB'sine göre eşlenmeli. Test sunucusundaki CI'lar sentetik MCP itmesidir.
-- **Hatırlatma bildirimi yok:** takvim ve İşlerim uygulama içinde; e-posta/Teams bildirimi yok.
+- **E-posta ve Teams bağlantıları tanımlanmadı:** altyapı ve sınama hazır; kurumun SMTP sunucusu/gönderici hesabı ve
+  Teams kanalı web kancası girilince bildirimler gider.
+- **Telifli standart metinleri yok:** ISO ailesi, TS EN 50600, PCI DSS ve CIS lisanslı kopyadan içe aktarılmalı; resmî
+  çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
+- **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
+  requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
 - **Veri yönetişimi modülü** henüz yok (Gökhan Bey ayrıca konuşmak istiyor).
 
 ## Sıradaki adımlar (sırayla)
@@ -160,10 +192,16 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
 10b. **Veri yönetişimi modülü:** kapsam görüşmesi (veri sahipliği, sınıflandırma, KVKK envanteri, veri kalitesi kuralları).
 10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
-11. **Yol haritası Faz 1** (`docs/YOL_HARITASI.md`): kanıt talep listesi (PBC), bildirimler, politika istisnaları, yükümlülük envanteri, SoA raporu. Ayrıca konteyner imajı taraması (trivy).
+11. ~~**Yol haritası Faz 1–4** (`docs/YOL_HARITASI.md`).~~ Büyük ölçüde tamamlandı (2026-11-15, K-023 – K-027); kalanlar yol haritası belgesinde. Ayrıca konteyner imajı taraması (trivy).
 12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler
+
+- Veri yönetişimi modülü görüşmesi (sıradaki iş).
+- `anthropic` paketinin bağımlılığa eklenmesi onayı (yapay zekâ önerileri için) ve Claude API anahtarı.
+- SMTP sunucusu ve gönderici hesabı, Teams bildirim kanalı (Workflows web kancası).
+- Lisanslı standart metinleri (ISO 27001/27017/27701/20000-1/9001/14001/22301/45001/50001/10002, TS EN 50600, PCI DSS,
+  CIS) ve varsa resmî çapraz eşleme tabloları; içe aktarım şablonu uygulamada.
 
 - Uygulamanın adı (şimdilik "GRC Platformu"; `TEDARIK_APP_NAME` ile değişir).
 - ServiceNow örnek adresi ve salt okunur hizmet hesabı **veya** ServiceNow MCP sunucusunun adresi, kimlik doğrulama türü (bearer / OAuth istemci kimlik bilgisi) ve CMDB okuyan aracın adı; CMDB'deki destek bitişi, yama ve açılış alanlarının adları.

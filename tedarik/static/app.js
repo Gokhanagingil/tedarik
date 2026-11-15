@@ -307,6 +307,11 @@ function tabs(items, initial, onchange) {
     if (onchange) onchange(key);
     bar.querySelectorAll('.tab').forEach(t => { const on = t.dataset.key === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', on); });
     const item = items.find(i => i.key === key); clear(body); const r = item.render(); if (r instanceof Promise) r.then(n => append(body, [n])); else append(body, [r]);
+    requestAnimationFrame(() => { // seçili sekme taşan çubukta görünür kalsın
+      const a = bar.querySelector('.tab.active'); if (!a || bar.scrollWidth <= bar.clientWidth) return;
+      const box = bar.getBoundingClientRect(), tab = a.getBoundingClientRect();
+      if (tab.right > box.right) bar.scrollLeft += tab.right - box.right + 24; else if (tab.left < box.left) bar.scrollLeft -= box.left - tab.left + 24;
+    });
   };
   for (const item of items) bar.append(h('button', {type: 'button', class: 'tab', role: 'tab', dataset: {key: item.key}, onclick: () => show(item.key)},
     item.label, item.count !== undefined ? h('span', {class: 'count', text: item.count}) : null));
@@ -802,62 +807,6 @@ async function editEngagementUsers(engagement) {
 }
 
 // ------------------------------------------------------------------ genel bakış
-async function home() {
-  setPage('Genel Bakış', 'Tedarikçi portföyü, performans, risk, anket ve uyumun özeti. Kartlara tıklayarak ilgili listeye geçin.');
-  const data = await api('dashboard/summary');
-  const sup = data.suppliers; const tier = Object.fromEntries(sup.by_tier.map(x => [x.key, x.count]));
-  const cards = h('div', {class: 'cards'},
-    metric('Tedarikçiler', fmt.num(sup.total, 0), `${tier.critical || 0} kritik · ${tier.important || 0} önemli`, '', () => Router.go('r/suppliers')),
-    metric('Sahibi olmayan aktif tedarikçi', fmt.num(sup.without_owner, 0), 'İlişki sahibi atanmalı', sup.without_owner ? 'warn' : 'good', () => Router.go('r/suppliers?owner__null=1&status=active')),
-    metric('90 gün içinde biten sözleşme', fmt.num(data.contracts_ending_90d, 0), 'Yenileme veya çıkış kararı', data.contracts_ending_90d ? 'warn' : 'good',
-      () => Router.go(`r/contracts?status=active&end_date__gte=${today()}&end_date__lte=${today(90)}`)),
-    data.sla_90d ? metric('SLA başarısı (son 3 ay)', data.sla_90d.rate === null ? '—' : fmt.pct(data.sla_90d.rate), `${data.sla_90d.met} / ${data.sla_90d.total} ölçüm`,
-      data.sla_90d.rate === null ? '' : data.sla_90d.rate >= 95 ? 'good' : data.sla_90d.rate >= 85 ? 'warn' : 'bad', () => Router.go('r/sla_measurements')) : null);
-  const second = h('div', {class: 'cards'});
-  if (data.risks) {
-    second.append(metric('Açık risk', fmt.num(data.risks.open, 0), `${data.risks.unassessed} değerlendirilmedi`, '', () => Router.go('r/supplier_risks?status=open')),
-      metric('İştah üstü risk', fmt.num(data.risks.above_appetite, 0), 'Son değerlendirmeye göre', data.risks.above_appetite ? 'bad' : 'good', () => Router.go('r/supplier_risks')),
-      metric('Gözden geçirmesi geciken', fmt.num(data.risks.review_overdue, 0), 'Risk gözden geçirme tarihi geçti', data.risks.review_overdue ? 'warn' : 'good',
-        () => Router.go(`r/supplier_risks?review_date__lte=${today(-1)}`)));
-  }
-  const grc = S.meta.modules.includes('grc') ? await api('grc/overview').catch(() => null) : null;
-  const third = grc ? h('div', {class: 'cards'},
-    metric('Kontrol başarı oranı', fmt.pct(grc.controls.pass_pct), `${grc.controls.completed} sonuçlanan test · ${grc.controls.overdue_tests} gecikmiş`,
-      grc.controls.pass_pct === null ? '' : grc.controls.pass_pct >= 85 ? 'good' : grc.controls.pass_pct >= 60 ? 'warn' : 'bad', () => Router.go('compliance')),
-    metric('Açık bulgu', fmt.num(grc.findings_open, 0), `${grc.findings_overdue} hedef tarihi geçmiş`, grc.findings_open ? 'warn' : 'good', () => Router.go('r/findings')),
-    metric('Geciken DÖF', fmt.num(grc.actions_overdue, 0), `${grc.actions_validation} etkinlik doğrulaması bekliyor`, grc.actions_overdue ? 'bad' : 'good', () => Router.go('r/grc_actions')),
-    metric('Süren denetim', fmt.num(grc.audits_active.filter(x => x.status === 'in_progress').length, 0), `${grc.evidence_expiring} kanıtın geçerliliği bitiyor`, '', () => Router.go('r/audits'))) : null;
-  if (data.surveys) second.append(metric('Açık anket kampanyası', fmt.num(data.surveys.open_campaigns, 0), `${data.surveys.submitted} yanıt gönderildi`, '', () => Router.go('r/survey_campaigns?status=open')));
-  const charts = h('div', {class: 'grid two'},
-    h('div', {class: 'panel'}, h('h3', {text: 'Kritiklik seviyesi'}), donut(sup.by_tier.map(x => ({label: META.option('suppliers', 'tier', x.key), value: x.count,
-      color: {critical: 3, important: 2, standard: 0}[x.key]})), {center: String(sup.total)})),
-    h('div', {class: 'panel'}, h('h3', {text: 'Birim başına angajman'}), barChart(data.engagements.by_unit.slice(0, 8).map(x => ({label: x.key, value: x.count})), {format: v => fmt.num(v, 0)})),
-    h('div', {class: 'panel'}, h('h3', {text: 'Tedarikçi tipleri'}), barChart(sup.by_type.filter(x => x.count).slice(0, 8).map(x => ({label: x.key, value: x.count, color: 1})), {format: v => fmt.num(v, 0)})),
-    data.events_90d ? h('div', {class: 'panel'}, h('h3', {text: 'Performans olayları (son 3 ay)'}), barChart(data.events_90d.map(x => ({label: META.option('performance_events', 'event_type', x.key), value: x.count,
-      color: x.key === 'praise' ? 1 : 3})), {format: v => fmt.num(v, 0), onclick: i => Router.go('r/performance_events')})) : null);
-  const due = await api('schedule').catch(() => null);
-  const attention = [];
-  if (sup.without_owner) attention.push([`${sup.without_owner} aktif tedarikçinin ilişki sahibi yok`, 'r/suppliers?owner__null=1&status=active']);
-  if (data.engagements.without_owner) attention.push([`${data.engagements.without_owner} aktif angajmanın iş sahibi yok`, 'r/engagements?business_owner__null=1&status=active']);
-  if (data.contracts_ending_90d) attention.push([`${data.contracts_ending_90d} sözleşme 90 gün içinde bitiyor`, `r/contracts?status=active&end_date__gte=${today()}&end_date__lte=${today(90)}`]);
-  if (data.risks?.above_appetite) attention.push([`${data.risks.above_appetite} risk iştah eşiğinin üstünde`, 'r/supplier_risks']);
-  if (data.risks?.review_overdue) attention.push([`${data.risks.review_overdue} riskin gözden geçirmesi gecikti`, `r/supplier_risks?review_date__lte=${today(-1)}`]);
-  if (data.risks?.unassessed) attention.push([`${data.risks.unassessed} açık risk henüz değerlendirilmedi`, 'r/supplier_risks?status=open']);
-  if (due) {
-    const sm = due.summary; const lateReviews = (sm.review_overdue || 0); const lateSurveys = (sm.survey_overdue || 0);
-    if (lateReviews) attention.unshift([`${lateReviews} tedarikçinin performans değerlendirmesi gecikti`, 'schedule']);
-    if (lateSurveys) attention.push([`${lateSurveys} tedarikçinin memnuniyet anketi gecikti`, 'schedule']);
-    if ((sm.review_due_soon || 0) + (sm.survey_due_soon || 0)) attention.push([`${(sm.review_due_soon || 0) + (sm.survey_due_soon || 0)} değerlendirme veya anket ${due.warning_days} gün içinde`, 'schedule']);
-  }
-  if (S.mySurveys) attention.unshift([`Yanıtlamanızı bekleyen ${S.mySurveys} anket var`, 'my-surveys']);
-  if (grc?.actions_overdue) attention.push([`${grc.actions_overdue} düzeltici faaliyetin hedef tarihi geçti`, 'r/grc_actions?status=in_progress']);
-  if (grc?.controls.overdue_tests) attention.push([`${grc.controls.overdue_tests} kontrolün testi gecikti`, 'compliance']);
-  const todo = h('div', {class: 'panel'}, h('h3', {text: 'Dikkat gerektirenler'}), attention.length ? h('ul', {class: 'attention'}, attention.map(([text, link]) =>
-    h('li', {}, h('span', {text}), h('a', {href: '#/' + link, class: 'btn ghost small', text: 'Aç →'})))) : h('div', {class: 'notice success', text: 'Bekleyen bir konu yok.'}));
-  content(cards, second.childElementCount ? second : '', third || '', todo, charts);
-}
-
-// ------------------------------------------------------------------ tedarikçi 360
 DETAILS.suppliers = async function supplierDetail(id) {
   await Promise.all([list('org_units'), list('catalog_items'), list('supplier_types')]);
   let ctx; try { ctx = await api(`suppliers/${id}/context`); } catch (e) { toast(e.message, false); return; }
@@ -931,44 +880,6 @@ const RISK_FIELDS = ['title', 'company_id', 'risk_type', 'category', 'process_id
 CREATE.supplier_risks = defaults => recordForm('supplier_risks', null, {only: RISK_FIELDS, defaults: {likelihood: 3, impact: 3, appetite: 9, owner: S.me.username, ...defaults},
   onsaved: r => { refreshList('supplier_risks'); openRecord('supplier_risks', r.id); },
   extra: h('div', {class: 'notice wide', text: 'Risk ifadesi KS GRC ile aynıdır: "… nedeniyle (neden), … olabilir (olay), bu da … sonucunu doğurur (etki)". Tedarikçi riski değilse etkilenen varlık / hizmeti yazın. Kabul ve kapanış için önce değerlendirme yapılır.'})});
-DETAILS.supplier_risks = async function riskDetail(id) {
-  await Promise.all([list('suppliers'), list('engagements')]);
-  let r; try { r = await api(`supplier_risks/${id}/context`); } catch (e) { toast(e.message, false); return; }
-  const last = r.assessments[0]; const terminal = ['accepted', 'closed'].includes(r.status);
-  const above = last && last.residual > last.appetite; const can = META.def('supplier_risks').can_write;
-  const scores = h('div', {class: 'grid three'},
-    metric('İçsel risk', fmt.num(r.inherent_score, 0), `Olasılık ${r.likelihood} × etki ${r.impact}`),
-    metric('Artık risk', last ? fmt.num(last.residual) : '—', last ? `Azaltım %${fmt.num(last.mitigation_pct)}` : 'Değerlendirme yok', !last ? '' : above ? 'bad' : 'good'),
-    metric('İştah eşiği', fmt.num(r.appetite, 0), above ? 'Son değerlendirme eşiğin üstünde' : last ? 'Eşik içinde' : '', above ? 'bad' : ''));
-  const body = h('div', {},
-    h('div', {class: 'chips'}, display('supplier_risks', 'status', r.status), display('supplier_risks', 'category', r.category), r.origin_ref ? pill('Anket sinyalinden', 'purple') : null), h('br'),
-    terminal ? h('div', {class: 'notice', text: 'Karar verilmiş risk değiştirilemez. Değişiklik için önce gerekçeyle yeniden açın.'}) : !last ? h('div', {class: 'notice warn', text: 'Bu risk henüz değerlendirilmedi.'}) : null,
-    scores, h('br'),
-    section('Risk ifadesi', kv([['Neden', r.cause], ['Olay', r.risk_event], ['İş etkisi', r.consequence]])),
-    r.controls && r.controls.length ? section(`Bağlı kontroller (${r.controls.length})`, h('ul', {class: 'mini'}, r.controls.map(k => h('li', {class: 'link', tabindex: '0', onclick: () => openRecord('controls', k.id)},
-      h('strong', {text: k.code + ' · ' + k.name}), ' ', k.last_status ? resultPill(k.last_status) : pill('Test edilmedi', 'neutral'),
-      k.last_executed_at ? h('span', {class: 'cell-sub', text: 'Son test ' + fmt.datetime(k.last_executed_at)}) : null)))) : null,
-    section('Bilgiler', kv([['Tedarikçi', display('supplier_risks', 'supplier_id', r.supplier_id)], ['Etkilenen varlık / hizmet', r.entity_name], ['Angajman', display('supplier_risks', 'engagement_id', r.engagement_id)],
-      ['Sahip', r.owner], ['Yanıt stratejisi', display('supplier_risks', 'response_strategy', r.response_strategy)], ['İşleme planı', r.treatment],
-      ['Gözden geçirme', fmt.date(r.review_date)], ['KS GRC risk kodu', r.control_risk_ref], ['Açıklama', r.description]])),
-    section(`Değerlendirmeler (${r.assessments.length})`, r.assessments.length ? h('ul', {class: 'timeline'}, r.assessments.map(a => h('li', {},
-      h('strong', {text: `${fmt.datetime(a.assessed_at)} · ${a.assessor}`}), h('div', {text: `İçsel ${a.inherent} → artık ${fmt.num(a.residual)} (iştah ${a.appetite})`}),
-      h('div', {class: 'muted', text: a.rationale}), (a.snapshot.mitigations || []).length ? h('div', {class: 'chips'}, a.snapshot.mitigations.map(m =>
-        h('span', {class: 'chip', text: `${m.title || 'Önlem'} · ${{low: 'düşük', medium: 'orta', high: 'yüksek'}[m.weight] || m.weight} katkı${m.effectiveness === 'partial' ? ' · kısmen etkili' : ''}`}))) : null)))
-      : h('div', {class: 'muted small', text: 'Değerlendirme yok'})),
-    section(`Kararlar (${r.decisions.length})`, r.decisions.length ? h('ul', {class: 'timeline'}, r.decisions.map(d => h('li', {},
-      h('strong', {text: `${META.option('supplier_risks', 'status', d.from_status)} → ${META.option('supplier_risks', 'status', d.to_status)}`}),
-      h('div', {class: 'muted', text: `${fmt.datetime(d.decided_at)} · ${d.actor} (${roleLabel(d.actor_role)})`}), h('div', {text: d.rationale}),
-      d.exception_rationale ? h('div', {class: 'notice warn', text: 'İştah istisnası: ' + d.exception_rationale}) : null))) : h('div', {class: 'muted small', text: 'Karar yok'})),
-    section(`İşleme faaliyetleri (${r.actions.length})`, r.actions.length ? h('ul', {class: 'mini'}, r.actions.map(a => h('li', {class: 'link', onclick: () => openRecord('risk_actions', a.id)},
-      h('strong', {text: a.code + ' · ' + a.title}), h('span', {class: 'cell-sub', text: `${a.owner} · ${fmt.date(a.due_date)}`}), h('div', {class: 'chips'}, display('risk_actions', 'priority', a.priority), display('risk_actions', 'status', a.status)))))
-      : h('div', {class: 'muted small', text: 'Faaliyet yok'}), can && !terminal ? btn('+ Faaliyet', () => createRecord('risk_actions', {risk_id: id, owner: r.owner}), 'ghost small') : null));
-  const reload = () => { refreshList('supplier_risks'); DETAILS.supplier_risks(id); };
-  Drawer.open(r.code + ' · ' + r.title, body, can ? (terminal ? [btn('Yeniden aç', () => decision(r, 'open', reload), 'secondary')] : [
-    btn('Düzenle', () => recordForm('supplier_risks', r, {only: RISK_FIELDS.filter(f => f !== 'code'), onsaved: reload}), 'secondary'),
-    last ? btn('Kapat', () => decision(r, 'closed', reload), 'secondary') : null, last ? btn('Kabul et', () => decision(r, 'accepted', reload), 'secondary') : null,
-    btn('Değerlendir', () => assessRisk(r, reload))]) : [], r.supplier_id ? 'Tedarikçi riski' : 'Kurumsal risk');
-};
 function assessRisk(risk, done) {
   const rows = h('div'); const preview = h('div', {class: 'score-preview'}); const rationale = h('textarea', {id: 'assessRationale', placeholder: 'Değerlendirmenin dayanağı: gözlem, kanıt, görüşme…'});
   const missing = ['owner', 'cause', 'risk_event', 'consequence', 'review_date'].filter(k => !risk[k]);
@@ -1963,7 +1874,6 @@ async function renderPage() {
   const keepDrawer = key === 'r' && parts[2]; if (!keepDrawer && Drawer.isOpen()) Drawer.close();
   try {
     if (PAGES[key]) await PAGES[key](parts, params);
-    else if (key === 'home') await home();
     else if (key === 'r' && parts[1]) { await listView(parts[1], {params}); if (parts[2]) openRecord(parts[1], Number(parts[2])); }
     else if (key === 'templates' && parts[1]) await templateBuilder(Number(parts[1]));
     else if (key === 'surveys' && parts[1]) await campaignPage(Number(parts[1]), params.get('tab'));

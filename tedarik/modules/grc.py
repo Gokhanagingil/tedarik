@@ -1137,8 +1137,8 @@ def audit_context_data(db, audit_id, principal=None):
     item["evidence"] = rows(db, "SELECT e.* FROM tdr_evidence e JOIN tdr_evidence_audits m ON m.evidence_id=e.id "
                                 f"WHERE m.audit_id=? AND {visible} ORDER BY e.id DESC", (audit_id, *args))
     item["blockers"] = completion_blockers(db, audit_id) if item["status"] in ("planned", "in_progress") else []
-    for extra in AUDIT_CONTEXT_EXTRAS:
-        extra(db, item, principal)
+    for hook in AUDIT_CONTEXT_EXTRAS:
+        hook(db, item, principal)
     return item
 
 

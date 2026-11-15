@@ -177,15 +177,20 @@ def exercise(page, out, base, errors):
     go(page, "r/audits", "Denetimler")
     page.locator("#topActions button", has_text="Yeni").click()
     page.locator('#detail [name="name"]').fill("Tedarikçi yönetimi iç denetimi")
-    page.locator("#detail .choices label", has_text="ISO/IEC 27001").locator("input").check()
-    page.locator("#detail .choices label", has_text="A.5.19").locator("input").check()
+    page.locator("#detail .picker .searchbar").fill("A.5.19")                 # madde seçici (ağaç + arama)
+    page.locator("#detail .tree-row", has_text="A.5.19").locator("input").check()
+    expect(page.locator("#detail .picker-summary")).to_contain_text("1 madde seçildi")
     page.locator("#detailFooter button", has_text="Oluştur").click()
     expect(page.locator("#pageTitle")).to_contain_text("Tedarikçi yönetimi iç denetimi")
     page.locator("#topActions button", has_text="Denetimi başlat").click()
     expect(page.locator("#content")).to_contain_text("Devam ediyor")
-    page.locator("#content tr", has_text="Kritik sözleşmelerde denetim hakkı").locator("button", has_text="Test et").click()
+    page.locator("#content .tab", has_text="Test planı").click()            # entegre test planı: kontrol başına tek test
+    card = page.locator(".test-card", has_text="Kritik sözleşmelerde denetim hakkı")
+    card.locator("button", has_text="Test et").click()
     page.locator("#resStatus").select_option("pass")
     page.locator("#modalFooter button", has_text="Sonucu kaydet").click()
+    expect(page.locator(".test-card", has_text="Kritik sözleşmelerde denetim hakkı")).to_contain_text("Başarılı")
+    page.locator("#content .tab", has_text="Özet").click()
     expect(page.locator("#content")).to_contain_text("%100")
     page.screenshot(path=str(out / "05-denetim.png"), full_page=True)
     checks.append("grc_denetim")
@@ -241,6 +246,28 @@ def exercise(page, out, base, errors):
     expect(page.locator("#content")).to_contain_text("Standartlara göre")
     page.screenshot(path=str(out / "05b-uyum-panosu.png"), full_page=True)
     checks.append("grc_uyum_panosu")
+    # standart kütüphanesi: NIST CSF 2.0 kurulumu ve standart tarayıcısı (K-023)
+    go(page, "library", "Standart Kütüphanesi")
+    page.locator(".lib-card", has_text="NIST CSF").locator("button", has_text="Kur").click()
+    expect(page.locator("#toast")).to_contain_text("134 yeni")
+    page.locator(".lib-card", has_text="NIST CSF").locator("button", has_text="Aç").click()
+    expect(page.locator("#pageTitle")).to_have_text("NIST CSF 2.0")
+    page.locator(".tree-open", has_text="GV.SC Cybersecurity Supply Chain").first.click()   # işlevler açık gelir
+    expect(page.locator(".tree-open", has_text="GV.SC-07").first).to_be_visible()
+    page.locator(".tree-open", has_text="GV.SC-07").first.click()
+    expect(page.locator("#detailTitle")).to_contain_text("GV.SC-07")
+    page.screenshot(path=str(out / "05d-standart.png"))
+    page.keyboard.press("Escape")
+    checks.append("standart_kutuphanesi")
+    # güvence, uyum, olay ve yönetim ekranları (K-024 – K-027): boş veride de hatasız açılmalı
+    for key, title in (("obligations", "Yükümlülük Envanteri"), ("audit-plan", "Denetim Planı"), ("crisis", "Kriz Yönetimi"),
+                       ("integrations", "Entegrasyonlar"), ("notifications", "Bildirimler"),
+                       ("r/evidence_requests", "Kanıt Talepleri"), ("r/policy_exceptions", "Politika İstisnaları"),
+                       ("r/attestation_campaigns", "Okundu Beyanı Kampanyaları"), ("r/certifications", "Sertifikalar"),
+                       ("r/access_reviews", "Erişim Gözden Geçirmeleri"), ("r/privacy_breaches", "Kişisel Veri İhlalleri"),
+                       ("r/rcsa_campaigns", "Öz Değerlendirme (RCSA)"), ("r/loss_events", "Kayıp Olayları")):
+        go(page, key, title)
+    checks.append("guvence_uyum_olay_ekranlari")
     # anket kurucu
     go(page, "r/survey_templates", "Anket Şablonları")
     page.locator("[data-row]", has_text="Tedarikçi Memnuniyet").click()

@@ -49,7 +49,8 @@ const RISK_TABS = [{key: 'quant', label: 'Nicel (TL)', render: (r, reload) => {
     }))) : null);
   }).catch(e => box.replaceChildren(h('div', {class: 'notice bad', text: e.message})));
   return box;
-}}, {key: 'losses', label: 'Kayıplar', render: r => {
+}}];
+const lossesOf = r => {
   const box = h('div', {}, h('div', {class: 'muted small', text: 'Yükleniyor…'}));
   api(`loss_events?risk_id=${r.id}&order=-occurred_on`).then(items => box.replaceChildren(
     items.length ? h('div', {}, statStrip([['Olay', String(items.length)], ['Toplam net kayıp', TL_SHORT(items.reduce((n, x) => n + Number(x.net_loss || 0), 0)), 'bad']]),
@@ -57,7 +58,10 @@ const RISK_TABS = [{key: 'quant', label: 'Nicel (TL)', render: (r, reload) => {
     META.def('loss_events')?.can_write ? btn('+ Kayıp olayı', () => createRecord('loss_events', {risk_id: r.id, company_id: r.company_id, process_id: r.process_id, occurred_on: today()}), 'ghost small') : null))
     .catch(e => box.replaceChildren(h('div', {class: 'notice bad', text: e.message})));
   return box;
-}}];
+};
+RISK_TABS[0].label = 'Nicel ve kayıplar';
+const quantOnly = RISK_TABS[0].render;
+RISK_TABS[0].render = (r, reload) => h('div', {}, quantOnly(r, reload), section('Gerçekleşen kayıp olayları', lossesOf(r)));
 
 async function quantPanel() {
   const d = await maybe(api('risks/quant-summary'));

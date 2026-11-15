@@ -6,6 +6,17 @@ savunma hattı modelinde birinci hat (süreç sahipleri), ikinci hat (risk, uyum
 denetim) için araç kuran bir uygulayıcı. Türkiye bağlamı: KVKK, BDDK Bilgi Sistemleri ve Elektronik Bankacılık
 Yönetmeliği, SPK ve TCMB ödeme hizmetleri düzenlemeleri; AB'deki müşteriler için NIS2 ve DORA.
 
+## Durum (2026-11-15)
+
+Aşağıdaki eksiklerden yapılanlar: kanıt talep listesi (PBC), risk bazlı yıllık plan, çalışma kâğıtları ve gözden geçirme
+imzası, denetim raporu ve yönetim yanıtı, dış denetçi erişimi, SoA raporu, sertifika takibi, yükümlülük envanteri,
+politika istisnaları, okundu beyanı, ortak kontrol çerçevesi ve standartlar arası madde ilişkileri, RCSA, olay ve kayıp
+veritabanı, kişisel veri ihlali kaydı (72 saat), nicel risk (Monte Carlo, TL), erişim gözden geçirme kampanyaları,
+kriz yönetimi modu, bildirim altyapısı (e-posta, Teams), DÖF → ServiceNow görev eşlemesi, insan onaylı yapay zekâ
+yardımı (K-023 – K-027). Kalanlar: veri envanteri ve sınıflandırma (veri yönetişimi modülü), zafiyet bulguları
+entegrasyonu, yapılandırılabilir onay akışları, rapor şablonları ve PDF/Excel, denetim izinin dışarıdan doğrulanması,
+İngilizce arayüz, Entra gruplarından birim ataması, tedarikçi riskinde dış istihbarat.
+
 ## Bugün olanlar (özet)
 
 Kurumsal risk (şirket bazında, kriterler, iştah/tolerans, dönemler, KRİ, değişmez değerlendirme ve kararlar), kontrol

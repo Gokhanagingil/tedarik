@@ -177,6 +177,10 @@ EVENT_TYPES = {
     "plan_review": ("Plan gözden geçirme", "continuity"), "evidence_expiry": ("Kanıt geçerlilik sonu", "grc"),
     "contract_end": ("Sözleşme bitişi", "core"), "survey": ("Anket kampanyası", "surveys"),
     "supplier_review": ("Tedarikçi değerlendirmesi", "performance"),
+    "evidence_request": ("Kanıt talebi", "grc"), "certification": ("Sertifika / gözetim denetimi", "grc"),
+    "exception_end": ("İstisna bitişi", "grc"), "attestation": ("Okundu beyanı", "grc"),
+    "access_review": ("Erişim gözden geçirme", "grc"), "obligation_review": ("Yükümlülük gözden geçirme", "grc"),
+    "rcsa": ("Öz değerlendirme", "risks"), "breach_deadline": ("KVKK bildirim süresi", "risks"),
 }
 
 
@@ -272,6 +276,35 @@ def calendar(c):
             if item["kind"] == "review" and item.get("due") and lo <= item["due"] <= hi:
                 add("supplier_review", f"{item['code']} {item['name']}", item["due"], None, "suppliers",
                     item["supplier_id"], item["state"])
+    simple = (   # (tür, kaynak, SQL, başlık alanı, tarih alanı)
+        ("evidence_request", "evidence_requests", "SELECT id, code, title, status, due_date AS d FROM tdr_evidence_requests "
+                                                  "WHERE status IN ('requested','rejected','submitted') AND due_date BETWEEN ? AND ?"),
+        ("exception_end", "policy_exceptions", "SELECT id, code, title, status, end_date AS d FROM tdr_policy_exceptions "
+                                               "WHERE status='approved' AND end_date BETWEEN ? AND ?"),
+        ("attestation", "attestation_campaigns", "SELECT id, code, title, status, due_date AS d FROM tdr_attestation_campaigns "
+                                                 "WHERE status='open' AND due_date BETWEEN ? AND ?"),
+        ("access_review", "access_reviews", "SELECT id, code, title, status, due_date AS d FROM tdr_access_reviews "
+                                            "WHERE status IN ('draft','open') AND due_date BETWEEN ? AND ?"),
+        ("obligation_review", "obligations", "SELECT id, code, title, status, review_date AS d FROM tdr_obligations "
+                                             "WHERE status='active' AND review_date BETWEEN ? AND ?"),
+        ("rcsa", "rcsa_campaigns", "SELECT id, code, title, status, due_date AS d FROM tdr_rcsa_campaigns "
+                                   "WHERE status IN ('draft','open') AND due_date BETWEEN ? AND ?"))
+    for kind, res, sql in simple:
+        if on(kind) and _readable(c, res):
+            for r in rows(db, sql, (lo, hi)):
+                add(kind, f"{r['code']} {r['title']}", r["d"], None, res, r["id"], r["status"])
+    if on("certification") and _readable(c, "certifications"):
+        for r in rows(db, "SELECT id, code, title, status, expires_on, next_surveillance FROM tdr_certifications "
+                          "WHERE status='active'"):
+            add("certification", f"{r['code']} {r['title']} — geçerlilik sonu", r["expires_on"], None, "certifications", r["id"],
+                r["status"])
+            add("certification", f"{r['code']} {r['title']} — gözetim denetimi", r["next_surveillance"], None,
+                "certifications", r["id"], r["status"])
+    if on("breach_deadline") and _readable(c, "privacy_breaches"):
+        from .incidents import deadline
+        for b in rows(db, "SELECT * FROM tdr_privacy_breaches WHERE status<>'closed'"):
+            add("breach_deadline", f"{b['code']} {b['title']}", deadline(db, b).date().isoformat(), None,
+                "privacy_breaches", b["id"], b["status"])
     events.sort(key=lambda e: (e["start"], e["type"]))
     return {"from": lo, "to": hi, "types": [{"key": k, "label": v[0]} for k, v in EVENT_TYPES.items()
                                             if c.app.enabled(v[1])], "events": events}
@@ -399,6 +432,25 @@ def health(c):
                              (SELECT 1 FROM tdr_control_clauses m WHERE m.clause_id=cl.id) AND NOT EXISTS (SELECT 1 FROM
                              tdr_clauses ch WHERE ch.parent_id=cl.id) ORDER BY s.code, cl.code"""), "clauses", population=_n(db, """SELECT COUNT(*) AS n FROM tdr_clauses cl JOIN tdr_standards s ON s.id=cl.standard_id WHERE cl.applicable=1 AND
                              s.active=1 AND NOT EXISTS (SELECT 1 FROM tdr_clauses ch WHERE ch.parent_id=cl.id)""")))
+        checks.append(_check("obligations_no_control", "Kontrolle karşılanmayan yükümlülükler",
+                             "Uygulanan her mevzuat veya sözleşme yükümlülüğü en az bir kontrolle güvence altına alınmalı; "
+                             "yoksa uyum durumu bilinemez.", "high",
+                             rows(db, """SELECT id, code, title FROM tdr_obligations o WHERE status='active' AND
+                             applicability='applicable' AND NOT EXISTS (SELECT 1 FROM tdr_obligation_controls m
+                             WHERE m.obligation_id=o.id) ORDER BY code"""), "obligations",
+                             population=_n(db, "SELECT COUNT(*) AS n FROM tdr_obligations WHERE status='active' AND "
+                                               "applicability='applicable'")))
+        checks.append(_check("certifications_expiring", "90 gün içinde süresi dolan sertifikalar",
+                             "Yeniden belgelendirme denetimi zamanında planlanmazsa sertifika düşer; müşteri ve "
+                             "düzenleyici yükümlülükleri etkilenir.", "high",
+                             rows(db, "SELECT id, code, title FROM tdr_certifications WHERE status='active' AND expires_on <= ? "
+                                      "ORDER BY expires_on", ((date.today() + timedelta(days=90)).isoformat(),)),
+                             "certifications", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_certifications WHERE status='active'")))
+        checks.append(_check("exceptions_expired_open", "Süresi geçmiş ama kapanmamış politika istisnaları",
+                             "Süresi geçen istisna ya yenilenmeli ya da kontrol uygulanmalı; aksi halde örtük risk kabulüdür.",
+                             "medium", rows(db, "SELECT id, code, title FROM tdr_policy_exceptions WHERE status='approved' AND "
+                                                "end_date < ? ORDER BY end_date", (today,)), "policy_exceptions",
+                             population=_n(db, "SELECT COUNT(*) AS n FROM tdr_policy_exceptions WHERE status='approved'")))
         checks.append(_check("findings_no_action", "14 günden eski ve düzeltici faaliyeti olmayan açık bulgular",
                              "Bulgu açıldıktan sonra makul sürede DÖF planlanmalı (ISO 9001 10.2).", "high",
                              rows(db, """SELECT id, code, title FROM tdr_findings f WHERE status IN ('open','in_progress') AND

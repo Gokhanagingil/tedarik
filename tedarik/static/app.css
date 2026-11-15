@@ -357,3 +357,7 @@ svg .grid-line{stroke:var(--stroke);stroke-width:1}svg .axis{font-size:10px;fill
 .crisis-tasks li.done{opacity:.65}.crisis-tasks li.skipped{opacity:.55}.crisis-tasks .toolbar{display:flex;gap:6px;margin-top:6px}
 .log-form{display:grid;gap:6px;margin-bottom:10px}.log-form textarea{min-height:60px}
 td.row-actions{white-space:nowrap}td.row-actions .btn{margin-right:2px}
+.ev.t-evidence_request,.dot.t-evidence_request,.ev.t-attestation,.dot.t-attestation{border-color:#2b5fd9}
+.ev.t-certification,.dot.t-certification,.ev.t-obligation_review,.dot.t-obligation_review{border-color:#6d4bd1}
+.ev.t-exception_end,.dot.t-exception_end,.ev.t-access_review,.dot.t-access_review{border-color:#e0a020}
+.ev.t-rcsa,.dot.t-rcsa{border-color:#0f8a5f}.ev.t-breach_deadline,.dot.t-breach_deadline{border-color:#d50c2d;background:#fdecee}
