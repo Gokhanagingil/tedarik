@@ -82,9 +82,11 @@ def exercise(page, out, base, errors):
         checks.append("ekran:" + key)
     # yavaş ağ: önceki ekranın geç gelen yanıtı yeni ekranı ezmemeli
     page.route("**/api/tdr/users", lambda route: (time.sleep(1.5), route.continue_()))
+    page.route("**/api/tdr/suppliers?*", lambda route: (time.sleep(2.5), route.continue_()))
     page.locator('[data-nav="users"]').click()
-    page.locator('[data-nav="r/suppliers"]').click()
-    page.wait_for_timeout(2500)
+    page.locator('[data-nav="r/suppliers"]').click()      # tedarikçi listesi, kullanıcılar yanıtından sonra gelir
+    page.wait_for_timeout(4500)
+    page.unroute("**/api/tdr/suppliers?*")
     expect(page.locator("#pageTitle")).to_have_text("Tedarikçiler")
     expect(page.locator("#content")).to_contain_text("Örnek Bilişim")
     expect(page.locator("#content")).not_to_contain_text("Son giriş")

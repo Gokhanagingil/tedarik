@@ -178,6 +178,11 @@ def main():
     browser = pw.chromium.launch(**({"executable_path": os.environ["PLAYWRIGHT_CHROMIUM"]} if os.environ.get("PLAYWRIGHT_CHROMIUM") else {}))
     page = browser.new_page(viewport={"width": 1440, "height": 900}, locale="tr-TR")
     STATE.update(page=page, out=out)
+    if os.environ.get("TDR_LATENCY_MS"):           # yerel prova: uzak ağ gecikmesini taklit et
+        cdp = page.context.new_cdp_session(page)
+        cdp.send("Network.enable")
+        cdp.send("Network.emulateNetworkConditions", {"offline": False, "latency": int(os.environ["TDR_LATENCY_MS"]),
+                                                     "downloadThroughput": -1, "uploadThroughput": -1})
     console = []
     dialogs = []
     page.on("console", lambda m: console.append(m.text) if m.type == "error" else None)

@@ -48,7 +48,7 @@ const fmt = {
 const today = (days = 0) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 
 // ------------------------------------------------------------------ durum ve API
-const S = {meta: null, me: null, cache: {}, filters: {}, mySurveys: 0, renderSeq: 0, renderDone: 0};
+const S = {meta: null, me: null, cache: {}, filters: {}, mySurveys: 0, renderSeq: 0, renderDone: 0, renderAgain: false};
 async function api(path, {method = 'GET', body, raw} = {}) {
   const opts = {method, credentials: 'same-origin', headers: {}};
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -1835,8 +1835,12 @@ async function render() {
   // eski bir çizim, en yenisi bittikten sonra biterse güncel ekran yeniden çizilir.
   const mine = ++S.renderSeq;
   try { await renderPage(); } finally {
-    if (mine === S.renderSeq) S.renderDone = mine;
-    else if (S.renderDone === S.renderSeq) render();
+    if (mine !== S.renderSeq) {                         // eski çizim: ekranı ezmiş olabilir
+      if (S.renderDone === S.renderSeq) render(); else S.renderAgain = true;
+    } else {
+      S.renderDone = mine;
+      if (S.renderAgain) { S.renderAgain = false; render(); }
+    }
   }
 }
 async function renderPage() {
