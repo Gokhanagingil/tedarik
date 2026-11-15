@@ -436,3 +436,7 @@ ul.mini.plain li{border:0;padding:2px 0;background:none}
 .proc-rows{display:grid;gap:8px;margin-bottom:8px}.proc-row{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) auto minmax(0,1.4fr) auto;gap:8px;align-items:center}
 @media(max-width:700px){.proc-row{grid-template-columns:1fr}}
 ul.mini li strong,ul.mini li a{overflow-wrap:anywhere}
+/* Otomatik toplama (K-030) */
+.dg-collect{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;width:100%;margin:0 0 12px;padding:9px 12px;border:1px solid var(--stroke);border-radius:10px;background:#fafbfc;text-align:left;cursor:pointer;font:inherit;color:inherit}
+.dg-collect:hover{border-color:var(--stroke2);background:#f3f5f8}.dg-collect strong{font-size:13px}
+.control.inline{display:flex;gap:8px;align-items:center}.control.inline input{flex:1;min-width:0}

@@ -127,6 +127,9 @@ class App:
             return 200, {"status": "ok"}
         if principal.external and not external_allowed(method, url.path):
             return 403, {"error": "Dış denetçi hesabı bu işleme yetkili değil"}
+        if (principal.auth_type == "collector") != url.path.startswith(API + "/collector/"):
+            return 403, {"error": "Toplayıcı anahtarı yalnızca toplayıcı uç noktalarını kullanır" if principal.auth_type == "collector"
+                         else "Bu uç nokta toplayıcı anahtarı ister"}
         fn, match = self._find(self.routes, method, url.path)
         if not fn:
             return 404, {"error": "Bulunamadı"}
@@ -200,7 +203,7 @@ class App:
 
     def same_origin(self, principal, headers):
         """Tarayıcı oturumuyla yapılan değişiklikler yalnızca aynı kökenden kabul edilir."""
-        if principal.auth_type == "api_key":
+        if principal.auth_type in ("api_key", "collector"):
             return True
         getter = getattr(headers, "get_all", None)
         if getter and len(getter("Origin", [])) > 1:      # KS GRC: tek Origin başlığı

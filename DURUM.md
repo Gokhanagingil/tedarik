@@ -29,6 +29,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   dört gözlü iş sözlüğü; uygulama içi yol haritası (K-028).
 - Veri yönetişimi Faz 2: kişisel veri keşfi (yerel doğrulama, yalnızca sayılar), VERBİS envanteri, saklama/imha, risk puanı,
   veri talepleri, ilgili kişi başvuruları (30 gün), VKED, ihlal ↔ veri varlığı (K-029).
+- Veri yönetişimi Faz 3: kurum ağında çalışan toplayıcı meta veriyi iter (platform kaynağa bağlanmaz, parola tutmaz); kaynak başına
+  tek seferlik gösterilen anahtar; bağlayıcı geliştirme kiti; gecikme/hata ve şema değişikliği bildirimi; toplu kaldırma eşiği (K-030).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -178,6 +180,30 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Demo: keşif sonuçları (kabul, ret ve bekleyen), 5 işleme faaliyeti (eksikli ve eksiksiz), örnek saklama kuralları, tamamlanmış
     ve planlı periyodik imha, veri talepleri, başvurular (süresinde, süren, son günler), VKED'ler, ihlal bağlantısı, risk kaydı.
   - Testler: 153 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi KVKK akışıyla.
+  - Test sunucusuna dağıtıldı (commit `8568ba0`): demo verisine KVKK bölümü eklendi; canlı kabul testi geçti (GitHub Actions
+    çalıştırması 43761941759, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Veri yönetişimi Faz 3 — otomatik toplama (2026-11-15, K-030).** Gökhan Bey'den bilgi/onay bekleyen bağlayıcılar (SAP HANA,
+  ServiceNow, Dynamics 365, Power BI gerçek bağlantısı) atlandı; yol haritasında "Bilgi bekleniyor".
+  - *Toplayıcı:* `tedarik/collector.py`, platformdan tek dosya `tedarik-toplayici.pyz` (yalnızca Python standart kitaplığı).
+    Komutlar: dene, topla (yalnızca yerel dosya), gonder (ön izlemeli), dosya-gonder, baglayicilar, ornek-ayar. HTTPS zorunlu,
+    yeniden deneme, kaynak tarafındaki hata platforma bildirilir.
+  - *Bağlayıcılar:* PostgreSQL (katalog, açıklama, birincil/yabancı anahtar, tahmini satır; oturum salt okunur), SQLite, genel SQL
+    sürücüsü (kurumun DB-API sürücüsüyle platformdaki hazır sorgu: HANA, ABAP sözlüğü, SQL Server, Oracle, MySQL, Snowflake,
+    Redshift; yer tutucu doldurulmadan çalışmaz), CSV klasörü (tip yerelde çıkarılır), hazır dışa aktarım dosyası; kurumun kendi
+    bağlayıcısı tek `Connector` sınıfı (`docs/TOPLAYICI.md`). İsteğe bağlı yerel örnek doğrulama yalnızca sayıları gönderir.
+  - *Kimlik ve güvenlik:* kaynak başına anahtar (bir kez gösterilir, SHA-256 özeti saklanır, yenileme/iptal); anahtar yalnızca
+    `/api/tdr/collector/` uç noktalarını kullanır; oturum ve MCP anahtarı toplayıcı uç noktasına giremez. Gönderim etkin tabloların
+    %30'undan fazlasını kaldıracaksa reddedilir (eşik toplayıcıda değiştirilebilir); boş gönderim reddedilir.
+  - *Zamanlama ve bildirim:* beklenen sıklık (saatlik/günlük/haftalık/aylık/elle); cron ve Windows Görev Zamanlayıcı satırları
+    ekranda hazır; gecikme ve hata teknik sorumluya bildirilir, sağlık kontrolü ve İşlerim'de görünür. Şema değişikliği
+    (dosya veya toplayıcı) etkilenen tabloların veri sahibine ve veri yöneticisine kişi başına tek iletiyle gider; kişisel/kritik
+    veri, terim bağı, onaylı veri setindeki kaldırma ve tip değişikliği "önemli"; kaynak başına tümü / yalnızca önemli / yok.
+  - *Ekranlar:* kaynakta "Otomatik toplama" sekmesi, toplayıcı ekleme penceresi, anahtar penceresi (yalnızca bir kez), toplayıcı
+    ekranı (durum, ayarlar, 5 adımlı kurulum, çalıştırma geçmişi), Toplayıcılar listesi (önce hatalı ve gecikmiş), panelde özet.
+  - Demo: çalışan (S/4HANA, SQL sürücüsü), hata bildiren (Dynamics dışa aktarımı), gecikmiş (pazarlama paylaşımı) ve kurulumu
+    bekleyen (ServiceNow) toplayıcılar.
+  - Testler: 162 uçtan uca test (SQLite ve PostgreSQL 16; PostgreSQL bağlayıcısı gerçek katalogla), indirilen .pyz ayrı süreçte
+    çalıştırılır; tarayıcı duman testi gerçek toplayıcıyı HTTP üzerinden çalıştırıp ekranda "Çalışıyor" durumunu doğrular.
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
@@ -209,7 +235,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
-- Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
+- Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`, `docs/TOPLAYICI.md`.
 
 ## Bilinen eksikler
 
@@ -225,9 +251,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi Faz 3–6 yok:** otomatik bağlayıcılar, soy kütüğü, veri kalitesi, yapay zekâ yönetişimi
-  (yol haritası uygulamada: Yönetim → Yol Haritası). Faz 1 içe aktarımı dosyayla; hazır sorgular gerçek SAP, ServiceNow,
-  Dynamics ve Power BI ortamında henüz denenmedi (sentetik dosyalarla test edildi).
+- **Veri yönetişimi Faz 4–6 yok:** soy kütüğü, veri kalitesi, yapay zekâ yönetişimi (yol haritası uygulamada: Yönetim → Yol
+  Haritası). Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
+  denenmedi (sentetik dosyalar, SQLite ve PostgreSQL ile test edildi). ServiceNow, Dynamics ve Power BI'ya doğrudan API bağlantısı yok.
 
 ## Sıradaki adımlar (sırayla)
 
@@ -245,8 +271,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10a0. ~~**Güvenlik taraması, Entra MFA, denetim arşivi, ServiceNow MCP istemcisi.**~~ Tamamlandı (2026-11-15).
 10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
 10b. ~~**Veri yönetişimi Faz 0–1:** yol haritası, veri sözlüğü ve katalog.~~ Tamamlandı (2026-11-15, K-028).
-10d. ~~**Veri yönetişimi Faz 2 — KVKK ve sınıflandırma**~~ Tamamlandı (2026-11-15, K-029). Sıradaki: Faz 4 (soy kütüğü ve etki
-     analizi; entegrasyon gerektirmeyen elle/Excel kısmı) veya Faz 5 (veri kalitesi kuralları); Faz 3 (bağlayıcılar) entegrasyonla birlikte.
+10d. ~~**Veri yönetişimi Faz 2 — KVKK ve sınıflandırma**~~ Tamamlandı (2026-11-15, K-029).
+10e. ~~**Veri yönetişimi Faz 3 — otomatik toplama**~~ Gökhan Bey'den bilgi beklemeyen kısmı tamamlandı (2026-11-15, K-030).
+     Sıradaki: Faz 4 (soy kütüğü ve etki analizi; Power BI soy kütüğü erişim bekliyor, SQL ayrıştırma sqlglot onayı bekliyor).
      Eski not: kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
      öneri → veri yöneticisi onayı), VERBİS uyumlu işleme envanteri (amaç, hukuki sebep, kategori, ilgili kişi grubu, alıcılar,
      yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim
@@ -260,8 +287,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 - Veri yönetişimi Faz 1'in gerçek kaynakla denenmesi: SAP (HANA kataloğu veya ABAP sözlüğü sorgusu), ServiceNow sys_dictionary,
   Dynamics EntityDefinitions ve Power BI `INFO.VIEW.COLUMNS()` çıktıları (yalnızca meta veri, veri içeriği yok).
-- Faz 3 için: salt okunur SAP HANA kullanıcısı ve SAP hdbcli sürücüsünün toplayıcıya eklenmesi onayı; Power BI yönetici API
-  izni ve hizmet sorumlusu; Dataverse'te salt okunur uygulama kullanıcısı (Entra uygulama kaydı).
+- Faz 3 gerçek bağlantılar için: salt okunur SAP HANA kullanıcısı ve toplayıcı makinesine hdbcli kurulumu (toplayıcı hazır;
+  `sql` bağlayıcısı ve `hana_catalog`/`sap_ddic` hazır sorguları); Power BI yönetici API izni ve hizmet sorumlusu; Dataverse'te
+  salt okunur uygulama kullanıcısı (Entra uygulama kaydı); ServiceNow salt okunur hizmet hesabı. Toplayıcının çalışacağı sunucu
+  (kaynaklara erişen, platforma HTTPS ile çıkabilen bir Linux veya Windows makine).
 - `anthropic` paketinin bağımlılığa eklenmesi onayı (yapay zekâ önerileri için) ve Claude API anahtarı.
 - SMTP sunucusu ve gönderici hesabı, Teams bildirim kanalı (Workflows web kancası).
 - Lisanslı standart metinleri (ISO 27001/27017/27701/20000-1/9001/14001/22301/45001/50001/10002, TS EN 50600, PCI DSS,

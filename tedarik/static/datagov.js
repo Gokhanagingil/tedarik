@@ -72,7 +72,7 @@ PAGES.datagov = async function datagovPage() {
     content(h('div', {class: 'panel'}, h('h3', {text: 'Veri sözlüğüne üç adımda başlayın'}),
       h('div', {class: 'dg-steps'},
         step(1, 'Veri alanlarını tanımlayın', 'Müşteri, Satış, Finans gibi alanlar; her alanın sorumlu birimi, veri sahibi ve veri yöneticisi.', canWrite('data_domains') ? btn('+ Veri alanı', () => createRecord('data_domains'), 'secondary small') : null),
-        step(2, 'Kaynağı ekleyip içe aktarın', 'SAP HANA, ServiceNow, Dynamics 365 veya Power BI. Kaynağın ekranındaki hazır sorguyu çalıştırıp çıktısını yükleyin; bağlayıcı beklemeye gerek yok.', canWrite('data_sources') ? btn('+ Veri kaynağı', () => createRecord('data_sources'), 'secondary small') : null),
+        step(2, 'Kaynağı ekleyip içe aktarın', 'SAP HANA, ServiceNow, Dynamics 365 veya Power BI. Kaynağın ekranındaki hazır sorgunun çıktısını yükleyin ya da toplayıcı kurup meta verinin zamanlanmış gelmesini sağlayın.', canWrite('data_sources') ? btn('+ Veri kaynağı', () => createRecord('data_sources'), 'secondary small') : null),
         step(3, 'Terimleri yazıp kolonlara bağlayın', 'Onaylı tanımlar kolonlara bağlandıkça "bu kolon ne anlama geliyor" ve "bu terim nerede kullanılıyor" soruları yanıtlanır.', btn('İş sözlüğü', () => Router.go('glossary'), 'secondary small')))));
     return;
   }
@@ -107,7 +107,7 @@ PAGES.datagov = async function datagovPage() {
         gauge(stwPct, 'Veri yöneticisi atanmış', {suffix: '%', sub: `${fmt.num(cv.stewarded)} / ${fmt.num(cv.tables)}`}),
         gauge(dgPct(d.terms.approved, live), 'Onaylı terim oranı', {suffix: '%', sub: `${d.terms.approved} onaylı · ${d.terms.draft} taslak`}))),
     h('div', {class: 'grid wide-left'},
-      panel('Kaynaklar', sources, canWrite('data_sources') ? btn('+ Kaynak', () => createRecord('data_sources'), 'ghost small') : null),
+      panel('Kaynaklar', h('div', {}, collectStrip(d.collectors), sources), canWrite('data_sources') ? btn('+ Kaynak', () => createRecord('data_sources'), 'ghost small') : null),
       panel('Dikkat isteyenler', attention.length ? h('div', {}, attention) : empty('Bekleyen iş yok', 'Onay bekleyen terim, sahipsiz tablo veya düşük sınıflı kişisel veri bulunmuyor.'))),
     h('div', {class: 'grid two'},
       panel('Son şema değişiklikleri', d.changes.length ? h('ul', {class: 'mini'}, d.changes.map(x => h('li', {class: x.table_id ? 'link' : '', onclick: () => x.table_id && Router.go('catalog/table/' + x.table_id)},
@@ -117,6 +117,15 @@ PAGES.datagov = async function datagovPage() {
         h('strong', {text: x.name}), h('span', {class: 'cell-sub', text: `${x.tables} tablo · ${x.terms} onaylı terim · sahip: ${x.owner || '—'} · veri yöneticisi: ${x.steward || '—'}`})))) : empty('Veri alanı yok', 'Veri alanı tanımlayınca sahiplik alanın tablolarına devralınır.'),
         canWrite('data_domains') ? btn('+ Veri alanı', () => createRecord('data_domains'), 'ghost small') : null)));
 };
+
+function collectStrip(c) {
+  if (!c || !c.active) return null;
+  const b = h('button', {type: 'button', class: 'dg-collect'}, h('strong', {text: 'Otomatik toplama'}), h('span', {class: 'chips'},
+    pill(`${c.active} toplayıcı`, 'neutral'), c.ok ? pill(`${c.ok} çalışıyor`, 'good') : null, c.overdue ? pill(`${c.overdue} gecikti`, 'warn') : null,
+    c.error ? pill(`${c.error} hata`, 'bad') : null, c.waiting ? pill(`${c.waiting} ilk gönderimi bekliyor`, 'neutral') : null));
+  b.addEventListener('click', () => Router.go('collectors'));
+  return b;
+}
 
 // ------------------------------------------------------------------ iş sözlüğü
 PAGES.glossary = async function glossaryPage(parts, params) {
@@ -152,6 +161,7 @@ const TERM_FIELDS = ['name', 'abbreviation', 'synonyms', 'definition', 'domain_i
 const TERM_MATERIAL = ['name', 'abbreviation', 'synonyms', 'definition', 'domain_id', 'parent_id', 'calculation', 'format_rule', 'example', 'source_reference', 'classification', 'personal_data', 'category_id', 'is_critical'];
 // Diğer dosyaların (privacy.js) tablo sayfasına ve kolon paneline eklediği bölümler: fn(kayıt, yenile) → düğüm
 const TABLE_EXTRAS = []; const COLUMN_EXTRAS = []; const TABLE_ACTIONS = [];
+const SOURCE_TABS = []; // diğer dosyaların veri kaynağı ekranına eklediği sekmeler: s => {key, label, count, render}
 DETAILS.glossary_terms = id => Router.go('glossary/' + id);
 
 async function termPage(id) {
@@ -474,7 +484,7 @@ PAGES.datasource = async function sourcePage(parts) {
     h('tbody', {}, s.schemas.map(x => h('tr', {class: 'link', onclick: () => Router.go(`catalog?s=${s.id}&schema=${encodeURIComponent(x.schema_name)}`)},
       h('td', {}, h('strong', {text: x.schema_name || '(şemasız)'})), h('td', {class: 'num', text: fmt.num(x.tables)}), h('td', {class: 'num', text: fmt.num(x.columns)}),
       h('td', {}, coverBar(x.documented, x.columns)), h('td', {class: 'num', text: fmt.num(x.personal || 0)})))))) : null;
-  const howTo = () => h('div', {}, h('p', {class: 'small', text: 'Bağlayıcılar (Faz 3) gelene kadar kaynak, aşağıdaki hazır sorgunun çıktısıyla içe aktarılır. Sorgu yalnızca tablo ve kolon tanımlarını okur; veri içeriği okunmaz ve platforma gelmez.'}),
+  const howTo = () => h('div', {}, h('p', {class: 'small', text: 'Kaynak iki yolla içe aktarılır: "Otomatik toplama" sekmesindeki toplayıcıyla zamanlanmış olarak veya aşağıdaki hazır sorgunun çıktısını "İçe aktar" ile yükleyerek. İkisi de yalnızca tablo ve kolon tanımlarını okur; veri içeriği okunmaz ve platforma gelmez.'}),
     s.queries.map(qy => h('div', {class: 'query-card'}, h('div', {class: 'panel-title'}, h('h4', {text: qy.title}), copyButton(qy.text)), qy.note ? h('p', {class: 'small muted', text: qy.note}) : null, h('pre', {class: 'query', text: qy.text}))));
   const importsTab = () => s.imports.length ? h('ul', {class: 'mini'}, s.imports.map(i => h('li', {}, h('div', {class: 'chips'}, pill(META.option('catalog_imports', 'kind', i.kind), 'neutral'), h('strong', {text: i.filename})),
     h('span', {class: 'cell-sub', text: [fmt.datetime(i.created_at), i.created_by, i.kind === 'structure' ? countText(i.summary.counts) : descText(i.summary.counts)].filter(Boolean).join(' · ')})))) : h('div', {class: 'muted small', text: 'İçe aktarım yok'});
@@ -489,7 +499,7 @@ PAGES.datasource = async function sourcePage(parts) {
         s.totals.removed ? ['Kaldırılan tablo', fmt.num(s.totals.removed), 'bad'] : null]), s.description ? h('p', {class: 'small', text: s.description}) : null, schemas),
       h('div', {class: 'panel'}, h('h3', {text: 'Kaynak bilgileri'}), info)),
     tabs([{key: 'how', label: 'Nasıl içe aktarılır', render: howTo}, {key: 'imports', label: 'İçe aktarım geçmişi', count: s.imports.length, render: importsTab},
-      {key: 'changes', label: 'Şema değişiklikleri', count: s.changes.length, render: changesTab}], s.totals.tables ? 'imports' : 'how'));
+      {key: 'changes', label: 'Şema değişiklikleri', count: s.changes.length, render: changesTab}, ...SOURCE_TABS.map(fn => fn(s))], s.totals.tables ? 'imports' : 'how'));
 };
 const COUNT_LABELS = {table_added: 'tablo eklendi', table_removed: 'tablo kaldırıldı', table_restored: 'tablo geri geldi', column_added: 'kolon eklendi',
   column_removed: 'kolon kaldırıldı', column_restored: 'kolon geri geldi', type_changed: 'tip değişti'};

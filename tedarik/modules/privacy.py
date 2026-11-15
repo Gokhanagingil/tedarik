@@ -457,13 +457,19 @@ def sample_stats(c):
     """Tarayıcıda (veya `python -m tedarik.pii` ile) hesaplanan örnek sayıları: değerler gönderilmez, yalnızca sayılar."""
     table = crud.get(c.db, TABLES, c.params["id"])
     _writable(c, TABLES, table)
-    body = c.body
-    columns = body.get("columns")
+    result = apply_sample_stats(c.db, table, c.body.get("columns"), c.principal, c.body.get("sample_size"))
+    audit.log(c.db, c.principal, "SAMPLE_STATS", "data_tables", table["id"],
+              {"sample_size": c.body.get("sample_size"), "findings": result["findings"]})
+    return result
+
+
+def apply_sample_stats(db, table, columns, principal, sample_size=None):
+    """Örnek sayılarından öneri üretir (ekran, `python -m tedarik.pii` ve toplayıcı ortak yolu). Değer almaz."""
     if not isinstance(columns, dict) or not columns or len(columns) > 2000:
         raise crud.Invalid("Kolon istatistikleri bekleniyor")
-    threshold = float(policy(c.db, "privacy.sample_threshold", 0.6))
-    cats = {r["name"]: r for r in categories(c.db)}
-    known = {r["name"].lower(): r for r in rows(c.db, "SELECT id, name FROM tdr_data_columns WHERE table_id=? AND status='active'",
+    threshold = float(policy(db, "privacy.sample_threshold", 0.6))
+    cats = {r["name"]: r for r in categories(db)}
+    known = {r["name"].lower(): r for r in rows(db, "SELECT id, name FROM tdr_data_columns WHERE table_id=? AND status='active'",
                                                     (table["id"],))}
     now, counts, unknown, findings = utcnow(), Counter(), [], []
     for name, stat in columns.items():
@@ -491,10 +497,8 @@ def sample_stats(c):
             if not cat:
                 continue
             evidence = f"Örnek: {non_empty} dolu değerin %{round(100 * ratio)}'i geçerli {label}"
-            _upsert_suggestion(c.db, col["id"], cat["id"], min(0.99, 0.6 + 0.4 * ratio), "sample", evidence, now, counts)
+            _upsert_suggestion(db, col["id"], cat["id"], min(0.99, 0.6 + 0.4 * ratio), "sample", evidence, now, counts)
             findings.append({"column": col["name"], "detector": key, "ratio": round(ratio, 3)})
-    audit.log(c.db, c.principal, "SAMPLE_STATS", "data_tables", table["id"],
-              {"sample_size": body.get("sample_size"), "findings": findings})
     return {"new": counts["new"], "updated": counts["updated"], "findings": findings, "unknown_columns": unknown[:50]}
 
 

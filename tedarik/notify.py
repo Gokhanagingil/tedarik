@@ -42,6 +42,9 @@ EVENTS = {   # olay: (Türkçe ad, varsayılan e-posta, varsayılan Teams)
     "glossary.review": ("Sözlük terimi onay bekliyor / iade edildi", True, False),
     "data_request.decided": ("Veri talebi onaylandı / reddedildi", True, False),
     "subject_request.due": ("İlgili kişi başvurusunun süresi doluyor", True, True),
+    "catalog.changed": ("Veri kaynağında şema değişikliği (sahip ve veri yöneticisine)", True, False),
+    "collector.overdue": ("Toplayıcı beklenen sürede veri göndermedi", True, True),
+    "collector.failed": ("Toplayıcı hata bildirdi veya gönderimi reddedildi", True, True),
 }
 
 

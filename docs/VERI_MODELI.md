@@ -192,6 +192,16 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `breach_data_tables` | İhlalden etkilenen veri varlıkları | Kategoriler ve kişi grupları önerilir |
 | `risk_data_tables` | Risk kaydına aktarılan veri varlıkları | Tablo başına bir açık risk |
 
+## Otomatik toplama (K-030)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `data_collectors` | Toplayıcı: kaynak, bağlayıcı, beklenen sıklık, kapsam, örnek satır sayısı, kaldırma eşiği, son durum | Kod sunucuda (TPL-); iptal edilen değişmez ve yeniden etkinleşmez |
+| `collector_keys` | Toplayıcı anahtarının SHA-256 özeti | API'de görünmez; anahtar yalnızca oluşturma/yenilemede bir kez döner |
+| `collector_events` | Çalıştırma geçmişi (gönderim, ön izleme, hata, ret) | Değiştirilemez |
+| `catalog_imports.collector_id` | İçe aktarımı yapan toplayıcı | Dosya yüklemesinde boş |
+| `data_sources.change_notice` | Şema değişikliği bildirimi: tümü, yalnızca önemli, yok | Varsayılan tümü |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

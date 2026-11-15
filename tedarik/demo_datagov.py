@@ -310,7 +310,7 @@ def pbi_columns():
     return "\n".join(lines) + "\n"
 
 
-DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"))
+DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"))
 
 
 class DatagovSections:
@@ -442,6 +442,57 @@ class DatagovSections:
         kvkk = column("SAP S/4HANA Üretim", "KNA1", "ZZKVKKONAY")
         if kvkk:
             crud.update(db, D.COLUMNS, kvkk["id"], {"business_name": "KVKK açık rıza işareti", "personal_data": "personal"}, None)
+
+    # -------------------------------------------------------------- otomatik toplama (K-030)
+    def collection(self):
+        """Toplayıcılar: çalışan, hata bildiren, gecikmiş ve kurulumu bekleyen. Anahtarlar üretilir ama hiçbir yerde tutulmaz;
+        gönderim gerçek içe aktarım hattından (apply_structure) toplayıcı kimliğiyle geçer."""
+        from datetime import datetime, timedelta, timezone
+        from . import crud
+        from .auth import Principal
+        from .modules import collection as C, datagov as D
+        db = self.db
+        if one(db, "SELECT id FROM tdr_data_collectors LIMIT 1"):
+            return
+        C.seed(db)
+        now = datetime.now(timezone.utc)
+        ago = lambda hours: (now - timedelta(hours=hours)).isoformat(timespec="seconds")   # noqa: E731
+        for source_name, name, connector, schedule, scope, sample, hours, result, message, host in COLLECTORS:
+            src = one(db, "SELECT * FROM tdr_data_sources WHERE name=?", (source_name,))
+            if not src:
+                continue
+            created = ago((hours or 2) + 24 * 20)
+            cid = crud.insert(db, C.COLLECTORS, {"name": name, "source_id": src["id"], "connector": connector, "schedule": schedule,
+                                                 "scope": scope, "sample_rows": sample, "status": "active", "created_by": "selin.aydin"},
+                              None)
+            C._new_key(db, cid, ADMIN)
+            db.execute("UPDATE tdr_data_collectors SET created_at=?, key_created_at=? WHERE id=?", (created, created, cid))
+            col = one(db, "SELECT * FROM tdr_data_collectors WHERE id=?", (cid,))
+            client = {"version": "1.0", "connector": connector, "host": host}
+            if hours is None:
+                db.execute("UPDATE tdr_data_collectors SET created_at=?, key_created_at=? WHERE id=?", (ago(3), ago(3), cid))
+                continue
+            for back in (hours + 48, hours + 24, hours) if schedule == "daily" else (hours + 24 * 7, hours):
+                db.execute("""INSERT INTO tdr_collector_events (collector_id, kind, message, counts_json, connector, client_version,
+                    client_host, created_at) VALUES (?,?,?,?,?,?,?,?)""",
+                           (cid, "push", "Katalog gönderildi; değişiklik yok", "{}", connector, "1.0", host, ago(back)))
+            db.execute("UPDATE tdr_data_collectors SET last_push_at=?, last_seen_at=?, last_result='ok', client_version=?, "
+                       "client_host=? WHERE id=?", (ago(hours), ago(hours), "1.0", host, cid))
+            if source_name == "SAP S/4HANA Üretim":
+                who = Principal(f"toplayici:{col['code']}", "COLLECTOR", "collector", name, collector_id=cid)
+                summary = D.apply_structure(db, src, D.parse_catalog("sql-sap_ddic.csv", sap_ddic(changed=True).encode("utf-8"),
+                                                                       "SAPHANADB"),
+                                            scope=scope, principal=who, filename="sql-sap_ddic.csv", collector_id=cid)
+                db.execute("""INSERT INTO tdr_collector_events (collector_id, kind, message, import_id, counts_json, connector,
+                    client_version, client_host, created_at) VALUES (?,?,?,?,?,?,?,?,?)""",
+                           (cid, "push", f"{summary['tables_in_file']} tablo, {summary['columns_in_file']} kolon",
+                            summary["import_id"], json.dumps(summary["counts"]), connector, "1.0", host, utcnow()))
+                db.execute("UPDATE tdr_data_collectors SET last_push_at=?, last_seen_at=? WHERE id=?", (utcnow(), utcnow(), cid))
+            if result == "error":
+                db.execute("""INSERT INTO tdr_collector_events (collector_id, kind, message, connector, client_version, client_host,
+                    created_at) VALUES (?,?,?,?,?,?,?)""", (cid, "error", message, connector, "1.0", host, ago(2)))
+                db.execute("UPDATE tdr_data_collectors SET last_result='error', last_message=?, last_seen_at=? WHERE id=?",
+                           (message, ago(2), cid))
 
     # -------------------------------------------------------------- KVKK ve sınıflandırma (K-029)
     def privacy(self):
@@ -636,6 +687,16 @@ class DatagovSections:
                 "risk_event": "Sahipsiz paylaşımdaki kişisel verinin yetkisiz erişim veya ifşası",
                 "consequence": "; ".join(score["factors"]), "entity_name": "Pazarlama Dosya Paylaşımı"}, None)
             db.execute("INSERT INTO tdr_risk_data_tables (risk_id, table_id, created_at) VALUES (?,?,?)", (risk, kampanya["id"], utcnow()))
+
+
+COLLECTORS = [  # kaynak, ad, bağlayıcı, sıklık, kapsam, örnek satır, son gönderim (saat önce), sonuç, ileti, makine
+    ("SAP S/4HANA Üretim", "S/4HANA gece toplayıcısı", "sql", "daily", "schemas", 0, 5, "ok", None, "dg-toplayici-01"),
+    ("Dynamics 365 CRM", "CRM varlık toplayıcısı", "file", "daily", "tables", 0, 30, "error",
+     "Dışa aktarım dosyası okunamadı: /disa-aktarim/EntityDefinitions.json (No such file or directory)", "dg-toplayici-01"),
+    ("Pazarlama Dosya Paylaşımı", "Pazarlama paylaşımı tarayıcısı", "files", "weekly", "full", 500, 24 * 12, "ok", None,
+     "dosya01"),
+    ("ServiceNow ITSM", "ServiceNow sözlük dışa aktarımı", "file", "daily", "tables", 0, None, None, None, None),
+]
 
 
 def RESOURCES_COLUMNS():

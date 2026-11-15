@@ -367,6 +367,33 @@ def exercise(page, out, base, errors):
                        ("r/retention_rules", "Saklama ve İmha Kuralları"), ("r/disposal_runs", "Periyodik İmha")):
         go(page, key, title)
     checks.append("kvkk")
+    # Otomatik toplama (K-030): toplayıcı ekle → anahtar bir kez görünür → gerçek toplayıcı HTTP ile gönderir → "Çalışıyor"
+    go(page, "r/data_sources", "Veri Kaynakları")
+    page.locator("[data-row]", has_text="SAP S/4HANA Test").click()
+    expect(page.locator("#pageTitle")).to_have_text("SAP S/4HANA Test")
+    page.locator(".tab", has_text="Otomatik toplama").click()
+    page.locator("#content button", has_text="+ Toplayıcı ekle").click()
+    page.locator("#modal input[name=tplConnector][value=files]").check()
+    page.locator("#modalFooter button", has_text="Oluştur ve anahtarı göster").click()
+    expect(page.locator("#modal")).to_contain_text("yalnızca şimdi gösteriliyor")
+    key = page.locator("#tplKey").input_value()
+    page.locator("#modalFooter button", has_text="Anahtarı kaydettim").click()
+    expect(page.locator("#content")).to_contain_text("İlk gönderim bekleniyor")
+    folder = Path(tempfile.mkdtemp())
+    (folder / "kampanya_listesi.csv").write_text("katilimci_no;eposta;sehir\n1;kisi1@ornek.test;Ankara\n", encoding="utf-8")
+    config = folder.parent / f"{folder.name}.json"
+    config.write_text(json.dumps({"platform": base, "connector": "files", "settings": {"path": str(folder), "schema": "paylasim"}}),
+                      encoding="utf-8")
+    run = subprocess.run([sys.executable, "-m", "tedarik.collector", "gonder", "--ayar", str(config)], cwd=ROOT, timeout=120,
+                         env={**os.environ, "TEDARIK_COLLECTOR_KEY": key}, capture_output=True, text=True)
+    if run.returncode:
+        raise SystemExit("Toplayıcı gönderemedi: " + run.stderr)
+    page.reload()
+    expect(page.locator("#content")).to_contain_text("Çalışıyor")
+    expect(page.locator("#content")).to_contain_text("1 tablo, 3 kolon")
+    page.screenshot(path=str(out / "09b-toplayici.png"), full_page=True)
+    go(page, "collectors", "Toplayıcılar")
+    checks.append("otomatik_toplama")
     # anket kurucu
     go(page, "r/survey_templates", "Anket Şablonları")
     page.locator("[data-row]", has_text="Tedarikçi Memnuniyet").click()

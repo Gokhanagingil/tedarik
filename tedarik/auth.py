@@ -2,6 +2,8 @@
 
 Kimlik kaynakları (öncelik sırasıyla):
 1. `X-API-Key`: MCP makine kimliği; rol değildir, yalnızca kaynağın açıkça izin verdiği işlemi yapar.
+   `X-Collector-Key`: veri kataloğu toplayıcısı (K-030); tek bir veri kaynağına bağlıdır ve yalnızca /api/tdr/collector/
+   uç noktalarını kullanır (http.py), hiçbir kaynağı okuyamaz veya yazamaz.
 2. `dev` modu: yalnızca yerel adreste, ortam değişkenindeki kullanıcı ve rol.
 3. Oturum çerezi (`local` ve `entra` modları): KS GRC `identity.py` oturumu (session.py).
    `local` modunda rol `tdr_user_roles`, `entra` modunda Entra uygulama rolü (KS.TDR.*) belirler.
@@ -19,7 +21,7 @@ ROLES = {
     "AUDITOR": "Denetçi",
     "VIEWER": "Görüntüleyici",
 }
-LEVELS = {"MACHINE": 0, "VIEWER": 1, "AUDITOR": 1, "UNIT_USER": 2, "SUPPLIER_MANAGER": 3, "ADMIN": 4}
+LEVELS = {"MACHINE": 0, "COLLECTOR": 0, "VIEWER": 1, "AUDITOR": 1, "UNIT_USER": 2, "SUPPLIER_MANAGER": 3, "ADMIN": 4}
 NEEDED = {"read": 1, "write": 2, "manage": 3, "admin": 4}
 # Entra uygulama rolü -> tedarik rolü; sıra önceliktir (birden çok rol atanmışsa en yetkili seçilir). K-012.
 ENTRA_ROLES = {
@@ -39,7 +41,7 @@ class Unauthenticated(Exception):
 class Principal:
     username: str
     role: str
-    auth_type: str  # session | api_key | dev
+    auth_type: str  # session | api_key | collector | dev
     display_name: str = ""
     user_id: int = None
     units: frozenset = field(default_factory=frozenset)   # Birim Kullanıcısının yazabildiği birimler
@@ -47,13 +49,15 @@ class Principal:
     external: bool = False                                # dış denetçi: salt okunur, yalnızca atanmış denetimler (K-026)
     audits: frozenset = field(default_factory=frozenset)
     expires_on: str = None
+    collector_id: int = None                              # toplayıcı anahtarı: bağlı olduğu toplayıcı kaydı (K-030)
 
     def can(self, need):
         return LEVELS[self.role] >= NEEDED[need]
 
     def public(self):
         return {"username": self.username, "display_name": self.display_name, "role": self.role,
-                "role_label": ("Dış denetçi" if self.external else ROLES.get(self.role, "MCP")), "auth_type": self.auth_type,
+                "role_label": ("Dış denetçi" if self.external else "Toplayıcı" if self.role == "COLLECTOR"
+                               else ROLES.get(self.role, "MCP")), "auth_type": self.auth_type,
                 "units": sorted(self.units), "must_change_password": self.must_change_password,
                 "external": self.external, "audits": sorted(self.audits), "expires_on": self.expires_on}
 
@@ -78,6 +82,9 @@ class Auth:
             if self.config.api_key and hmac.compare_digest(key.encode(), self.config.api_key.encode()):
                 return Principal("mcp", "MACHINE", "api_key", "MCP")
             raise Unauthenticated()
+        collector = headers.get("X-Collector-Key", "")
+        if collector:
+            return self._collector(collector)
         if self.config.auth_mode == "dev":
             return Principal(self.config.dev_user, self.config.dev_role, "dev", "Geliştirici",
                              units=frozenset(self.config.dev_units))
@@ -106,6 +113,17 @@ class Auth:
                          external=access["external"], audits=audits, expires_on=access["expires_on"])
 
 
+    def _collector(self, key):
+        if "datagov" not in self.config.modules:
+            raise Unauthenticated()
+        from .modules.collection import resolve_key
+        with self.database.connect() as db:
+            row = resolve_key(db, key)
+        if not row:
+            raise Unauthenticated()
+        return Principal(f"toplayici:{row['code']}", "COLLECTOR", "collector", row["name"], collector_id=row["id"])
+
+
 def access_of(db, user_id):
     """Hesabın süresi ve dış denetçi durumu. Süresi geçmiş hesap oturum açamaz, açık oturumu geçersiz olur."""
     from datetime import date
@@ -129,7 +147,9 @@ def require_audit(principal, audit_id):
 
 
 def check(principal, res, action):
-    """action: read | write. MCP anahtarı yalnızca kaynağın açıkça izin verdiği işlemi yapar."""
+    """action: read | write. MCP anahtarı yalnızca kaynağın açıkça izin verdiği işlemi yapar; toplayıcı hiçbirini."""
+    if principal.role == "COLLECTOR":
+        raise Forbidden("Toplayıcı anahtarı yalnızca katalog gönderebilir")
     if principal.role == "MACHINE":
         if ("r" if action == "read" else "w") not in res.machine:
             raise Forbidden("MCP anahtarı bu işleme yetkili değil")
@@ -144,7 +164,7 @@ def check(principal, res, action):
 
 def can_write(principal, res):
     """Rol listesi tanımlı kaynakta (ör. denetim kayıtları: Yönetici ve Denetçi) seviye yerine liste geçerlidir."""
-    if principal.role == "MACHINE":
+    if principal.role in ("MACHINE", "COLLECTOR"):
         return False
     if res.write_roles is not None:
         return principal.role in res.write_roles
@@ -157,5 +177,5 @@ def require(principal, need):
 
 
 def require_human(principal):
-    if principal.auth_type == "api_key":
+    if principal.auth_type in ("api_key", "collector"):
         raise Forbidden("Bu işlem yalnızca kullanıcı oturumuyla yapılabilir")

@@ -61,9 +61,10 @@ SOURCES = Resource("data_sources", "Veri Kaynakları", {
     "environment": "TEXT NOT NULL DEFAULT 'production'", "description": "TEXT", "domain_id": fk("data_domains", False),
     "ci_id": fk("cmdb_cis", False), "supplier_id": fk("suppliers", False), "location": "TEXT", "owner": "TEXT",
     "steward": "TEXT", "custodian": "TEXT", "status": "TEXT NOT NULL DEFAULT 'active'", "last_import_at": "TIMESTAMP",
-    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    "change_notice": "TEXT NOT NULL DEFAULT 'all'", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, code_prefix="VK", write="manage", readonly=("last_import_at",), search=("code", "name", "location"),
-    enums={"platform": PLATFORMS, "environment": ("production", "test", "development"), "status": ("active", "retired")})
+    enums={"platform": PLATFORMS, "environment": ("production", "test", "development"), "status": ("active", "retired"),
+           "change_notice": ("all", "important", "none")})
 
 TABLES = Resource("data_tables", "Veri Tabloları", {
     "source_id": fk("data_sources"), "schema_name": "TEXT NOT NULL DEFAULT ''", "name": "TEXT NOT NULL",
@@ -119,7 +120,8 @@ Resource("term_relations", "İlişkili terimler", {
 
 IMPORTS = Resource("catalog_imports", "Katalog İçe Aktarımları", {
     "source_id": fk("data_sources"), "kind": "TEXT NOT NULL", "format": "TEXT NOT NULL", "filename": "TEXT NOT NULL",
-    "scope": "TEXT", "summary_json": "TEXT NOT NULL", "created_by": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL"},
+    "scope": "TEXT", "summary_json": "TEXT NOT NULL", "collector_id": fk("data_collectors", False),
+    "created_by": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL"},
     module=M, api=("list", "get"), immutable=True, search=("filename",),
     enums={"kind": ("structure", "descriptions"), "scope": SCOPES})
 CHANGES = Resource("catalog_changes", "Şema Değişiklikleri", {
@@ -600,7 +602,7 @@ def _type_sig(data_type, length):
     return f"{(data_type or '').upper()}({length})" if length else (data_type or "").upper()
 
 
-def apply_structure(db, source, catalog, *, scope="tables", dry_run=False, principal=None, filename=""):
+def apply_structure(db, source, catalog, *, scope="tables", dry_run=False, principal=None, filename="", collector_id=None):
     if scope not in SCOPES:
         raise crud.Invalid("Kapsam tables, schemas veya full olmalı")
     sid, now = source["id"], utcnow()
@@ -716,9 +718,9 @@ def apply_structure(db, source, catalog, *, scope="tables", dry_run=False, princ
     if dry_run:
         return summary
     import_id = db.execute("""INSERT INTO tdr_catalog_imports (source_id, kind, format, filename, scope, summary_json,
-        created_by, created_at) VALUES (?,?,?,?,?,?,?,?)""",
+        collector_id, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?)""",
         (sid, "structure", catalog.format, filename[:200], scope,
-         json.dumps({k: v for k, v in summary.items() if k != "samples"}, ensure_ascii=False),
+         json.dumps({k: v for k, v in summary.items() if k != "samples"}, ensure_ascii=False), collector_id,
          principal.username if principal else "system", now)).lastrowid
     if changes:
         db.executemany("""INSERT INTO tdr_catalog_changes (source_id, import_id, table_id, column_id, change, object_name,
@@ -726,6 +728,7 @@ def apply_structure(db, source, catalog, *, scope="tables", dry_run=False, princ
                        [(sid, import_id, tid, cid, kind, obj[:500], detail, now) for kind, obj, detail, tid, cid in changes])
     db.execute("UPDATE tdr_data_sources SET last_import_at=?, updated_at=? WHERE id=?", (now, now, sid))
     summary["import_id"] = import_id
+    summary["notified"] = collection.notify_changes(db, source, import_id, changes) if changes else 0
     return summary
 
 
@@ -1659,6 +1662,7 @@ def source_context(c):
     s["changes"] = rows(db, "SELECT * FROM tdr_catalog_changes WHERE source_id=? ORDER BY id DESC LIMIT 50", (s["id"],))
     s["queries"] = QUERIES.get(s["platform"], []) + [GENERIC_QUERY]
     s["can_import"] = c.principal.can("manage") and c.principal.auth_type != "api_key"
+    s["collectors"] = collection.source_collectors(db, s["id"])
     return s
 
 
@@ -1861,8 +1865,9 @@ def overview(c):
         "changes": rows(db, """SELECT x.*, s.name AS source_name FROM tdr_catalog_changes x JOIN tdr_data_sources s
             ON s.id=x.source_id ORDER BY x.id DESC LIMIT 15"""),
         "imports": rows(db, """SELECT i.id, i.source_id, i.kind, i.format, i.filename, i.created_by, i.created_at,
-            s.name AS source_name FROM tdr_catalog_imports i JOIN tdr_data_sources s ON s.id=i.source_id
+            i.collector_id, s.name AS source_name FROM tdr_catalog_imports i JOIN tdr_data_sources s ON s.id=i.source_id
             ORDER BY i.id DESC LIMIT 8"""),
+        "collectors": collection.collectors_summary(db),
     }
 
 
@@ -1976,6 +1981,7 @@ def my_work_items(db, principal):
     out["glossary_review"] = rows(db, f"""SELECT id, code, name AS title, review_date FROM tdr_glossary_terms WHERE
         status='approved' AND owner IN ({marks}) AND review_date <= ? ORDER BY review_date""", (*names, soon))
     out.update(privacy.my_work_items(db, principal))
+    out.update(collection.my_work_items(db, principal, names))
     return out
 
 
@@ -2005,7 +2011,7 @@ def health_checks(db, check, count, readable=lambda name: True):
               rows(db, """SELECT id, code, name AS title FROM tdr_glossary_terms WHERE (status='in_review' AND submitted_at < ?)
               OR (pending_json IS NOT NULL AND pending_at < ?) ORDER BY code""", (stale, stale)), "glossary_terms",
               population=count(db, "SELECT COUNT(*) AS n FROM tdr_glossary_terms WHERE status<>'retired'")),
-    ] + privacy.health_checks(db, check, count, readable)
+    ] + privacy.health_checks(db, check, count, readable) + collection.health_checks(db, check, count, readable)
 
 
 # ------------------------------------------------------------------ kayıt
@@ -2036,10 +2042,14 @@ def register(app):
     app.route("POST", API + "/glossary_terms/{id}/links", term_links)
     app.route("POST", API + "/glossary_terms/{id}/related", term_related)
     privacy.register(app)
+    collection.register(app)
 
 
 def seed(db):
     privacy.seed(db)
+    collection.seed(db)
 
 
-from . import privacy  # noqa: E402  (Faz 2: KVKK ve sınıflandırma — aynı modülün parçası; tanımlar yukarıdakilere dayanır)
+# Aynı modülün parçaları; tanımlar yukarıdakilere dayanır. Faz 2: KVKK ve sınıflandırma, Faz 3: otomatik toplama.
+from . import privacy  # noqa: E402
+from . import collection  # noqa: E402

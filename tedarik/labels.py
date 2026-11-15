@@ -500,6 +500,32 @@ CHOICES.update({
                "column_added": "Kolon eklendi", "column_removed": "Kolon kaldırıldı", "column_restored": "Kolon geri geldi",
                "type_changed": "Tip değişti"},
 })
+# Otomatik toplama (K-030)
+FIELDS.update({
+    "change_notice": "Şema değişikliği bildirimi", "collector_id": "Toplayıcı", "connector": "Bağlayıcı",
+    "data_collectors.scope": "Kapsam", "schedule": "Beklenen çalışma sıklığı", "max_removal_pct": "Kaldırma eşiği (%)",
+    "sample_rows": "Örnek doğrulama satırı (tablo başına)", "key_hint": "Anahtar (son karakterler)",
+    "key_created_at": "Anahtar oluşturma", "last_seen_at": "Son bağlantı", "last_push_at": "Son gönderim",
+    "last_result": "Son sonuç", "last_message": "Son ileti", "client_version": "Toplayıcı sürümü",
+    "client_host": "Çalıştığı makine", "overdue_notified_at": "Gecikme bildirimi", "revoked_at": "İptal zamanı",
+    "revoked_by": "İptal eden", "key_hash": "Anahtar özeti", "collector_events.kind": "Olay", "counts_json": "Sayılar",
+    "collector_events.message": "Açıklama", "data_collectors.name": "Toplayıcı adı",
+    "data_collectors.description": "Not", "data_collectors.status": "Durum",
+})
+CHOICES.update({
+    "change_notice": {"all": "Tüm değişiklikler", "important": "Yalnızca önemli değişiklikler", "none": "Bildirim yok"},
+    "connector": {"postgresql": "PostgreSQL", "sqlite": "SQLite", "sql": "SQL sürücüsü (SAP HANA, SQL Server, Oracle, MySQL…)",
+                  "files": "CSV klasörü", "file": "Hazır dışa aktarım dosyası", "custom": "Kurumun bağlayıcısı"},
+    "data_collectors.scope": {"tables": "Yalnızca gönderilen tablolar", "schemas": "Gönderilen şemaların tamamı",
+                              "full": "Kaynağın tamamı"},
+    "schedule": {"hourly": "Saatte bir", "daily": "Günde bir", "weekly": "Haftada bir", "monthly": "Ayda bir",
+                 "manual": "Elle (zamanlanmamış)"},
+    "data_collectors.schedule": {"hourly": "Saatte bir", "daily": "Günde bir", "weekly": "Haftada bir",
+                                 "monthly": "Ayda bir", "manual": "Elle (zamanlanmamış)"},
+    "data_collectors.status": {"active": "Etkin", "revoked": "İptal edildi"},
+    "last_result": {"ok": "Başarılı", "error": "Hata", "rejected": "Reddedildi"},
+    "collector_events.kind": {"push": "Gönderim", "preview": "Ön izleme", "error": "Hata", "rejected": "Reddedildi"},
+})
 CHOICES["risk_category"] = CHOICES["category"]
 
 
