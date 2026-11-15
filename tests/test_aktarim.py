@@ -57,13 +57,14 @@ class Excel(Base):
         sheets = self.xlsx.read_xlsx(reply.content)
         self.assertEqual(list(sheets), ["Veri", "Açıklama"])
         header = sheets["Veri"][0]
-        self.assertIn("Tedarikçi (kod) *", header)
+        self.assertIn("Tedarikçi (kod veya ad) *", header)
         self.assertIn("Faydalanan", header)
         notes = {r[0]: r for r in sheets["Açıklama"][1:] if r}
         self.assertIn("Şirket içi", notes["Faydalanan"][2])
-        self.ok("POST", "/org_units", {"code": "BT", "name": "Bilgi Teknolojileri"})
-        self.ok("POST", "/catalog_items", {"code": "DC", "name": "Barındırma"})
-        self.ok("POST", "/suppliers", {"code": "S1", "name": "Örnek Bilişim"})
+        self.ok("POST", "/org_units", {"name": "Bilgi Teknolojileri"})
+        for item in ("Barındırma", "Yedekleme", "Destek"):
+            self.ok("POST", "/catalog_items", {"name": item})
+        self.ok("POST", "/suppliers", {"name": "Örnek Bilişim"})
         index = {h.rstrip(" *"): i for i, h in enumerate(header)}
 
         def row(**values):
@@ -72,18 +73,19 @@ class Excel(Base):
                 cells[index[label]] = value
             return cells
         data = [header,
-                row(**{"Kod": "E1", "Tedarikçi (kod)": "S1", "Ürün / hizmet (kod)": "DC", "Birim (kod)": "BT",
-                       "Faydalanan": "Müşteri", "Müşteri adı": "Banka A", "Başlangıç tarihi": "01.02.2026",
-                       "Kritiklik": "Yüksek"}),
-                row(**{"Kod": "E2", "Tedarikçi (kod)": "YOK", "Ürün / hizmet (kod)": "DC", "Birim (kod)": "BT"}),
-                row(**{"Kod": "E3", "Tedarikçi (kod)": "S1", "Ürün / hizmet (kod)": "DC", "Birim (kod)": "BT",
-                       "Faydalanan": "Müşteri"}),                          # müşteri adı kuralı
-                row(**{"Kod": "E4", "Tedarikçi (kod)": "S1", "Ürün / hizmet (kod)": "DC", "Birim (kod)": "BT",
-                       "Kritiklik": "çok"})]
+                row(**{"Tedarikçi (kod veya ad)": "Örnek Bilişim", "Ürün / hizmet (kod veya ad)": "Barındırma",
+                       "Birim (kod veya ad)": "bilgi teknolojileri", "Faydalanan": "Müşteri", "Müşteri adı": "Banka A",
+                       "Başlangıç tarihi": "01.02.2026", "Kritiklik": "Yüksek"}),
+                row(**{"Tedarikçi (kod veya ad)": "YOK", "Ürün / hizmet (kod veya ad)": "Barındırma",
+                       "Birim (kod veya ad)": "Bilgi Teknolojileri"}),
+                row(**{"Tedarikçi (kod veya ad)": "Örnek Bilişim", "Ürün / hizmet (kod veya ad)": "Yedekleme",
+                       "Birim (kod veya ad)": "Bilgi Teknolojileri", "Faydalanan": "Müşteri", "Kritiklik": "Orta"}),
+                row(**{"Tedarikçi (kod veya ad)": "Örnek Bilişim", "Ürün / hizmet (kod veya ad)": "Destek",
+                       "Birim (kod veya ad)": "Bilgi Teknolojileri", "Kritiklik": "çok"})]
         preview = self.upload("engagements", {"Veri": data}, dry_run=True)[1]
         self.assertEqual({k: preview[k] for k in ("total", "create", "error")}, {"total": 4, "create": 1, "error": 3})
         self.assertEqual(self.ok("GET", "/engagements"), [])
-        self.assertIn("'YOK' kodlu kayıt bulunamadı", preview["rows"][1]["message"])
+        self.assertIn("'YOK' kodlu veya adlı kayıt bulunamadı", preview["rows"][1]["message"])
         self.assertIn("customer_name", preview["rows"][2]["message"])
         self.assertIn("izin verilenler: Kritik, Yüksek, Orta, Düşük", preview["rows"][3]["message"])
         result = self.upload("engagements", {"Veri": data})[1]
@@ -95,13 +97,16 @@ class Excel(Base):
         self.assertEqual(sorted(r["action"] for r in batch), ["create", "error", "error", "error"])
 
     def test_portalda_girilen_deger_ezilmez(self):
-        self.ok("POST", "/org_units", {"code": "BT", "name": "BT Portal Adı"})
-        data = [["Kod", "Ad", "Yönetici"], ["BT", "Excel Adı", "ayse"], ["OPS", "Operasyon", ""]]
+        made = self.ok("POST", "/org_units", {"name": "BT Portal Adı", "manager": "mehmet"})["id"]
+        code = self.ok("GET", f"/org_units/{made}")["code"]
+        data = [["Kod", "Ad", "Yönetici"], [code, "Excel Adı", "ayse"], ["", "Operasyon", ""]]
         result = self.upload("org_units", {"Birimler": data})[1]
-        self.assertEqual((result["update"], result["create"]), (1, 1))
-        self.assertIn("Portaldaki değer korundu: Ad", result["rows"][0]["message"])
-        unit = self.ok("GET", "/org_units?code=BT")[0]
-        self.assertEqual((unit["name"], unit["manager"]), ("BT Portal Adı", "ayse"))
+        self.assertEqual((result["skip"], result["create"]), (1, 1))      # kodla bulundu; dolu alanlar korunur
+        self.assertIn("Portaldaki değer korundu", result["rows"][0]["message"])
+        unit = self.ok("GET", f"/org_units/{made}")
+        self.assertEqual((unit["name"], unit["manager"]), ("BT Portal Adı", "mehmet"))
+        wrong = self.upload("org_units", {"Birimler": [["Kod", "Ad"], ["BRM-9999", "Yeni"]]})[1]
+        self.assertIn("kod sunucuda üretilir", wrong["rows"][0]["message"])          # K-017
         again = self.upload("org_units", {"Birimler": data})[1]
         self.assertEqual((again["skip"], again["create"]), (2, 0))
 
@@ -110,14 +115,14 @@ class Excel(Base):
         first = self.upload("suppliers", {"LFA1": data}, source_system="sap")[1]
         self.assertEqual(first["create"], 1)
         supplier = self.ok("GET", "/suppliers")[0]
-        self.assertEqual((supplier["tier"], supplier["code"]), ("critical", "TDR-00001"))
+        self.assertEqual((supplier["tier"], supplier["code"]), ("critical", "TED-0001"))
         renamed = [data[0], ["100", "Örnek Bilişim (yeni ad)", "", "Standart"]]
         second = self.upload("suppliers", {"LFA1": renamed}, source_system="sap")[1]
         self.assertEqual((second["create"], second["skip"]), (0, 1))
         self.assertEqual(len(self.ok("GET", "/suppliers")), 1)
 
     def test_formul_ve_makro_reddedilir_disa_aktarim_okunur(self):
-        self.ok("POST", "/suppliers", {"code": "S1", "name": "=HYPERLINK(\"x\")", "tier": "critical"})
+        self.ok("POST", "/suppliers", {"name": "=HYPERLINK(\"x\")", "tier": "critical"})
         status, reply = self.call("GET", "/export/suppliers?format=xlsx")
         self.assertEqual(status, 200)
         sheet = self.xlsx.read_xlsx(reply.content)["Tedarikçiler"]
@@ -143,7 +148,7 @@ class Excel(Base):
         self.assertIn("Formül", payload["error"])
 
     def test_yetki(self):
-        data = {"filename": "a.csv", "content_base64": b64("Kod;Ad\r\nA;B\r\n".encode())}
+        data = {"filename": "a.csv", "content_base64": b64("Ad;Yönetici\r\nB;ayse\r\n".encode())}
         self.assertEqual(self.call("POST", "/import/org_units", data, app=self.make(role="UNIT_USER", units="1"))[0],
                          403)
         self.assertEqual(self.app.dispatch("GET", "/api/tdr/export", {"X-API-Key": "k" * 40})[0], 403)

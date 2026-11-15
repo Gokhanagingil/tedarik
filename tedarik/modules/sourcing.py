@@ -20,7 +20,7 @@ NEEDS = Resource("needs", "İş İhtiyaçları", {
     "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "description": "TEXT", "org_unit_id": fk("org_units"),
     "catalog_item_id": fk("catalog_items", False), "requester": "TEXT NOT NULL", "needed_by": "DATE",
     "workflow_instance_id": fk("workflow_instances", False), "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write="write", api=("list", "get", "update"), search=("code", "title"),
+    module=M, code_prefix="IHT", write="write", api=("list", "get", "update"), search=("code", "title"),
     readonly=("requester", "workflow_instance_id"))
 
 Resource("need_candidates", "Aday Tedarikçiler", {

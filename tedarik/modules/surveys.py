@@ -44,7 +44,7 @@ TEMPLATES = Resource("survey_templates", "Anket Şablonları", {
     "description": "TEXT", "intro": "TEXT", "outro": "TEXT", "status": "TEXT NOT NULL DEFAULT 'draft'",
     "version": "INTEGER NOT NULL DEFAULT 1", "parent_id": fk("survey_templates", False),
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, unique=(("code", "version"),), search=("code", "name", "description"),
+    module=M, code_prefix="SAB", unique=(("code", "version"),), search=("code", "name", "description"),
     readonly=("status", "version", "parent_id"),
     enums={"purpose": ("satisfaction", "risk", "general"), "status": ("draft", "published", "retired")})
 
@@ -68,7 +68,7 @@ CAMPAIGNS = Resource("survey_campaigns", "Anket Kampanyaları", {
     "period_start": "DATE", "period_end": "DATE", "opens_on": "DATE", "closes_on": "DATE",
     "owner": "TEXT", "status": "TEXT NOT NULL DEFAULT 'draft'", "opened_at": "TIMESTAMP", "closed_at": "TIMESTAMP",
     "salt": "TEXT", "created_at": "TIMESTAMP NOT NULL"},
-    module=M, search=("code", "name", "description"), readonly=("status", "opened_at", "closed_at", "salt"),
+    module=M, code_prefix="KMP", search=("code", "name", "description"), readonly=("status", "opened_at", "closed_at", "salt"),
     enums={"subject": ("none", "supplier", "engagement"), "audience": ("invited", "all"),
            "status": ("draft", "open", "closed")})
 
@@ -881,9 +881,10 @@ STARTERS = [
 
 
 def seed(db):
-    for code, name, purpose, description, sections in STARTERS:
-        if one(db, "SELECT 1 AS x FROM tdr_survey_templates WHERE code=?", (code,)):
+    for _key, name, purpose, description, sections in STARTERS:     # adla tekil; kod sunucuda (K-017)
+        if one(db, "SELECT 1 AS x FROM tdr_survey_templates WHERE name=?", (name,)):
             continue
+        code = crud.next_code(db, TEMPLATES)
         template_id = db.execute("INSERT INTO tdr_survey_templates (code, name, purpose, description, status, version, "
                                  "created_at) VALUES (?,?,?,?,'draft',1,?)",
                                  (code, name, purpose, description, utcnow())).lastrowid

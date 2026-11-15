@@ -9,13 +9,13 @@ class AnketTabani(Base):
     def setUp(self):
         super().setUp()
         self.unit, self.item, self.supplier, self.engagement = self.base_data()
-        self.other = self.ok("POST", "/suppliers", {"code": "S2", "name": "İkinci Tedarikçi", "tier": "critical"})["id"]
+        self.other = self.ok("POST", "/suppliers", {"name": "İkinci Tedarikçi", "tier": "critical"})["id"]
 
     def as_user(self, name, role="VIEWER"):
         return self.make(role=role, user=name)
 
     def template(self, code="T1", purpose="satisfaction"):
-        template = self.ok("POST", "/survey_templates", {"code": code, "name": "Deneme şablonu", "purpose": purpose})["id"]
+        template = self.ok("POST", "/survey_templates", {"name": "Deneme şablonu", "purpose": purpose})["id"]
         section = self.ok("POST", "/survey_sections", {"template_id": template, "title": "Hizmet"})["id"]
         q = {}
         q["kalite"] = self.ok("POST", "/survey_questions", {"template_id": template, "section_id": section,
@@ -64,7 +64,8 @@ class Kurucu(AnketTabani):
         self.assertEqual(self.call("POST", "/survey_questions", {"template_id": template, "text": "Ek"})[0], 409)
         self.assertEqual(self.call("PATCH", f"/survey_templates/{template}", {"name": "Yeni ad"})[0], 409)
         copy = self.ok("POST", f"/survey_templates/{template}/copy", {})
-        self.assertEqual((copy["code"], copy["version"], copy["status"], copy["parent_id"]), ("T1", 2, "draft", template))
+        original = self.ok("GET", f"/survey_templates/{template}")["code"]
+        self.assertEqual((copy["code"], copy["version"], copy["status"], copy["parent_id"]), (original, 2, "draft", template))
         self.assertEqual(len(copy["questions"]), 5)
         self.assertEqual(copy["questions"][2]["show_if"], {"question": "S2", "equals": "yes"})
         self.assertNotEqual(copy["questions"][0]["section_id"], q["kalite"])
@@ -74,20 +75,20 @@ class Kurucu(AnketTabani):
         self.assertEqual(len(self.ok("GET", f"/survey_templates/{copy['id']}/structure?all=1")["questions"]), 5)
 
     def test_baslangic_sablonlari(self):
-        templates = {t["code"]: t for t in self.ok("GET", "/survey_templates")}
-        self.assertEqual(templates["RISK-DEG"]["purpose"], "risk")
-        risk = self.ok("GET", f"/survey_templates/{templates['RISK-DEG']['id']}/structure")
+        templates = {t["purpose"]: t for t in self.ok("GET", "/survey_templates")}
+        self.assertEqual(templates["risk"]["code"][:4], "SAB-")
+        risk = self.ok("GET", f"/survey_templates/{templates['risk']['id']}/structure")
         negative = next(x for x in risk["questions"] if "güvenlik olayı" in x["text"])
         self.assertEqual(negative["options"][0], {"value": "yes", "label": "Evet", "score": 0})
 
     def test_yetki(self):
         viewer = self.as_user("ali")
-        self.assertEqual(self.call("POST", "/survey_templates", {"code": "X", "name": "X"}, app=viewer)[0], 403)
+        self.assertEqual(self.call("POST", "/survey_templates", {"name": "X"}, app=viewer)[0], 403)
 
 
 class Kampanya(AnketTabani):
     def campaign(self, template, **extra):
-        body = {"code": "2026-Q4", "name": "4. çeyrek memnuniyet", "template_id": template, "subject": "supplier",
+        body = {"name": "4. çeyrek memnuniyet", "template_id": template, "subject": "supplier",
                 **extra}
         return self.ok("POST", "/survey_campaigns", body)["id"]
 
@@ -168,7 +169,7 @@ class Kampanya(AnketTabani):
 
     def test_anonim_ve_bagimsiz_anket(self):
         template, q = self.template(code="GENEL", purpose="general")
-        campaign = self.ok("POST", "/survey_campaigns", {"code": "CALISAN", "name": "İç memnuniyet",
+        campaign = self.ok("POST", "/survey_campaigns", {"name": "İç memnuniyet",
                                                          "template_id": template, "subject": "none",
                                                          "audience": "all", "anonymous": 1, "min_responses": 2})["id"]
         self.assertEqual(self.call("POST", f"/survey_campaigns/{campaign}/targets",

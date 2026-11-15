@@ -119,7 +119,7 @@ class YerelOturum(Base):
 
     def test_koken_denetimi_oturumda_zorunlu(self):
         cookie = self.ready("tdradmin", self.admin_password)
-        body = {"code": "BT", "name": "Bilgi Teknolojileri"}
+        body = {"name": "Bilgi Teknolojileri"}
         self.assertEqual(self.request("POST", "/api/tdr/org_units", body, cookie=cookie, origin="http://kotu.test")[0],
                          403)
         self.assertEqual(self.request("POST", "/api/tdr/org_units", body, cookie=cookie, origin="")[0], 403)
@@ -140,7 +140,7 @@ class YerelOturum(Base):
                                       cookie=admin)[0], 400)
         viewer = self.ready("zeynep", created["temporary_password"])
         self.assertEqual(self.request("GET", "/api/me", cookie=viewer)[1]["display_name"], "Zeynep K.")
-        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"code": "X", "name": "X"}, cookie=viewer)[0], 403)
+        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"name": "X"}, cookie=viewer)[0], 403)
         self.assertEqual(self.request("GET", "/api/tdr/users", cookie=viewer)[0], 403)
         self.assertEqual(self.request("PATCH", f"/api/tdr/users/{created['id']}", {"is_active": 0},
                                       cookie=admin)[0], 200)
@@ -176,12 +176,11 @@ class BirimKapsami(Base):
     def setUp(self):
         super().setUp()
         self.bt, item, self.supplier, self.engagement = self.base_data()
-        self.ops = self.ok("POST", "/org_units", {"code": "OPS", "name": "Operasyon"})["id"]
-        self.other_supplier = self.ok("POST", "/suppliers", {"code": "S2", "name": "Diğer Ltd."})["id"]
+        self.ops = self.ok("POST", "/org_units", {"name": "Operasyon"})["id"]
+        self.other_supplier = self.ok("POST", "/suppliers", {"name": "Diğer Ltd."})["id"]
         self.ops_engagement = self.ok("POST", "/engagements", {
-            "code": "E2", "supplier_id": self.other_supplier, "catalog_item_id": item, "org_unit_id": self.ops})["id"]
-        self.sla_ops = self.ok("POST", "/sla_definitions", {"engagement_id": self.ops_engagement, "code": "UP",
-                                                            "name": "Erişilebilirlik", "target_value": 99})["id"]
+            "supplier_id": self.other_supplier, "catalog_item_id": item, "org_unit_id": self.ops})["id"]
+        self.sla_ops = self.ok("POST", "/sla_definitions", {"engagement_id": self.ops_engagement, "name": "Erişilebilirlik", "target_value": 99})["id"]
         self.bt_user = self.make(role="UNIT_USER", user="can", units=str(self.bt))
 
     def test_kendi_biriminin_kaydina_yazar(self):
@@ -203,11 +202,10 @@ class BirimKapsami(Base):
         self.assertEqual(self.call("POST", "/sla_measurements", {"sla_id": self.sla_ops, "period_start": "2026-10-01",
                                                                  "actual_value": 99.5}, app=u)[0], 403)
         risk = {"title": "Bağımlılık", "category": "exit", "owner": "can", "appetite": 9}
-        self.assertEqual(self.call("POST", "/supplier_risks", {**risk, "code": "R1", "supplier_id": self.supplier,
+        self.assertEqual(self.call("POST", "/supplier_risks", {**risk, "supplier_id": self.supplier,
                                                                "engagement_id": self.engagement}, app=u)[0], 201)
-        self.assertEqual(self.call("POST", "/supplier_risks", {**risk, "code": "R2",
-                                                               "supplier_id": self.other_supplier}, app=u)[0], 403)
-        other_risk = self.ok("POST", "/supplier_risks", {**risk, "code": "R3", "supplier_id": self.other_supplier,
+        self.assertEqual(self.call("POST", "/supplier_risks", {**risk, "supplier_id": self.other_supplier}, app=u)[0], 403)
+        other_risk = self.ok("POST", "/supplier_risks", {**risk, "supplier_id": self.other_supplier,
                                                          "review_date": "2099-01-01", "cause": "a",
                                                          "risk_event": "b", "consequence": "c"})["id"]
         self.assertEqual(self.call("POST", f"/supplier_risks/{other_risk}/assessments", {"rationale": "x"},
@@ -292,7 +290,7 @@ class EntraOturumu(Base):
         self.assertTrue(manager.startswith("__Host-tdr_session="))
         me = self.request("GET", "/api/me", cookie=manager)[1]
         self.assertEqual((me["role"], me["display_name"]), ("SUPPLIER_MANAGER", "Kurumsal Kullanıcı"))
-        self.assertEqual(self.request("POST", "/api/tdr/suppliers", {"code": "S1", "name": "A"}, cookie=manager)[0],
+        self.assertEqual(self.request("POST", "/api/tdr/suppliers", {"name": "A"}, cookie=manager)[0],
                          201)
         self.assertEqual(self.request("GET", "/api/tdr/users", cookie=manager)[0], 403)
         self.sign_in(403, roles=["KS.GRC.Admin"])          # KS GRC rolü tedarikte yetki vermez
@@ -309,9 +307,9 @@ class EntraOturumu(Base):
         self.assertEqual(self.request("POST", "/api/tdr/users", {"username": "yerel", "role": "ADMIN"},
                                       cookie=admin)[0], 403)
         self.assertEqual(self.request("GET", "/auth/entra/start", host="kotu.example.test")[0], 400)
-        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"code": "A", "name": "A"}, cookie=admin,
+        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"name": "A"}, cookie=admin,
                                       origin="https://kotu.example.test")[0], 403)
-        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"code": "A", "name": "A"}, cookie=admin,
+        self.assertEqual(self.request("POST", "/api/tdr/org_units", {"name": "A"}, cookie=admin,
                                       host="kotu.example.test")[0], 403)
         login_page = self.request("GET", "/login")[1].payload.content
         self.assertNotIn('type="password"', login_page)
@@ -322,7 +320,7 @@ class EntraOturumu(Base):
         users = self.request("GET", "/api/tdr/users", cookie=admin)[1]
         unit_user = next(u for u in users if u["username"].endswith(OID))
         self.assertEqual((unit_user["kind"], unit_user["role"]), ("entra", None))
-        unit = self.request("POST", "/api/tdr/org_units", {"code": "BT", "name": "BT"}, cookie=admin)[1]["id"]
+        unit = self.request("POST", "/api/tdr/org_units", {"name": "BT"}, cookie=admin)[1]["id"]
         self.assertEqual(self.request("PATCH", f"/api/tdr/users/{unit_user['id']}", {"role": "ADMIN"},
                                       cookie=admin)[0], 403)        # rol Entra'dan gelir
         self.request("PATCH", f"/api/tdr/users/{unit_user['id']}", {"org_unit_ids": [unit]}, cookie=admin)

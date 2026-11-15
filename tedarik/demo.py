@@ -107,6 +107,11 @@ COMMENTS = ["Aylık hizmet raporları daha düzenli ve zamanında gelmeli.", "İ
             "Güvenlik açıkları için yama takvimini paylaşmıyorlar.", "Hizmet seviyesi toplantıları verimli geçiyor."]
 
 
+TYPE_NAMES = {"HW": "Donanım", "SW": "Yazılım ve Lisans", "CLOUD": "Bulut Hizmeti", "CONSULT": "Danışmanlık",
+              "OUTSOURCE": "Dış Kaynak Personel", "SUPPORT": "Bakım ve Destek", "TELCO": "Telekom",
+              "FACILITY": "Tesis ve Veri Merkezi"}
+
+
 class Seeder:
     def __init__(self, db, app):
         self.db, self.app, self.rnd = db, app, random.Random(20261115)
@@ -147,7 +152,8 @@ class Seeder:
         for code, name, parent, manager in UNITS:
             self.ids["unit"][code] = self.add("org_units", {"code": code, "name": name, "manager": manager,
                                                             "parent_id": self.ids["unit"].get(parent)})
-        types = {t["code"]: t["id"] for t in rows(self.db, "SELECT id, code FROM tdr_supplier_types")}
+        by_name = {t["name"]: t["id"] for t in rows(self.db, "SELECT id, name FROM tdr_supplier_types")}
+        types = {key: by_name[name] for key, name in TYPE_NAMES.items()}
         self.ids["item"] = {}
         for code, name, kind, category, _ in CATALOG:
             self.ids["item"][code] = self.add("catalog_items", {"code": code, "name": name, "kind": kind,
@@ -395,7 +401,9 @@ class Seeder:
             return
         from .modules import surveys as SV
         r = self.rnd
-        templates = {t["code"]: t["id"] for t in rows(self.db, "SELECT id, code FROM tdr_survey_templates")}
+        templates = {{"satisfaction": "MEMNUNIYET", "risk": "RISK-DEG"}[t["purpose"]]: t["id"]
+                     for t in rows(self.db, "SELECT id, purpose FROM tdr_survey_templates WHERE purpose IN "
+                                            "('satisfaction','risk') AND version=1")}
         for code in ("MEMNUNIYET", "RISK-DEG"):
             self.db.execute("UPDATE tdr_survey_templates SET status='published' WHERE id=?", (templates[code],))
         people = ["mehmet.kaya", "deniz.koc", "okan.yildiz", "zeynep.demir", "kerem.aksoy", "ayse.yilmaz"]

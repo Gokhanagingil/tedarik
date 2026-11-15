@@ -12,7 +12,7 @@ SLAS = Resource("sla_definitions", "SLA Tanımları", {
     "unit": "TEXT NOT NULL DEFAULT 'percent'", "target_value": "REAL NOT NULL",
     "direction": "TEXT NOT NULL DEFAULT 'higher_better'", "period": "TEXT NOT NULL DEFAULT 'monthly'",
     "active": "INTEGER NOT NULL DEFAULT 1"},
-    module=M, unique=(("engagement_id", "code"),), machine="r",
+    module=M, unique=(("engagement_id", "code"),), machine="r", code_prefix="SLA",
     enums={"unit": ("percent", "hours", "minutes", "count"), "direction": ("higher_better", "lower_better"),
            "period": ("monthly", "quarterly", "yearly")})
 
@@ -25,7 +25,7 @@ MEASUREMENTS = Resource("sla_measurements", "SLA Ölçümleri", {
 
 Resource("review_criteria", "Değerlendirme Kriterleri", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "weight": "INTEGER NOT NULL DEFAULT 1",
-    "active": "INTEGER NOT NULL DEFAULT 1"}, module=M, write="admin")
+    "active": "INTEGER NOT NULL DEFAULT 1"}, module=M, write="admin", code_prefix="KRT")
 
 Resource("performance_reviews", "Performans Değerlendirmeleri", {
     "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False), "period_start": "DATE NOT NULL",
@@ -117,8 +117,8 @@ def register(app):
 
 
 def seed(db):
-    for code, name, weight in (("QUALITY", "Hizmet ve Ürün Kalitesi", 3), ("DELIVERY", "Zamanında Teslim", 3),
-                               ("COMMS", "İletişim ve Çözüm Hızı", 2), ("COMMERCIAL", "Ticari Uyum", 1),
-                               ("COMPLIANCE", "Güvenlik ve Uyum", 2)):
-        db.execute("INSERT INTO tdr_review_criteria (code, name, weight) VALUES (?,?,?) ON CONFLICT DO NOTHING",
-                   (code, name, weight))
+    criteria = RESOURCES["review_criteria"]
+    for name, weight in (("Hizmet ve Ürün Kalitesi", 3), ("Zamanında Teslim", 3), ("İletişim ve Çözüm Hızı", 2),
+                         ("Ticari Uyum", 1), ("Güvenlik ve Uyum", 2)):     # öneri; adla tekil, kod sunucuda
+        if not one(db, "SELECT id FROM tdr_review_criteria WHERE name=?", (name,)):
+            crud.insert(db, criteria, {"name": name, "weight": weight})

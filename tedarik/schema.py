@@ -66,7 +66,8 @@ def fk(resource, required=True, cascade=False):
 class Resource:
     def __init__(self, name, label, fields, *, module, enums=None, unique=(), search=("code", "name"),
                  write="manage", api=("list", "get", "create", "update"), readonly=(), filters=None,
-                 read_roles=None, machine="", immutable=False, indexes=(), write_roles=None):
+                 read_roles=None, machine="", immutable=False, indexes=(), write_roles=None, code_prefix=None,
+                 code_yearly=False):
         self.name, self.label, self.fields, self.module = name, label, fields, module
         self.table = PREFIX + name
         self.columns = {f: Field(f, d) for f, d in fields.items()}
@@ -76,6 +77,9 @@ class Resource:
         self.write = write              # yazma için gereken en düşük seviye: write | manage | admin
         self.api = api                  # otomatik açılan uç noktalar
         self.readonly = set(readonly) | AUTO   # yalnızca sunucunun yazdığı alanlar
+        self.code_prefix, self.code_yearly = code_prefix, code_yearly   # K-017: kod sunucuda üretilir
+        if code_prefix:
+            self.readonly.add("code")
         self.filters = filters or {}    # ek liste filtreleri: ad -> SQL parçası (tek parametre)
         self.read_roles = read_roles    # None: tüm roller okur
         self.write_roles = frozenset(write_roles) if write_roles else None   # verilirse seviye yerine bu roller yazar

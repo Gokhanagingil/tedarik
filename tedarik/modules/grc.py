@@ -40,7 +40,7 @@ from .. import audit, auth as authz, crud
 from ..db import one, rows, utcnow
 from ..http import API, MAX_UPLOAD_BODY, Raw, guard_readonly
 from ..schema import RESOURCES, Resource, fk
-from .core import policy, supplier_units
+from .core import PROCESSES, policy, supplier_units
 
 M = "grc"
 REQUIRES = ("risks",)
@@ -68,21 +68,16 @@ CLAUSES = Resource("clauses", "Maddeler", {
     "justification": "TEXT"},
     module=M, unique=(("standard_id", "code"),), search=("code", "title"), write_roles=LIBRARY)
 
-PROCESSES = Resource("processes", "Süreçler", {
-    "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "owner": "TEXT", "org_unit_id": fk("org_units", False),
-    "description": "TEXT", "active": "INTEGER NOT NULL DEFAULT 1"},
-    module=M, write_roles=LIBRARY)
-
 OBJECTIVES = Resource("objectives", "Kontrol Hedefleri", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT"},
-    module=M, write_roles=LIBRARY)
+    module=M, code_prefix="KHD", write_roles=LIBRARY)
 
 DOCUMENTS = Resource("documents", "Dokümanlar", {
     "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "category": "TEXT NOT NULL DEFAULT 'procedure'",
     "version": "TEXT", "owner": "TEXT", "status": "TEXT NOT NULL DEFAULT 'draft'", "reference_url": "TEXT",
     "approved_by": "TEXT", "approved_on": "DATE", "review_date": "DATE", "description": "TEXT",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, search=("code", "title"), write_roles=LIBRARY,
+    module=M, code_prefix="DOK", search=("code", "title"), write_roles=LIBRARY,
     enums={"category": ("policy", "procedure", "instruction", "standard", "guideline", "contract_clause"),
            "status": ("draft", "active", "retired")})
 
@@ -93,7 +88,7 @@ CONTROLS = Resource("controls", "Kontroller", {
     "method_type": "TEXT NOT NULL DEFAULT 'inspection'", "method": "TEXT", "expected_result": "TEXT",
     "owner": "TEXT", "org_unit_id": fk("org_units", False), "automation": "TEXT",
     "active": "INTEGER NOT NULL DEFAULT 1", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write_roles=LIBRARY, machine="r",
+    module=M, code_prefix="KTL", write_roles=LIBRARY, machine="r",
     enums={"execution_mode": ("manual", "automatic"),
            "nature": ("preventive", "detective", "corrective", "directive", "compensating"),
            "frequency": tuple(FREQUENCY_DAYS), "criticality": ("low", "medium", "high", "critical"),
@@ -117,7 +112,7 @@ AUDITS = Resource("audits", "Denetimler", {
     "lead_auditor": "TEXT", "auditors": "TEXT", "auditees": "TEXT", "status": "TEXT NOT NULL DEFAULT 'planned'",
     "conclusion": "TEXT", "opinion": "TEXT", "revision": "INTEGER NOT NULL DEFAULT 0",
     "plan_captured_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write_roles=ASSURANCE, api=("list", "get"), readonly=("revision", "plan_captured_at"),
+    module=M, code_prefix="DNT", code_yearly=True, write_roles=ASSURANCE, api=("list", "get"), readonly=("revision", "plan_captured_at"),
     enums={"kind": ("internal", "external", "certification", "supplier"),
            "status": ("planned", "in_progress", "completed", "closed", "cancelled"),
            "opinion": ("effective", "partially_effective", "ineffective")})
@@ -136,7 +131,7 @@ EVIDENCE = Resource("evidence", "Kanıtlar", {
     "supplier_id": fk("suppliers", False), "org_unit_id": fk("org_units", False),
     "file_name": "TEXT", "file_size": "INTEGER", "mime_type": "TEXT", "hash_sha256": "TEXT",
     "current_version": "INTEGER", "created_by": "TEXT", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, search=("code", "title"), write_roles=CONTRIBUTORS, machine="r",
+    module=M, code_prefix="KNT", code_yearly=True, search=("code", "title"), write_roles=CONTRIBUTORS, machine="r",
     readonly=("file_name", "file_size", "mime_type", "hash_sha256", "current_version", "created_by"),
     enums={"source": ("manual", "mcp", "system"), "confidentiality": ("internal", "confidential", "restricted"),
            "status": ("current", "expired", "archived")})
@@ -176,7 +171,7 @@ FINDINGS = Resource("findings", "Bulgular", {
     "owner": "TEXT", "due_date": "DATE", "root_cause": "TEXT", "closure_note": "TEXT",
     "recurrence": "INTEGER NOT NULL DEFAULT 1", "last_seen_at": "TIMESTAMP", "closed_at": "TIMESTAMP",
     "created_by": "TEXT", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, search=("code", "title"), write_roles=ASSURANCE,
+    module=M, code_prefix="BLG", code_yearly=True, search=("code", "title"), write_roles=ASSURANCE,
     readonly=("execution_id", "recurrence", "last_seen_at", "closed_at", "created_by"),
     enums={"severity": ("low", "medium", "high", "critical"),
            "status": ("open", "in_progress", "closed", "accepted")})
@@ -188,7 +183,7 @@ ACTIONS = Resource("grc_actions", "Düzeltici Faaliyetler", {
     "status": "TEXT NOT NULL DEFAULT 'open'", "resolution": "TEXT", "verified_by": "TEXT",
     "verification_note": "TEXT", "closed_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL",
     "updated_at": "TIMESTAMP"},
-    module=M, search=("code", "title"), write_roles=CONTRIBUTORS, readonly=("verified_by", "closed_at"),
+    module=M, code_prefix="DOF", code_yearly=True, search=("code", "title"), write_roles=CONTRIBUTORS, readonly=("verified_by", "closed_at"),
     enums={"priority": ("low", "medium", "high", "critical"),
            "status": ("open", "in_progress", "validation", "completed", "cancelled")})
 
@@ -242,7 +237,6 @@ def _evidence_rules(db, data, current, principal):
     if merged.get("reference_url") and not re.match(r"^https?://", merged["reference_url"]):
         raise crud.Invalid("Referans bağlantısı http:// veya https:// ile başlamalı")
     if current is None:
-        data["code"] = data.get("code") or next_code(db, "tdr_evidence", "KNT")
         data.setdefault("created_by", principal.username if principal else "system")
         if principal and principal.role == "MACHINE":
             data["source"] = "mcp"
@@ -262,7 +256,6 @@ def _finding_rules(db, data, current, principal):
             and not merged.get("due_date") and current is not None and "due_date" in data:
         raise crud.Invalid("Yüksek ve kritik bulguda hedef tarih boş bırakılamaz")
     if current is None:
-        data["code"] = data.get("code") or next_code(db, "tdr_findings", "BLG")
         data.setdefault("created_by", principal.username if principal else "system")
         data.setdefault("last_seen_at", utcnow())
         return
@@ -300,7 +293,6 @@ def _action_rules(db, data, current, principal):
         if not merged.get("control_id") and finding["control_id"]:
             data["control_id"] = finding["control_id"]
     if current is None:
-        data["code"] = data.get("code") or next_code(db, "tdr_grc_actions", "DOF")
         if merged.get("status", "open") not in ("open", "in_progress"):
             raise crud.Invalid("Yeni faaliyet açık veya üzerinde çalışılıyor durumunda başlar")
         return
@@ -345,14 +337,6 @@ EVIDENCE.scope = _evidence_scope
 FINDINGS.before_save = _finding_rules
 ACTIONS.before_save = _action_rules
 ACTIONS.scope = _action_scope
-
-
-def next_code(db, table, prefix):
-    year = date.today().year
-    stem = f"{prefix}-{year}-"
-    row = one(db, f"SELECT code FROM {table} WHERE code LIKE ? ORDER BY code DESC LIMIT 1", (stem + "%",))
-    number = int(row["code"].rsplit("-", 1)[1]) + 1 if row and row["code"].rsplit("-", 1)[1].isdigit() else 1
-    return f"{stem}{number:04d}"
 
 
 # ------------------------------------------------------------------ kontrol bağlamı ve eşlemeler
@@ -575,7 +559,7 @@ def record_execution(db, principal, data, source=None):
                 "INSERT INTO tdr_findings (code, title, control_id, execution_id, audit_id, description, severity, "
                 "status, owner, due_date, recurrence, last_seen_at, created_by, created_at) "
                 "VALUES (?,?,?,?,?,?,?,'open',?,?,1,?,?,?)",
-                (next_code(db, "tdr_findings", "BLG"), f"{control['name']} — test başarısız",
+                (crud.next_code(db, FINDINGS), f"{control['name']} — test başarısız",
                  control["id"], execution_id, audit_id, data.get("details") or "", severity, control["owner"],
                  due.isoformat(), now, "system" if source == "system" else principal.username if not machine else "mcp",
                  now)).lastrowid
@@ -984,8 +968,8 @@ def _save_audit(c, audit_id=None):
     if unknown:
         raise crud.Invalid("Geçersiz denetim alanları: " + ", ".join(sorted(unknown)))
     data = crud.clean(body)
-    if not previous and not data.get("code"):
-        data["code"] = next_code(c.db, "tdr_audits", "DNT")
+    if not previous:
+        data["code"] = crud.next_code(c.db, AUDITS)
     crud.validate(AUDITS, data, partial=bool(previous))
     merged = {"status": "planned", "kind": "internal", **(previous or {}), **data}
     if previous and previous["status"] in CLOSED_AUDIT:

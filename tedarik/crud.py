@@ -117,8 +117,30 @@ def get(db, res, record_id):
     return record
 
 
+def next_code(db, res):
+    """K-017: kaynağın bir sonraki kodu (ÖNEK-0001 veya ÖNEK-YIL-0001). Sayaç geri dönmez; ilk kullanımda var olan
+    en büyük numaradan devam eder. Çağıran işlem içinde kilit altında çalışır."""
+    prefix = res.code_prefix + (f"-{date.today().year}" if res.code_yearly else "")
+    db.lock("seq:" + prefix)
+    row = one(db, "SELECT value FROM tdr_sequences WHERE name=?", (prefix,))
+    if row is None:
+        start = 0
+        for r in rows(db, f"SELECT code FROM {res.table} WHERE code LIKE ?", (prefix + "-%",)):
+            tail = str(r["code"])[len(prefix) + 1:]
+            if tail.isdigit():
+                start = max(start, int(tail))
+        value = start + 1
+        db.execute("INSERT INTO tdr_sequences (name, value) VALUES (?,?)", (prefix, value))
+    else:
+        value = row["value"] + 1
+        db.execute("UPDATE tdr_sequences SET value=? WHERE name=?", (value, prefix))
+    return f"{prefix}-{value:04d}"
+
+
 def insert(db, res, payload, principal=None):
     data = clean(payload)
+    if res.code_prefix and not data.get("code"):
+        data["code"] = next_code(db, res)
     validate(res, data)
     if res.before_save:
         res.before_save(db, data, None, principal)

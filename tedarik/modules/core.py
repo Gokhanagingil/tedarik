@@ -34,25 +34,42 @@ def _policy_rules(db, data, current, principal):
 
 POLICIES.before_save = _policy_rules
 
+COMPANIES = Resource("companies", "Şirketler", {
+    "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "kind": "TEXT NOT NULL DEFAULT 'own'",
+    "parent_id": fk("companies", False), "tax_id": "TEXT", "sector": "TEXT", "country": "TEXT",
+    "servicenow_ref": "TEXT", "description": "TEXT", "active": ACTIVE,
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    module=M, write="admin", machine="r", code_prefix="SRK", search=("code", "name", "servicenow_ref"),
+    enums={"kind": ("own", "customer")})     # K-018: riskler şirkete bağlıdır (kendi şirketimiz / müşterimiz)
+
 Resource("org_units", "Birimler", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "parent_id": fk("org_units", False),
-    "manager": "TEXT", "active": ACTIVE}, module=M, write="admin", machine="r")
+    "manager": "TEXT", "active": ACTIVE}, module=M, write="admin", machine="r", code_prefix="BRM",
+    search=("code", "name"))
+
+PROCESSES = Resource("processes", "Süreçler", {
+    "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "process_type": "TEXT NOT NULL DEFAULT 'core'",
+    "parent_id": fk("processes", False), "owner": "TEXT", "org_unit_id": fk("org_units", False),
+    "position": "INTEGER", "inputs": "TEXT", "outputs": "TEXT", "description": "TEXT",
+    "active": ACTIVE},
+    module=M, write="admin", machine="r", code_prefix="SRC", search=("code", "name", "owner"),
+    enums={"process_type": ("management", "core", "support")})   # ISO 9001 4.4 süreç yaklaşımı
 
 Resource("supplier_types", "Tedarikçi Tipleri", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT", "active": ACTIVE},
-    module=M, write="admin", machine="r")
+    module=M, write="admin", machine="r", code_prefix="TIP")
 
 Resource("catalog_items", "Ürün ve Hizmetler", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "kind": "TEXT NOT NULL DEFAULT 'service'",
     "category": "TEXT", "description": "TEXT", "active": ACTIVE},
-    module=M, enums={"kind": ("product", "service")}, machine="r")
+    module=M, enums={"kind": ("product", "service")}, machine="r", code_prefix="URN")
 
 SUPPLIERS = Resource("suppliers", "Tedarikçiler", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "tax_id": "TEXT UNIQUE", "country": "TEXT",
     "city": "TEXT", "website": "TEXT", "status": "TEXT NOT NULL DEFAULT 'active'",
     "tier": "TEXT NOT NULL DEFAULT 'standard'", "segment": "TEXT", "owner": "TEXT", "description": "TEXT",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, search=("code", "name", "tax_id"), machine="r",
+    module=M, search=("code", "name", "tax_id"), machine="r", code_prefix="TED",
     enums={"status": ("prospect", "active", "suspended", "offboarding", "terminated"),
            "tier": ("critical", "important", "standard"),
            "segment": ("strategic", "leverage", "bottleneck", "routine")},
@@ -75,10 +92,11 @@ Resource("source_refs", "Kaynak Sistem Eşlemeleri", {
 ENGAGEMENTS = Resource("engagements", "Angajmanlar", {
     "code": "TEXT NOT NULL UNIQUE", "supplier_id": fk("suppliers"), "catalog_item_id": fk("catalog_items"),
     "org_unit_id": fk("org_units"), "beneficiary": "TEXT NOT NULL DEFAULT 'internal'", "customer_name": "TEXT",
+    "customer_company_id": fk("companies", False), "process_id": fk("processes", False),
     "business_owner": "TEXT", "criticality": "TEXT NOT NULL DEFAULT 'medium'",
     "status": "TEXT NOT NULL DEFAULT 'active'", "start_date": "DATE", "end_date": "DATE", "description": "TEXT",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write="write", search=("code", "description", "customer_name"), machine="r",
+    module=M, write="write", search=("code", "description", "customer_name"), machine="r", code_prefix="ANG",
     enums={"beneficiary": ("internal", "customer"), "criticality": ("critical", "high", "medium", "low"),
            "status": ("planned", "active", "ending", "ended")})
 
@@ -97,7 +115,7 @@ Resource("contracts", "Sözleşme Referansları", {
     "code": "TEXT NOT NULL UNIQUE", "supplier_id": fk("suppliers"), "engagement_id": fk("engagements", False),
     "title": "TEXT NOT NULL", "source_system": "TEXT", "external_id": "TEXT", "start_date": "DATE",
     "end_date": "DATE", "notice_days": "INTEGER", "status": "TEXT NOT NULL DEFAULT 'active'"},
-    module=M, search=("code", "title"), machine="r",
+    module=M, search=("code", "title"), machine="r", code_prefix="SOZ",
     enums={"status": ("draft", "active", "expiring", "expired", "terminated")})
 
 
@@ -209,9 +227,8 @@ def register(app):
     app.route("GET", API + "/reports/usage", usage_report)
 
 
-STARTER_TYPES = (("HW", "Donanım"), ("SW", "Yazılım ve Lisans"), ("CLOUD", "Bulut Hizmeti"),
-                 ("CONSULT", "Danışmanlık"), ("OUTSOURCE", "Dış Kaynak Personel"), ("SUPPORT", "Bakım ve Destek"),
-                 ("TELCO", "Telekom"), ("FACILITY", "Tesis ve Veri Merkezi"))
+STARTER_TYPES = ("Donanım", "Yazılım ve Lisans", "Bulut Hizmeti", "Danışmanlık", "Dış Kaynak Personel",
+                 "Bakım ve Destek", "Telekom", "Tesis ve Veri Merkezi")
 
 
 DEFAULT_POLICIES = (
@@ -227,5 +244,7 @@ def seed(db):
     for code, value, description in DEFAULT_POLICIES:     # öneri; yönetici Politika Parametreleri'nden değiştirir
         db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, json.dumps(value), description))
-    for code, name in STARTER_TYPES:   # başlangıç önerisi; kurumun gerçek tip listesiyle değiştirilecek
-        db.execute("INSERT INTO tdr_supplier_types (code, name) VALUES (?,?) ON CONFLICT DO NOTHING", (code, name))
+    types = RESOURCES["supplier_types"]
+    for name in STARTER_TYPES:   # başlangıç önerisi; kurumun gerçek tip listesiyle değiştirilecek; adla tekil
+        if not one(db, "SELECT id FROM tdr_supplier_types WHERE name=?", (name,)):
+            crud.insert(db, types, {"name": name})

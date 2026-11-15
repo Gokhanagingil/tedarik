@@ -48,14 +48,15 @@ ALIASES = {
 }
 
 # Genel içe aktarma: kaynak -> doğal anahtar alanları. İlişki alanları hedef kaydın koduyla verilir.
+# Kodlar sunucuda üretildiği için (K-017) anahtar doğal alanlardır; dosyada kod varsa var olan kaydı bulmak için okunur.
 IMPORTABLE = OrderedDict([
-    ("org_units", ("code",)),
-    ("supplier_types", ("code",)),
-    ("catalog_items", ("code",)),
+    ("org_units", ("name",)),
+    ("supplier_types", ("name",)),
+    ("catalog_items", ("name",)),
     ("suppliers", ("name",)),
-    ("engagements", ("code",)),
-    ("contracts", ("code",)),
-    ("sla_definitions", ("engagement_id", "code")),
+    ("engagements", ("supplier_id", "catalog_item_id", "org_unit_id")),
+    ("contracts", ("supplier_id", "title")),
+    ("sla_definitions", ("engagement_id", "name")),
 ])
 EXPORT_ORDER = ("org_units", "supplier_types", "catalog_items", "suppliers", "supplier_contacts", "source_refs",
                 "engagements", "responsibilities", "contracts", "sla_definitions", "sla_measurements",
@@ -145,7 +146,7 @@ def header_label(res, name):
     label = field(name, res.name)
     target = _ref_target(res, name)
     if target is not None and "code" in target.fields:
-        label += " (kod)"
+        label += " (kod veya ad)"
     return label
 
 
@@ -171,10 +172,13 @@ def convert(db, res, name, text):
     target = _ref_target(res, name)
     if target is not None:
         row = one(db, f"SELECT id FROM {target.table} WHERE code=?", (text,)) if "code" in target.fields else None
+        for label_field in ("name", "title"):          # kod yerine ad da kabul edilir (ör. birim adı)
+            if not row and label_field in target.fields:
+                row = one(db, f"SELECT id FROM {target.table} WHERE tdr_fold({label_field})=?", (fold_letters(text),))
         if not row and text.isdigit():
             row = one(db, f"SELECT id FROM {target.table} WHERE id=?", (int(text),))
         if not row:
-            raise crud.Invalid(f"{field(name)}: '{text}' kodlu kayıt bulunamadı ({target.label})")
+            raise crud.Invalid(f"{field(name)}: '{text}' kodlu veya adlı kayıt bulunamadı ({target.label})")
         return row["id"]
     if name in res.enums:
         allowed = res.enums[name]
@@ -307,26 +311,28 @@ def import_generic(c, res, key):
                            + ". Şablonu indirip kullanın (Aktarım → Şablon).")
     c.db.lock("import:" + res.name)
     seen = set()
+    code_header = next((h for h, n in mapping.items() if n == "code"), None)
 
     def handle(record, state):
         state["values"] = values = _row_values(c.db, res, mapping, record)
-        natural = tuple(values.get(k) for k in key)
+        code = str(record.get(code_header) or "").strip() if code_header else ""
+        current = one(c.db, f"SELECT * FROM {res.table} WHERE code=?", (code,)) if code else None
+        if code and current is None:
+            raise crud.Invalid(f"'{code}' kodlu kayıt yok; yeni kayıtta kod boş bırakılır (kod sunucuda üretilir)")
+        natural = tuple(values.get(k) if values.get(k) is not None else (current or {}).get(k) for k in key)
         if any(v in (None, "") for v in natural):
             raise crud.Invalid("Anahtar alan boş: " + ", ".join(field(k) for k in key))
         if natural in seen:
             raise crud.Invalid("Bu anahtar dosyada daha önce geçti")
         seen.add(natural)
-        current = one(c.db, f"SELECT * FROM {res.table} WHERE " + " AND ".join(f"{k}=?" for k in key), natural)
+        if current is None:
+            current = one(c.db, f"SELECT * FROM {res.table} WHERE " + " AND ".join(f"{k}=?" for k in key), natural)
         return _apply(c, res, values, current, dry_run)
 
     batch_id = _batch(c, res.name, "manual", filename, dry_run)
     summary, results = _run_rows(c, records, handle)
     summary["unmapped_columns"] = [h for h in headers if h not in mapping]
     return _finish(c, batch_id, res.name, summary, results, dry_run)
-
-
-def _next_code(db):
-    return f"TDR-{one(db, 'SELECT COALESCE(MAX(id), 0) + 1 AS n FROM tdr_suppliers')['n']:05d}"
 
 
 def import_suppliers(c):
@@ -343,6 +349,7 @@ def import_suppliers(c):
         raise crud.Invalid("Tedarikçi adı sütunu bulunamadı. Tanınan başlıklar: Ad, " + ", ".join(ALIASES["name"]))
     c.db.lock("import:suppliers")
     known = {norm_name(s["name"]): s["id"] for s in rows(c.db, "SELECT id, name FROM tdr_suppliers")}
+    code_header = next((h for h, n in mapping.items() if n == "code"), None)
 
     def handle(record, state):
         external = str(record.get(external_header) or "").strip() or None if external_header else None
@@ -354,18 +361,16 @@ def import_suppliers(c):
         ref = one(c.db, "SELECT supplier_id FROM tdr_source_refs WHERE source_system=? AND external_id=?",
                   (source, external)) if external else None
         match = ref["supplier_id"] if ref else None
-        for key in ("code", "tax_id"):
-            if match is None and values.get(key):
-                found = one(c.db, f"SELECT id FROM tdr_suppliers WHERE {key}=?", (values[key],))
+        code = str(record.get(code_header) or "").strip() if code_header else ""
+        for key, value in (("code", code), ("tax_id", values.get("tax_id"))):
+            if match is None and value:
+                found = one(c.db, f"SELECT id FROM tdr_suppliers WHERE {key}=?", (value,))
                 match = found["id"] if found else None
         if match is None and norm_name(values["name"]) in known:
             return "review", known[norm_name(values["name"])], \
                 "Aynı ada sahip tedarikçi var; VKN veya harici kimlikle doğrulayın"
         current = crud.get(c.db, suppliers, match) if match else None
-        if current is None and not dry_run:
-            values.setdefault("code", _next_code(c.db))
-        action, target, message = _apply(c, suppliers, values if current or not dry_run
-                                         else {**values, "code": values.get("code") or "TDR-YENI"}, current, dry_run)
+        action, target, message = _apply(c, suppliers, values, current, dry_run)
         if action == "create" and target:
             known[norm_name(values["name"])] = target
         if external and target and not dry_run:
@@ -464,6 +469,11 @@ def template(name):
         header, notes = [], [["Sütun", "Zorunlu", "Açıklama"]]
         for f in template_columns(name):
             needed = f in key or (f in res.required and f != "code")
+            if f == "code" and res.code_prefix:
+                label, hint = header_label(res, f), "Yalnızca var olan kaydı güncellemek için; yeni kayıtta boş bırakın"
+                header.append(label)
+                notes.append([label, "Hayır", hint])
+                continue
             if f == "external_id":
                 label, hint = "Harici kimlik", "Kaynak sistemdeki tedarikçi numarası (SAP LIFNR vb.); tekrar " \
                                                "aktarımda eşleştirme için"
@@ -475,9 +485,7 @@ def template(name):
                 if f in res.enums:
                     hint = "Şunlardan biri: " + ", ".join(choice(name, f, v) for v in res.enums[f])
                 elif _ref_target(res, f) is not None:
-                    hint = f"{_ref_target(res, f).label} kaydının kodu"
-                if name == "suppliers" and f == "code":
-                    hint = "Boş bırakılırsa TDR-00001 biçiminde üretilir"
+                    hint = f"{_ref_target(res, f).label} kaydının kodu veya adı"
             header.append(label + (" *" if needed else ""))
             notes.append([label, "Evet" if needed else "Hayır", hint])
         notes += [[], ["Var olan kayıtta yalnızca boş alanlar doldurulur; portalda girilmiş değer korunur.", "", ""],

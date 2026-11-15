@@ -4,14 +4,15 @@
 
 ## Bağlam
 
-Tedarikçi yönetimi portalı. Kardeş uygulama KS GRC (`../control`, GitHub: Gokhanagingil/control). İki uygulama ileride birleşecek; `docs/UYUM_SOZLESMESI.md` bağlayıcıdır. Bir kuralı çiğnemen gerekiyorsa önce `docs/KARARLAR.md` içine yeni karar yaz.
+GRC platformu (adı sonra belirlenecek): tedarikçi yönetimi, kurumsal risk (ISO 31000), uyum ve denetim, iş sürekliliği (ISO 22301), doküman yönetimi (ISO 9001), CMDB bağlantısı. KS GRC (`../control`) artık kullanılmıyor (K-016); `docs/UYUM_SOZLESMESI.md` tarihsel kayıttır. Bir kuralı çiğnemen gerekiyorsa önce `docs/KARARLAR.md` içine yeni karar yaz.
 
 ## Kurallar
 
 - Python 3.12. Bağımlılıklar `requirements.txt` içinde sürüm ve hashle sabit (PostgreSQL sürücüsü, K-011). Yeni bağımlılık eklemeden önce sor. SQLite ile çalışma ek paket istemez; bunu koru.
 - Kod iki motorda çalışır (PostgreSQL üretim, SQLite geliştirme): SQL'de parametre `?`; `date('now')` yerine `db.today()`; `INSERT OR IGNORE` yerine `ON CONFLICT DO NOTHING`; `GROUP_CONCAT` yerine `db.group_concat()`; aramada `tdr_fold()`; mantıksal toplamda `SUM(CASE WHEN ...)`; kilit için `db.lock(ad)`; `PRAGMA` ve `sqlite3` yalnızca `db.py` ve `migrate.py` içinde. Tarih alanı `DATE`, zaman alanı `TIMESTAMP`, para `DECIMAL`.
 - Değiştirilemez kayıt (iz, değerlendirme, karar, geçmiş) `Resource(..., immutable=True)` ile tanımlanır; tetikleyiciyi `migrate.py` kurar.
-- KS GRC'de karşılığı olan parçayı yeniden yazma; `tedarik/vendor/` altına aynen kopyala, kaynak commit kimliğini dosya başına yaz. Uyarlama sarmalayıcıda (`session.py`); kaçınılmaz yama `vendor/PATCHES.md` içinde ve `[tedarik yaması K-0xx]` işaretiyle.
+- `tedarik/vendor/` altındaki kopya dosyalar değiştirilmez; uyarlama sarmalayıcıda (`session.py`); kaçınılmaz yama `vendor/PATCHES.md` içinde ve `[tedarik yaması K-0xx]` işaretiyle.
+- Kayıt kodları sunucuda üretilir (`Resource(code_prefix=...)`, K-017); API veya arayüzden kod alınmaz.
 - Birim Kullanıcısının yazabildiği her yeni kaynak `Resource.scope` tanımlar; özel uç noktada `crud.check_scope` çağrılır.
 - Tablolar `tdr_` önekli, uç noktalar `/api/tdr` altında. Silme uç noktası ekleme.
 - Yeni tablo `Resource` tanımıyla, yeni kural `before_save` kancasıyla veya iş akışı korumasıyla eklenir. Süreç kuralını koda gömme; `policies` tablosuna koy.

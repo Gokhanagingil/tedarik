@@ -25,6 +25,9 @@ Resource("idempotency", "Tekrar Koruması", {
     "response_json": "TEXT NOT NULL", "created_at": "TIMESTAMP NOT NULL",
 }, module="core", api=(), search=(), immutable=True)
 
+Resource("sequences", "Kod Sayaçları", {"name": "TEXT NOT NULL UNIQUE", "value": "INTEGER NOT NULL"},
+         module="core", api=(), search=())   # K-017: kayıt kodu sayaçları
+
 # Parola değişimi beklenirken yalnızca bu yollar açıktır (KS GRC `authorized`).
 PASSWORD_CHANGE_ROUTES = {"/api/me", "/api/change-password", "/api/logout", "/change-password"}
 

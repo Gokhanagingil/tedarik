@@ -19,14 +19,15 @@ class GrcBase(Base):
         self.std = self.ok("POST", "/standards", {"code": "ISO 27001", "name": "Bilgi güvenliği", "version": "2022"})["id"]
         self.cl1 = self.ok("POST", "/clauses", {"standard_id": self.std, "code": "A.5.19", "title": "Tedarikçi ilişkilerinde bilgi güvenliği"})["id"]
         self.cl2 = self.ok("POST", "/clauses", {"standard_id": self.std, "code": "A.5.22", "title": "Tedarikçi hizmetlerinin izlenmesi"})["id"]
-        self.ctl = self.ok("POST", "/controls", {"code": "C-01", "name": "Kritik tedarikçi değerlendirmesi",
+        self.ctl = self.ok("POST", "/controls", {"name": "Kritik tedarikçi değerlendirmesi",
                                                  "frequency": "quarterly", "criticality": "high", "owner": "ayse"})["id"]
-        self.auto = self.ok("POST", "/controls", {"code": "C-02", "name": "Tedarikçi sahibi atanmış",
+        self.auto = self.ok("POST", "/controls", {"name": "Tedarikçi sahibi atanmış",
                                                   "execution_mode": "automatic", "automation": "supplier.owner",
                                                   "frequency": "daily"})["id"]
         self.ok("POST", f"/controls/{self.ctl}/links", {"clauses": [self.cl1, self.cl2]})
         self.ok("POST", f"/controls/{self.auto}/links", {"clauses": [self.cl2]})
         self.auditor = self.make(role="AUDITOR", user="denetci")
+        self.auto_code = self.ok("GET", f"/controls/{self.auto}")["code"]
 
     def execute(self, body, app=None, **kw):
         return self.call("POST", "/executions", body, app=app or self.auditor, **kw)
@@ -36,7 +37,7 @@ class Cerceve(GrcBase):
     def test_kutuphane_yalnizca_yonetici_yazar(self):
         for role in ("AUDITOR", "SUPPLIER_MANAGER", "UNIT_USER"):
             other = self.make(role=role, user=role.lower())
-            self.assertEqual(self.call("POST", "/controls", {"code": "X", "name": "x"}, app=other)[0], 403, role)
+            self.assertEqual(self.call("POST", "/controls", {"name": "x"}, app=other)[0], 403, role)
         meta = self.ok("GET", "/metadata", app=self.auditor)["resources"]
         self.assertFalse(meta["controls"]["can_write"])
         self.assertTrue(meta["findings"]["can_write"])
@@ -54,14 +55,14 @@ class Cerceve(GrcBase):
         self.ok("PATCH", f"/clauses/{self.cl1}", {"applicable": 0, "justification": "Kapsam dışı hizmet"})
 
     def test_kurumsal_risk_tedarikcisiz_acilir(self):
-        self.assertEqual(self.call("POST", "/supplier_risks", {"code": "KR1", "title": "Veri merkezi kesintisi",
+        self.assertEqual(self.call("POST", "/supplier_risks", {"title": "Veri merkezi kesintisi",
                                                                 "category": "operational", "owner": "x",
                                                                 "appetite": 8})[0], 400)
-        risk = self.ok("POST", "/supplier_risks", {"code": "KR1", "title": "Veri merkezi kesintisi",
+        risk = self.ok("POST", "/supplier_risks", {"title": "Veri merkezi kesintisi",
                                                     "category": "operational", "owner": "x", "appetite": 8,
                                                     "entity_name": "Birincil veri merkezi"})["id"]
         context = self.ok("POST", f"/controls/{self.ctl}/links", {"risks": [risk]})
-        self.assertEqual(context["risks"][0]["code"], "KR1")
+        self.assertEqual(context["risks"][0]["id"], risk)
 
 
 class Calismalar(GrcBase):
@@ -106,7 +107,7 @@ class Calismalar(GrcBase):
         status, again = self.call("POST", "/executions", body, headers=mcp)
         self.assertEqual((status, again["execution_id"], again["replayed"]), (200, first["execution_id"], True))
         self.assertEqual(self.call("POST", "/executions", {**body, "status": "pass"}, headers=mcp)[0], 409)
-        self.assertEqual(self.call("POST", "/controls", {"code": "Z", "name": "z"}, headers=mcp)[0], 403)
+        self.assertEqual(self.call("POST", "/controls", {"name": "z"}, headers=mcp)[0], 403)
         # aynı kontrolde açık MCP bulgusu varken yeni başarısızlık tekrar sayar
         second = self.call("POST", "/executions", {**body, "idempotency_key": "mcp-ctl-2-2026-11-16"}, headers=mcp)[1]
         self.assertEqual(second["finding_id"], first["finding_id"])
@@ -115,11 +116,11 @@ class Calismalar(GrcBase):
 
 class IcOtomatik(GrcBase):
     def test_portal_verisinden_kontrol_calisir(self):
-        self.ok("POST", "/suppliers", {"code": "S1", "name": "Sahipsiz A.Ş.", "tier": "critical"})
+        self.ok("POST", "/suppliers", {"name": "Sahipsiz A.Ş.", "tier": "critical"})
         result = self.ok("POST", f"/controls/{self.auto}/run", {}, app=self.auditor)
         run = self.ok("GET", f"/executions/{result['execution_id']}/context")
         self.assertEqual((run["status"], run["source"]), ("fail", "system"))
-        self.assertEqual(run["provenance"]["items"][0]["code"], "S1")
+        self.assertEqual(run["provenance"]["items"][0]["name"], "Sahipsiz A.Ş.")
         self.assertEqual(len(run["provenance"]["result_sha256"]), 64)
         again = self.ok("POST", f"/controls/{self.auto}/run", {}, app=self.auditor)
         self.assertEqual((again["finding_id"], again["finding_repeated"]), (result["finding_id"], True))
@@ -130,11 +131,11 @@ class IcOtomatik(GrcBase):
         self.assertEqual(self.ok("GET", f"/controls/{self.auto}/context")["latest"]["status"], "pass")
         self.assertEqual(self.call("POST", f"/controls/{self.ctl}/run", {}, app=self.auditor)[0], 400)
         results = self.ok("POST", "/grc/run-automatic", {})["results"]
-        self.assertEqual([r["code"] for r in results], ["C-02"])
+        self.assertEqual([r["code"] for r in results], [self.auto_code])
 
     def test_kapali_modul_belirsiz_sonuc_verir(self):
         app = self.make(modules="core,risks,grc")
-        ctl = self.ok("POST", "/controls", {"code": "C-09", "name": "SLA", "execution_mode": "automatic",
+        ctl = self.ok("POST", "/controls", {"name": "SLA", "execution_mode": "automatic",
                                             "automation": "supplier.sla"}, app=app)["id"]
         result = self.ok("POST", f"/controls/{ctl}/run", {}, app=app)
         run = self.ok("GET", f"/executions/{result['execution_id']}/context", app=app)
@@ -150,7 +151,7 @@ class Denetimler(GrcBase):
     def test_yasam_dongusu_plan_dondurma_ve_kapsam(self):
         audit = self.audit()
         self.assertTrue(audit["code"].startswith("DNT-"))
-        self.assertEqual({c["code"] for c in audit["controls"]}, {"C-01", "C-02"})
+        self.assertEqual({c["id"] for c in audit["controls"]}, {self.ctl, self.auto})
         aid, rev = audit["id"], audit["revision"]
         self.assertEqual(self.call("PATCH", f"/audits/{aid}", {"status": "in_progress"}, app=self.auditor)[0], 400)
         self.ok("PATCH", f"/audits/{aid}", {"status": "in_progress", "actual_start": "2026-10-02"}, app=self.auditor)
@@ -205,14 +206,14 @@ class Kanitlar(GrcBase):
         self.assertEqual((run["evidence"][0]["version"], run["evidence"][0]["sha256"]), (1, first["sha256"]))
         context = self.ok("GET", f"/evidence/{eid}/context")
         self.assertEqual([f["version"] for f in context["files"]], [2, 1])
-        self.assertEqual(context["controls"][0]["code"], "C-01")
+        self.assertEqual(context["controls"][0]["id"], self.ctl)
         with self.db() as db, self.assertRaises(Exception):
             db.execute("UPDATE tdr_evidence_blobs SET content=? WHERE file_id=1", (b"x",))
         self.assertEqual(self.call("GET", f"/evidence/{eid}/files/1", headers={"X-API-Key": KEY})[0], 403)
 
     def test_birim_kullanicisi_kendi_birimine_kanit_yukler(self):
-        unit = self.ok("POST", "/org_units", {"code": "BT", "name": "BT"})["id"]
-        other = self.ok("POST", "/org_units", {"code": "IK", "name": "İK"})["id"]
+        unit = self.ok("POST", "/org_units", {"name": "BT"})["id"]
+        other = self.ok("POST", "/org_units", {"name": "İK"})["id"]
         user = self.make(role="UNIT_USER", user="birim", units=str(unit))
         body = {"title": "Erişim gözden geçirme", "file_name": "liste.csv", "content_base64": b64(b"kullanici,yetki\n")}
         self.assertEqual(self.call("POST", "/evidence/upload", {**body, "org_unit_id": other}, app=user)[0], 403)
@@ -223,7 +224,7 @@ class BulguVeFaaliyet(GrcBase):
     def test_dof_dogrulama_ayriligi_ve_bulgu_kapanisi(self):
         finding = self.execute({"control_id": self.ctl, "status": "fail", "details": "Değerlendirme yok"})[1]["finding_id"]
         owner = self.make(role="SUPPLIER_MANAGER", user="ayse")
-        action = self.ok("POST", "/grc_actions", {"code": "DOF-1", "title": "Değerlendirmeleri tamamla", "finding_id": finding,
+        action = self.ok("POST", "/grc_actions", {"title": "Değerlendirmeleri tamamla", "finding_id": finding,
                                                   "owner": "ayse", "due_date": "2026-12-31"}, app=owner)["id"]
         self.assertEqual(self.ok("GET", f"/grc_actions/{action}")["control_id"], self.ctl)
         self.assertEqual(self.call("PATCH", f"/findings/{finding}", {"status": "closed", "closure_note": "Bitti"},
@@ -242,7 +243,7 @@ class BulguVeFaaliyet(GrcBase):
         closed = self.ok("PATCH", f"/findings/{finding}", {"status": "closed", "closure_note": "Faaliyet doğrulandı"},
                          app=self.auditor)
         self.assertIsNotNone(closed["closed_at"])
-        self.assertEqual(self.call("POST", "/grc_actions", {"code": "DOF-2", "title": "x", "finding_id": finding,
+        self.assertEqual(self.call("POST", "/grc_actions", {"title": "x", "finding_id": finding,
                                                             "owner": "a", "due_date": "2026-12-31"})[0], 409)
 
     def test_bulgu_kabulu_yalnizca_yonetici(self):

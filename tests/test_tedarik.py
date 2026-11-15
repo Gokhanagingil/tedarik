@@ -67,12 +67,12 @@ class Base(unittest.TestCase):
 
     def base_data(self):
         """Bir birim, bir hizmet, bir tedarikçi ve bir angajman."""
-        unit = self.ok("POST", "/org_units", {"code": "BT", "name": "Bilgi Teknolojileri"})["id"]
-        item = self.ok("POST", "/catalog_items", {"code": "DC-HOST", "name": "Veri Merkezi Barındırma"})["id"]
-        supplier = self.ok("POST", "/suppliers", {"code": "S1", "name": "Örnek Bilişim A.Ş.",
+        unit = self.ok("POST", "/org_units", {"name": "Bilgi Teknolojileri"})["id"]
+        item = self.ok("POST", "/catalog_items", {"name": "Veri Merkezi Barındırma"})["id"]
+        supplier = self.ok("POST", "/suppliers", {"name": "Örnek Bilişim A.Ş.",
                                                   "tax_id": "1234567890", "tier": "critical"})["id"]
         engagement = self.ok("POST", "/engagements", {
-            "code": "E1", "supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit,
+            "supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit,
             "business_owner": "ayse"})["id"]
         return unit, item, supplier, engagement
 
@@ -90,19 +90,19 @@ class Guvenlik(Base):
         self.base_data()
         viewer = self.make(role="VIEWER")
         self.assertEqual(self.call("GET", "/suppliers", app=viewer)[0], 200)
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "X", "name": "X"}, app=viewer)[0], 403)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "X"}, app=viewer)[0], 403)
         self.assertEqual(self.call("GET", "/audit_log", app=viewer)[0], 403)
         unit_user = self.make(role="UNIT_USER", units="1")
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "X", "name": "X"}, app=unit_user)[0], 403)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "X"}, app=unit_user)[0], 403)
         self.assertEqual(self.call("PATCH", "/engagements/1", {"business_owner": "can"}, app=unit_user)[0], 200)
 
     def test_mcp_anahtari_en_az_yetki(self):
         _, _, _, engagement = self.base_data()
-        sla = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "code": "UP", "name": "Erişilebilirlik",
+        sla = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "name": "Erişilebilirlik",
                                                    "target_value": 99.5})["id"]
         mcp = {"X-API-Key": KEY}
         self.assertEqual(self.call("GET", "/suppliers", headers=mcp)[0], 200)
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "X", "name": "X"}, headers=mcp)[0], 403)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "X"}, headers=mcp)[0], 403)
         self.assertEqual(self.call("GET", "/export/suppliers", headers=mcp)[0], 403)
         body = {"sla_id": sla, "period_start": "2026-10-01", "actual_value": 99.9}
         self.assertEqual(self.call("POST", "/sla_measurements", body, headers=mcp)[0], 403)   # source=mcp yok
@@ -114,23 +114,23 @@ class Guvenlik(Base):
 
     def test_farkli_kokenden_degisiklik_reddedilir(self):
         headers = {"Origin": "http://kotu.example", "Host": "127.0.0.1:8090"}
-        self.assertEqual(self.call("POST", "/org_units", {"code": "A", "name": "A"}, headers=headers)[0], 403)
+        self.assertEqual(self.call("POST", "/org_units", {"name": "A"}, headers=headers)[0], 403)
 
     def test_tekrar_korumasi(self):
-        body = {"code": "A", "name": "A", "idempotency_key": "istek-0001"}
+        body = {"name": "A", "idempotency_key": "istek-0001"}
         first = self.call("POST", "/org_units", body)
         again = self.call("POST", "/org_units", dict(body))
         self.assertEqual((first[0], again[0]), (201, 200))
         self.assertTrue(again[1]["replayed"])
         self.assertEqual(again[1]["id"], first[1]["id"])
-        changed = self.call("POST", "/org_units", {"code": "B", "name": "B", "idempotency_key": "istek-0001"})
+        changed = self.call("POST", "/org_units", {"name": "B", "idempotency_key": "istek-0001"})
         self.assertEqual(changed[0], 409)
         for bad in ("kisa", "bosluk içeren anahtar", "x" * 161):
-            self.assertEqual(self.call("POST", "/org_units", {"code": "C", "name": "C", "idempotency_key": bad})[0], 400)
+            self.assertEqual(self.call("POST", "/org_units", {"name": "C", "idempotency_key": bad})[0], 400)
 
     def test_eszamanli_tekrarlar_tek_kayit_uretir(self):
         from concurrent.futures import ThreadPoolExecutor
-        body = {"code": "P", "name": "Paralel", "idempotency_key": "paralel-0001"}
+        body = {"name": "Paralel", "idempotency_key": "paralel-0001"}
         with ThreadPoolExecutor(8) as pool:
             results = list(pool.map(lambda _: self.call("POST", "/org_units", dict(body)), range(8)))
         self.assertEqual(sorted(r[0] for r in results), [200] * 7 + [201])
@@ -152,12 +152,12 @@ class Guvenlik(Base):
         headers = Message()
         headers["Host"] = "127.0.0.1:8090"
         headers["Origin"] = "http://127.0.0.1:8090"
-        self.assertEqual(self.call("POST", "/org_units", {"code": "A", "name": "A"}, headers=headers)[0], 201)
+        self.assertEqual(self.call("POST", "/org_units", {"name": "A"}, headers=headers)[0], 201)
         headers["Origin"] = "http://127.0.0.1:8090"
-        self.assertEqual(self.call("POST", "/org_units", {"code": "B", "name": "B"}, headers=headers)[0], 403)
+        self.assertEqual(self.call("POST", "/org_units", {"name": "B"}, headers=headers)[0], 403)
 
     def test_denetim_izi_ks_grc_alanlari(self):
-        self.ok("POST", "/org_units", {"code": "A", "name": "A"})
+        self.ok("POST", "/org_units", {"name": "A"})
         entry = self.ok("GET", "/audit_log")[0]
         self.assertEqual({k: entry[k] for k in ("actor", "method", "object_type", "object_id")},
                          {"actor": "dev", "method": "CREATE", "object_type": "org_units", "object_id": "1"})
@@ -184,7 +184,7 @@ class Veritabani(Base):
 
     def test_tarih_ve_zaman_dogrulanir_ve_utc_ye_cevrilir(self):
         unit, item, supplier, engagement = self.base_data()
-        body = {"code": "E9", "supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit}
+        body = {"supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit}
         for bad in ("2026-13-01", "13.11.2026", "2026-2-1", 20261113):
             self.assertEqual(self.call("POST", "/engagements", {**body, "start_date": bad})[0], 400, bad)
         self.ok("POST", "/engagements", {**body, "start_date": "2026-11-13"})
@@ -192,22 +192,24 @@ class Veritabani(Base):
         self.assertEqual(self.call("POST", "/performance_events", {**event, "occurred_at": "2026-11-13T12:00"})[0], 400)
         made = self.ok("POST", "/performance_events", {**event, "occurred_at": "2026-11-13T12:00:00+03:00"})
         self.assertEqual(self.ok("GET", f"/performance_events/{made['id']}")["occurred_at"], "2026-11-13T09:00:00+00:00")
-        self.assertEqual(self.call("POST", "/suppliers", {"code": 5, "name": "Sayı kodlu"})[0], 400)
+        self.assertEqual(self.call("POST", "/suppliers", {"code": "S-9", "name": "Kod veren"}),
+                         (400, {"error": "Bu alanlar sunucu tarafından yazılır: code"}))      # K-017
         self.assertEqual(self.call("GET", "/suppliers?limit=x")[0], 400)
 
     def test_turkce_arama_iki_motorda_ayni(self):
-        self.ok("POST", "/suppliers", {"code": "S1", "name": "Örnek Bilişim A.Ş."})
-        self.ok("POST", "/suppliers", {"code": "S2", "name": "İZMİR ÇÖZÜM LTD"})
-        self.ok("POST", "/suppliers", {"code": "S3", "name": "Yüzde%50 Ticaret"})
-        for query, expected in (("örnek", ["S1"]), ("ÖRNEK", ["S1"]), ("ornek bilisim", ["S1"]),
-                                ("izmir", ["S2"]), ("çözüm", ["S2"]), ("%", ["S3"]), ("_", [])):
+        self.ok("POST", "/suppliers", {"name": "Örnek Bilişim A.Ş."})
+        self.ok("POST", "/suppliers", {"name": "İZMİR ÇÖZÜM LTD"})
+        self.ok("POST", "/suppliers", {"name": "Yüzde%50 Ticaret"})
+        for query, expected in (("örnek", ["Örnek Bilişim A.Ş."]), ("ÖRNEK", ["Örnek Bilişim A.Ş."]),
+                                ("ornek bilisim", ["Örnek Bilişim A.Ş."]), ("izmir", ["İZMİR ÇÖZÜM LTD"]),
+                                ("çözüm", ["İZMİR ÇÖZÜM LTD"]), ("%", ["Yüzde%50 Ticaret"]), ("_", [])):
             from urllib.parse import quote
-            found = [r["code"] for r in self.ok("GET", "/suppliers?q=" + quote(query))]
+            found = [r["name"] for r in self.ok("GET", "/suppliers?q=" + quote(query))]
             self.assertEqual(found, expected, query)
 
     def test_degismez_tablolar_veritabaninda_korunur(self):
         from tedarik.db import IntegrityError
-        self.ok("POST", "/org_units", {"code": "A", "name": "A"})
+        self.ok("POST", "/org_units", {"name": "A"})
         for sql in ("UPDATE tdr_audit_log SET actor='baskasi'", "DELETE FROM tdr_audit_log"):
             with self.assertRaises(IntegrityError):
                 with self.db() as db:
@@ -219,7 +221,7 @@ class Veritabani(Base):
         from tedarik.schema import RESOURCES
         suppliers = RESOURCES["suppliers"]
         migrate.sync(self.app.database, self.app.config.modules)          # tekrar çalıştırmak zararsız
-        self.ok("POST", "/suppliers", {"code": "S1", "name": "Önce"})
+        self.ok("POST", "/suppliers", {"name": "Önce"})
         original = dict(suppliers.fields), dict(suppliers.columns)
         self.addCleanup(lambda: (suppliers.fields.clear(), suppliers.fields.update(original[0]),
                                  suppliers.columns.clear(), suppliers.columns.update(original[1])))
@@ -260,11 +262,11 @@ class Arayuz(Base):
 
     def test_aralik_filtresi_ve_siralama(self):
         for code, end in (("K1", "2026-01-10"), ("K2", "2026-03-01"), ("K3", "2026-06-30")):
-            sid = self.ok("POST", "/suppliers", {"code": "S" + code, "name": code})["id"]
-            self.ok("POST", "/contracts", {"code": code, "supplier_id": sid, "title": code, "end_date": end})
+            sid = self.ok("POST", "/suppliers", {"name": "S" + code})["id"]
+            self.ok("POST", "/contracts", {"supplier_id": sid, "title": code, "end_date": end})
         found = self.ok("GET", "/contracts?end_date__gte=2026-02-01&end_date__lte=2026-06-30&order=end_date")
-        self.assertEqual([c["code"] for c in found], ["K2", "K3"])
-        self.assertEqual([s["code"] for s in self.ok("GET", "/suppliers?owner__null=1&order=-code")][:1], ["SK3"])
+        self.assertEqual([c["title"] for c in found], ["K2", "K3"])
+        self.assertEqual([s["name"] for s in self.ok("GET", "/suppliers?owner__null=1&order=-code")][:1], ["SK3"])
         self.assertEqual(self.call("GET", "/contracts?order=yok")[0], 400)
 
 
@@ -272,17 +274,17 @@ class Takvim(Base):
     def test_kritiklige_gore_degerlendirme_ve_anket_takvimi(self):
         from datetime import date, timedelta
         old = (date.today() - timedelta(days=400)).isoformat()
-        critical = self.ok("POST", "/suppliers", {"code": "K", "name": "Kritik A.Ş.", "tier": "critical"})["id"]
-        standard = self.ok("POST", "/suppliers", {"code": "S", "name": "Standart Ltd.", "tier": "standard"})["id"]
+        critical = self.ok("POST", "/suppliers", {"name": "Kritik A.Ş.", "tier": "critical"})["id"]
+        standard = self.ok("POST", "/suppliers", {"name": "Standart Ltd.", "tier": "standard"})["id"]
         self.ok("POST", "/performance_reviews", {"supplier_id": critical, "period_start": old, "period_end": old})
         with self.db() as db:          # standart tedarikçi 2 yıl önce açılmış olsun
             db.execute("UPDATE tdr_suppliers SET created_at=? WHERE id=?", ((date.today() - timedelta(days=800)).isoformat()
                                                                            + "T00:00:00+00:00", standard))
         due = self.ok("GET", "/schedule")
-        overdue = {(i["code"], i["kind"]) for i in due["items"] if i["state"] == "overdue"}
-        self.assertIn(("K", "review"), overdue)               # 6 ayda bir; son değerlendirme 400 gün önce
-        self.assertIn(("S", "review"), overdue)               # hiç değerlendirilmedi, 24 ay geçti
-        self.assertTrue(next(i for i in due["items"] if i["code"] == "S")["never"])
+        overdue = {(i["supplier_id"], i["kind"]) for i in due["items"] if i["state"] == "overdue"}
+        self.assertIn((critical, "review"), overdue)          # 6 ayda bir; son değerlendirme 400 gün önce
+        self.assertIn((standard, "review"), overdue)          # hiç değerlendirilmedi, 24 ay geçti
+        self.assertTrue(next(i for i in due["items"] if i["supplier_id"] == standard)["never"])
         self.assertEqual(due["summary"]["review_overdue"], 2)
         policy = next(p for p in self.ok("GET", "/policies") if p["code"] == "review.cadence_months")
         self.ok("PATCH", f"/policies/{policy['id']}", {"value_json": '{"critical": 24, "important": 24, "standard": 36}'})
@@ -295,16 +297,16 @@ class Takvim(Base):
 class Cekirdek(Base):
     def test_dogrulama(self):
         self.base_data()
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "S2", "name": "Y", "bilinmeyen": 1})[0], 400)
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "S2", "name": "Y", "tier": "çok"})[0], 400)
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "S2", "name": "Y", "created_at": "x"})[0], 400)
-        self.assertEqual(self.call("POST", "/suppliers", {"code": "S1", "name": "Aynı kod"})[0], 409)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "Y", "bilinmeyen": 1})[0], 400)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "Y", "tier": "çok"})[0], 400)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "Y", "created_at": "x"})[0], 400)
+        self.assertEqual(self.call("POST", "/suppliers", {"name": "Y", "tax_id": "1234567890"})[0], 409)   # aynı VKN
         self.assertEqual(self.call("GET", "/suppliers?olmayan=1")[0], 400)
         self.assertEqual(self.call("GET", "/suppliers/999")[0], 404)
 
     def test_musteriye_sunulan_hizmet_ayrisir(self):
         unit, item, supplier, _ = self.base_data()
-        body = {"code": "E2", "supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit,
+        body = {"supplier_id": supplier, "catalog_item_id": item, "org_unit_id": unit,
                 "beneficiary": "customer"}
         self.assertEqual(self.call("POST", "/engagements", body)[0], 400)
         self.ok("POST", "/engagements", {**body, "customer_name": "Müşteri A"})
@@ -313,15 +315,15 @@ class Cekirdek(Base):
 
     def test_tip_filtresi_baglam_ve_kullanim_raporu(self):
         unit, _, supplier, engagement = self.base_data()
-        other_unit = self.ok("POST", "/org_units", {"code": "OPS", "name": "Operasyon"})["id"]
-        self.ok("POST", "/suppliers", {"code": "S2", "name": "Diğer Ltd."})
-        cloud = next(t["id"] for t in self.ok("GET", "/supplier_types") if t["code"] == "CLOUD")
+        other_unit = self.ok("POST", "/org_units", {"name": "Operasyon"})["id"]
+        self.ok("POST", "/suppliers", {"name": "Diğer Ltd."})
+        cloud = next(t["id"] for t in self.ok("GET", "/supplier_types") if t["name"] == "Bulut Hizmeti")
         self.ok("POST", f"/suppliers/{supplier}/types", {"type_ids": [cloud]})
-        self.assertEqual([s["code"] for s in self.ok("GET", f"/suppliers?type_id={cloud}")], ["S1"])
-        self.assertEqual([s["code"] for s in self.ok("GET", "/suppliers?q=Diğer")], ["S2"])
+        self.assertEqual([s["id"] for s in self.ok("GET", f"/suppliers?type_id={cloud}")], [supplier])
+        self.assertEqual([s["name"] for s in self.ok("GET", "/suppliers?q=Diğer")], ["Diğer Ltd."])
         self.ok("POST", f"/engagements/{engagement}/users", {"org_unit_ids": [unit, other_unit]})
         context = self.ok("GET", f"/suppliers/{supplier}/context")
-        self.assertEqual(context["types"][0]["code"], "CLOUD")
+        self.assertEqual(context["types"][0]["name"], "Bulut Hizmeti")
         self.assertEqual(context["engagements"][0]["unit_name"], "Bilgi Teknolojileri")
         report = self.ok("GET", "/reports/usage")
         self.assertEqual(report[0]["buyer_unit"], "Bilgi Teknolojileri")
@@ -332,9 +334,9 @@ class Cekirdek(Base):
 class Performans(Base):
     def test_sla_ve_scorecard(self):
         _, _, supplier, engagement = self.base_data()
-        sla = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "code": "UP", "name": "Erişilebilirlik",
+        sla = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "name": "Erişilebilirlik",
                                                    "target_value": 99.5})["id"]
-        resp = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "code": "RT", "name": "Yanıt süresi",
+        resp = self.ok("POST", "/sla_definitions", {"engagement_id": engagement, "name": "Yanıt süresi",
                                                     "unit": "hours", "target_value": 4, "direction": "lower_better"})
         from datetime import date
         month = date.today().replace(day=1).isoformat()
@@ -346,11 +348,11 @@ class Performans(Base):
                                                                  "actual_value": 100})[0], 409)   # dönem tekil
         review = self.ok("POST", "/performance_reviews", {"supplier_id": supplier, "period_start": month,
                                                           "period_end": month})["id"]
-        criteria = {c["code"]: c["id"] for c in self.ok("GET", "/review_criteria")}
-        self.ok("POST", "/review_scores", {"review_id": review, "criterion_id": criteria["QUALITY"], "score": 5})
-        self.ok("POST", "/review_scores", {"review_id": review, "criterion_id": criteria["COMMERCIAL"], "score": 1})
+        criteria = {c["name"]: c["id"] for c in self.ok("GET", "/review_criteria")}
+        self.ok("POST", "/review_scores", {"review_id": review, "criterion_id": criteria["Hizmet ve Ürün Kalitesi"], "score": 5})
+        self.ok("POST", "/review_scores", {"review_id": review, "criterion_id": criteria["Ticari Uyum"], "score": 1})
         self.assertEqual(self.call("POST", "/review_scores", {"review_id": review,
-                                                              "criterion_id": criteria["COMMS"], "score": 9})[0], 400)
+                                                              "criterion_id": criteria["İletişim ve Çözüm Hızı"], "score": 9})[0], 400)
         card = self.ok("GET", f"/suppliers/{supplier}/scorecard")
         self.assertEqual(card["sla"], {"total": 2, "met": 1, "rate": 50.0})
         self.assertEqual(card["review"]["score"], 4.0)   # (5*3 + 1*1) / 4
@@ -362,7 +364,7 @@ class Risk(Base):
                  "consequence": "müşteriye taahhüt edilen süre aşılabilir"}
 
     def new_risk(self, supplier, appetite=6, **extra):
-        body = {"code": "R1", "title": "Tek tedarikçiye bağımlılık", "supplier_id": supplier,
+        body = {"title": "Tek tedarikçiye bağımlılık", "supplier_id": supplier,
                 "category": "concentration", "owner": "ayse", "appetite": appetite, "likelihood": 4, "impact": 5,
                 "review_date": "2099-01-01", **self.STATEMENT, **extra}
         return self.ok("POST", "/supplier_risks", body)["id"]
@@ -380,9 +382,9 @@ class Risk(Base):
         full = self.assess(risk, [{"weight": "high"}, {"weight": "high"}])     # katkı %100 ile sınırlı
         self.assertEqual(full["residual"], 0.0)
         self.assertEqual(self.call("PATCH", f"/supplier_risks/{risk}", {"likelihood": 6})[0], 400)
-        self.assertEqual(self.call("POST", "/supplier_risks", {"code": "R2", "title": "t", "supplier_id": supplier,
+        self.assertEqual(self.call("POST", "/supplier_risks", {"title": "t", "supplier_id": supplier,
                                                                "category": "exit", "owner": "a", "appetite": 30})[0], 400)
-        self.assertEqual(self.call("POST", "/supplier_risks", {"code": "R3", "title": "t", "supplier_id": supplier,
+        self.assertEqual(self.call("POST", "/supplier_risks", {"title": "t", "supplier_id": supplier,
                                                                "category": "exit", "owner": "a", "appetite": 5,
                                                                "cause": "yalnız neden"})[0], 400)
         context = self.ok("GET", f"/supplier_risks/{risk}/context")
@@ -440,7 +442,7 @@ class Risk(Base):
     def test_kapanis_acik_faaliyetle_olmaz(self):
         *_, supplier, _ = self.base_data()
         risk = self.new_risk(supplier, appetite=25)
-        action = self.ok("POST", "/risk_actions", {"code": "A1", "risk_id": risk, "title": "İkinci tedarikçi",
+        action = self.ok("POST", "/risk_actions", {"risk_id": risk, "title": "İkinci tedarikçi",
                                                    "owner": "ayse", "due_date": "2027-01-01"})["id"]
         assessed = self.assess(risk)
         close = {"status": "closed", "decision_rationale": "Tamamlandı", "assessment_id": assessed["id"]}
@@ -449,7 +451,7 @@ class Risk(Base):
         self.assertIsNotNone(done["closed_at"])
         self.ok("PATCH", f"/supplier_risks/{risk}", close)
         self.assertEqual(self.call("PATCH", f"/risk_actions/{action}", {"status": "open"})[0], 409)
-        self.assertEqual(self.call("POST", "/risk_actions", {"code": "A2", "risk_id": risk, "title": "x",
+        self.assertEqual(self.call("POST", "/risk_actions", {"risk_id": risk, "title": "x",
                                                             "owner": "a", "due_date": "2027-01-01"})[0], 409)
 
 
@@ -466,9 +468,9 @@ class KaynakBulma(Base):
 
     def test_mevcut_tedarikci_yoksa_en_az_uc_teklif(self):
         unit, *_ = self.base_data()
-        suppliers = [self.ok("POST", "/suppliers", {"code": f"T{i}", "name": f"Teklif Veren {i}"})["id"]
+        suppliers = [self.ok("POST", "/suppliers", {"name": f"Teklif Veren {i}"})["id"]
                      for i in range(3)]
-        need = self.ok("POST", "/needs", {"code": "N1", "title": "Yedekleme hizmeti", "org_unit_id": unit},
+        need = self.ok("POST", "/needs", {"title": "Yedekleme hizmeti", "org_unit_id": unit},
                        app=self.full)["id"]
         self.assertEqual(self.step(need, "submit")[0], 200)
         self.assertEqual(self.step(need, "select_existing")[0], 409)   # seçili mevcut tedarikçi yok
@@ -497,7 +499,7 @@ class KaynakBulma(Base):
 
     def test_mevcut_tedarikciden_secim_kisayolu(self):
         unit, _, supplier, _ = self.base_data()
-        need = self.ok("POST", "/needs", {"code": "N2", "title": "Ek lisans", "org_unit_id": unit},
+        need = self.ok("POST", "/needs", {"title": "Ek lisans", "org_unit_id": unit},
                        app=self.full)["id"]
         self.step(need, "submit")
         self.ok("POST", "/need_candidates", {"need_id": need, "supplier_id": supplier, "selected": 1}, app=self.full)
@@ -507,7 +509,7 @@ class KaynakBulma(Base):
         with self.db() as db:
             db.execute("UPDATE tdr_policies SET value_json='1' WHERE code='sourcing.min_quotes'")
         unit, _, supplier, _ = self.base_data()
-        need = self.ok("POST", "/needs", {"code": "N3", "title": "x", "org_unit_id": unit}, app=self.full)["id"]
+        need = self.ok("POST", "/needs", {"title": "x", "org_unit_id": unit}, app=self.full)["id"]
         self.step(need, "submit"), self.step(need, "request_quotes")
         self.ok("POST", "/quotes", {"need_id": need, "supplier_id": supplier, "amount": 1,
                                     "received_at": "2026-11-01"}, app=self.full)
@@ -528,7 +530,7 @@ class Aktarim(Base):
 
     def test_eslestirme_ve_tekrar_aktarim(self):
         *_, supplier, _ = self.base_data()
-        self.ok("POST", "/suppliers", {"code": "S2", "name": "Diğer Ltd."})
+        self.ok("POST", "/suppliers", {"name": "Diğer Ltd."})
         preview = self.send(dry_run=True)
         self.assertEqual({k: preview[k] for k in ("total", "create", "update", "review", "error")},
                          {"total": 4, "create": 1, "update": 1, "review": 1, "error": 1})
@@ -545,7 +547,7 @@ class Aktarim(Base):
         self.assertEqual(len(self.ok("GET", "/suppliers")), 3)
 
     def test_disa_aktarim_formul_enjeksiyonunu_etkisizlestirir(self):
-        self.ok("POST", "/suppliers", {"code": "S9", "name": "=HYPERLINK(\"http://x\")"})
+        self.ok("POST", "/suppliers", {"name": "=HYPERLINK(\"http://x\")"})
         status, raw = self.call("GET", "/export/suppliers")
         self.assertEqual(status, 200)
         self.assertTrue(raw.content.startswith("\ufeffKayıt No;Kod;Ad"))

@@ -41,7 +41,7 @@ CATALOG = Resource("risk_catalog", "Risk Kataloğu", {
     "cause": "TEXT NOT NULL", "risk_event": "TEXT NOT NULL", "consequence": "TEXT NOT NULL",
     "likelihood": "INTEGER NOT NULL DEFAULT 3", "impact": "INTEGER NOT NULL DEFAULT 3", "description": "TEXT",
     "active": "INTEGER NOT NULL DEFAULT 1", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write="manage", search=("code", "title"),
+    module=M, write="manage", search=("code", "title"), code_prefix="RKT",
     enums={"category": ("operational", "supplier", "continuity", "security", "compliance", "financial",
                         "concentration", "performance", "privacy", "reputation", "exit")})
 
@@ -54,7 +54,7 @@ RISKS = Resource("supplier_risks", "Risk Kaydı", {
     "response_strategy": "TEXT", "treatment": "TEXT", "review_date": "DATE", "control_risk_ref": "TEXT",
     "origin_ref": "TEXT", "catalog_id": fk("risk_catalog", False), "entity_name": "TEXT",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, write="write", api=("list", "get", "create"), search=("code", "title"), machine="r",
+    module=M, write="write", api=("list", "get", "create"), search=("code", "title"), machine="r", code_prefix="RSK",
     readonly=("origin_ref",),
     enums={"category": ("operational", "supplier", "continuity", "security", "compliance", "financial",
                         "concentration", "performance", "privacy", "reputation", "exit"),
@@ -79,7 +79,7 @@ ACTIONS = Resource("risk_actions", "Risk İşleme Faaliyetleri", {
     "description": "TEXT", "owner": "TEXT NOT NULL", "due_date": "DATE NOT NULL",
     "priority": "TEXT NOT NULL DEFAULT 'medium'", "status": "TEXT NOT NULL DEFAULT 'open'",
     "resolution": "TEXT", "closed_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL"},
-    module=M, write="write", search=("code", "title"), readonly=("closed_at",),
+    module=M, write="write", search=("code", "title"), readonly=("closed_at",), code_prefix="RIF",
     enums={"priority": ("low", "medium", "high", "critical"),
            "status": ("open", "in_progress", "validation", "completed", "cancelled")})
 
