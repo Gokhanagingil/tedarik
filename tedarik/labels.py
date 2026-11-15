@@ -112,6 +112,8 @@ CHOICES = {
     "confidentiality": {"internal": "Kurum içi", "confidential": "Gizli", "restricted": "Kısıtlı"},
     "audits.kind": {"internal": "İç denetim", "external": "Dış denetim", "certification": "Belgelendirme",
                     "supplier": "Tedarikçi denetimi"},
+    "audits.status": {"planned": "Planlandı", "in_progress": "Devam ediyor", "completed": "Tamamlandı",
+                      "closed": "Kapalı", "cancelled": "İptal"},
     "opinion": {"effective": "Etkin", "partially_effective": "Kısmen etkin", "ineffective": "Etkin değil"},
     "documents.category": {"policy": "Politika", "procedure": "Prosedür", "instruction": "Talimat",
                            "standard": "İç standart", "guideline": "Rehber", "contract_clause": "Sözleşme maddesi"},

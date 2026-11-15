@@ -13,11 +13,11 @@ a{color:var(--blue)}.hidden{display:none!important}.muted{color:var(--muted)}.sm
 color:#c8d8eb;display:flex;flex-direction:column;z-index:10}
 .brand{color:#fff;font-size:22px;letter-spacing:-.6px;font-weight:800;margin:0 11px 22px}.brand strong{color:#64e0ce}
 .brand small{display:block;font-size:9.5px;letter-spacing:1.4px;color:#a2b8d3;font-weight:500;margin-top:6px}
-#nav{overflow-y:auto;flex:1;padding:0 3px}
-.nav-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8aa2be;font-weight:700;margin:18px 12px 7px}
+#nav{overflow-y:auto;flex:1;min-height:0;padding:0 3px;scrollbar-width:thin;scrollbar-color:#3a5578 transparent}
+.nav-title{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:#8aa2be;font-weight:700;margin:14px 12px 5px}
 .nav-title:first-child{margin-top:0}
 .nav-button{width:100%;display:flex;align-items:center;gap:11px;text-align:left;color:#c8d8eb;border:0;background:transparent;
-border-radius:10px;padding:9px 12px;margin:1px 0;font-size:13px}
+border-radius:10px;padding:7px 12px;margin:1px 0;font-size:13px}
 .nav-button:hover{background:#263f60;color:#fff}.nav-button.active{background:#315277;color:#fff;box-shadow:inset 3px 0 #5ccef4}
 .nav-icon{width:20px;text-align:center;font-size:15px;opacity:.85}.nav-count{margin-left:auto;background:#5ccef4;color:#0d2238;
 border-radius:999px;font-size:10px;font-weight:800;padding:1px 7px}
@@ -44,7 +44,9 @@ font-weight:650;line-height:1.15;white-space:nowrap;display:inline-flex;align-it
 justify-content:space-between;gap:12px;margin-bottom:14px}.panel-title h2,.panel-title h3{margin:0}
 .skeleton{color:var(--muted)}.intro{font-size:13px;line-height:1.7;color:#566a84;margin:0 0 12px}
 .grid{display:grid;gap:16px}.grid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
-.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}.grid.four{grid-template-columns:repeat(4,minmax(0,1fr));margin:6px 0 14px}
+.choices.tall{max-height:46vh;overflow:auto;padding-right:4px}.choices .choice-group{font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin-top:8px}
+.choices.tall label{padding:7px 10px;font-weight:450;font-size:12.5px}.mono{font-family:ui-monospace,Consolas,monospace;overflow-wrap:anywhere}.mini li.file-row{display:flex;justify-content:space-between;align-items:center;gap:12px}button.chip.link{cursor:pointer;text-align:left}
 /* kartlar ve göstergeler */
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px}
 .metric{padding:17px 18px;border:1px solid var(--stroke);border-radius:13px;background:#fff;box-shadow:var(--shadow);text-align:left;
@@ -152,8 +154,8 @@ box-shadow:-10px 0 30px #1a365314;transform:translateX(105%);transition:transfor
 .type-card{border:1px solid var(--stroke);border-radius:12px;background:#fff;padding:14px;text-align:left}.type-card:hover{border-color:#9dc7fb}
 .type-card.on{border-color:var(--blue);box-shadow:0 0 0 3px #d7e6fd}.type-card strong{display:block;margin-bottom:4px;color:#1f3858}
 .secret{font-family:ui-monospace,Consolas,monospace;font-size:15px;background:#0f2238;color:#7fe7d6;padding:12px 14px;border-radius:10px;letter-spacing:.5px;word-break:break-all}
-@media(max-width:1200px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three{grid-template-columns:1fr 1fr}}
-@media(max-width:1000px){#main.details-open{padding-right:34px}#detail{width:min(640px,100vw)}#detailResize{display:none}.grid.two,.grid.three{grid-template-columns:1fr}}
+@media(max-width:1200px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three,.grid.four{grid-template-columns:1fr 1fr}}
+@media(max-width:1000px){#main.details-open{padding-right:34px}#detail{width:min(640px,100vw)}#detailResize{display:none}.grid.two,.grid.three,.grid.four{grid-template-columns:1fr}}
 @media(max-width:800px){#sidebar{position:static;width:100%;padding:12px}.brand{margin:0 6px 8px;font-size:18px}.brand small{display:none}
 #nav{display:flex;gap:4px;overflow:auto;flex:none}.nav-title{display:none}.nav-button{white-space:nowrap;width:auto;font-size:12px;padding:8px 10px}
 .nav-bottom{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:8px;margin-top:6px}#identity{padding:2px}#signout{width:auto;font-size:11px}

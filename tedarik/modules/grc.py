@@ -575,7 +575,7 @@ def record_execution(db, principal, data, source=None):
                 "INSERT INTO tdr_findings (code, title, control_id, execution_id, audit_id, description, severity, "
                 "status, owner, due_date, recurrence, last_seen_at, created_by, created_at) "
                 "VALUES (?,?,?,?,?,?,?,'open',?,?,1,?,?,?)",
-                (next_code(db, "tdr_findings", "BLG"), f"Kontrol başarısız: {control['code']} — {control['name']}",
+                (next_code(db, "tdr_findings", "BLG"), f"{control['name']} — test başarısız",
                  control["id"], execution_id, audit_id, data.get("details") or "", severity, control["owner"],
                  due.isoformat(), now, "system" if source == "system" else principal.username if not machine else "mcp",
                  now)).lastrowid
@@ -782,7 +782,7 @@ def _decode(body):
         raise crud.Invalid("Geçersiz dosya kodlaması") from None
 
 
-def store_file(db, evidence_id, filename, binary, username):
+def store_file(db, evidence_id, filename, binary, username, uploaded_at=None):
     _valid_file(filename, binary)
     db.lock(f"evidence:{evidence_id}")
     row = one(db, "SELECT COALESCE(MAX(version), 0) AS v FROM tdr_evidence_files WHERE evidence_id=?", (evidence_id,))
@@ -791,7 +791,8 @@ def store_file(db, evidence_id, filename, binary, username):
     mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
     file_id = db.execute("INSERT INTO tdr_evidence_files (evidence_id, version, file_name, file_size, mime_type, "
                          "sha256, uploaded_by, uploaded_at) VALUES (?,?,?,?,?,?,?,?)",
-                         (evidence_id, version, filename, len(binary), mime, digest, username, utcnow())).lastrowid
+                         (evidence_id, version, filename, len(binary), mime, digest, username,
+                          uploaded_at or utcnow())).lastrowid
     db.execute("INSERT INTO tdr_evidence_blobs (file_id, content) VALUES (?,?)", (file_id, binary))
     db.execute("UPDATE tdr_evidence SET file_name=?, file_size=?, mime_type=?, hash_sha256=?, current_version=?, "
                "updated_at=? WHERE id=?", (filename, len(binary), mime, digest, version, utcnow(), evidence_id))

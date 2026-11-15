@@ -81,6 +81,24 @@ Model ve kurallar KS GRC ile aynıdır (ayrıntı: `UYUM_SOZLESMESI.md`).
 
 Hesap: içsel = olasılık × etki; katkı düşük %20, orta %40, yüksek %60, kısmen etkili önlem yarısı, toplam en çok %100; artık = içsel × (1 − katkı). Kabul ve kapanış `PATCH /api/tdr/supplier_risks/{id}` ile `assessment_id` (güncel değerlendirme) ve `decision_rationale` ister; değerlendirmeden sonra risk veya iştah değiştiyse yeniden değerlendirme gerekir. İştah üstü kabulü, değerlendirmeyi yapandan farklı bir Yönetici `exception_rationale` ile onaylar. Kabul edilmiş veya kapalı risk yalnızca gerekçeyle yeniden açılır ve yeni değerlendirme ister. Açık faaliyeti olan risk kapatılamaz.
 
+## Uyum (GRC) — K-015
+
+| Tablo | Amaç | Not |
+| --- | --- | --- |
+| `tdr_standards`, `tdr_clauses` | Standart ve maddeler (hiyerarşik) | `applicable` + `justification`: uygulanabilirlik bildirimi |
+| `tdr_processes`, `tdr_objectives`, `tdr_documents` | Süreç, kontrol hedefi, politika/prosedür | Yürürlükteki doküman onay ister |
+| `tdr_controls` | Kontrol kütüphanesi | `automation`: iç otomatik kural anahtarı |
+| `tdr_control_{clauses,processes,objectives,risks,documents}` | Kontrol eşlemeleri | Küme olarak değişir (`POST /controls/{id}/links`) |
+| `tdr_audits`, `tdr_audit_standards`, `tdr_audit_clauses` | Denetim ve kapsamı | `revision` ile eşzamanlı düzenleme koruması |
+| `tdr_audit_plan` | Tamamlanınca dondurulan plan | Değiştirilemez |
+| `tdr_evidence`, `tdr_evidence_files`, `tdr_evidence_blobs` | Kanıt ve sürümleri | Dosya sürümleri ve içerik değiştirilemez; SHA-256 |
+| `tdr_evidence_{controls,audits,clauses}` | Kanıt bağlantıları | |
+| `tdr_executions`, `tdr_execution_evidence` | Kontrol çalışmaları | Değiştirilemez; tanım ve kaynak bilgisi JSON olarak dondurulur |
+| `tdr_findings`, `tdr_grc_actions` | Bulgu ve düzeltici faaliyet (DÖF) | Doğrulama aşaması, görevler ayrılığı |
+| `tdr_risk_catalog` | Risk senaryoları (risks modülü) | Risk kaydı `catalog_id` taşır |
+
+`tdr_supplier_risks` tek risk kaydıdır: `supplier_id` isteğe bağlı, tedarikçisiz riskte `entity_name` zorunlu (göç 1).
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

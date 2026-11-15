@@ -92,12 +92,12 @@ fi
 # parolaları yalnızca root'un okuyabildiği dosyaya yazılır; CI günlüğüne basılmaz.
 if [ "${TEDARIK_SEED_DEMO:-0}" = 1 ] || [ "${TEDARIK_SEED_DEMO:-}" = true ]; then
   demo=$($COMPOSE exec -T app python -m tedarik.demo)
-  if [ "$demo" != "DEMO_ALREADY_LOADED" ]; then
-    (umask 077; printf '%s\n' "$demo" > "$BASE/.demo-users")
-    echo "Demo verisi yüklendi; demo kullanıcıların geçici parolaları: $BASE/.demo-users (yalnızca root okur)"
-  else
-    echo "Demo verisi zaten yüklü"
-  fi
+  case "$demo" in
+    DEMO_ALREADY_LOADED) echo "Demo verisi zaten yüklü" ;;
+    DEMO_GRC_ADDED) echo "Yüklü demoya uyum (GRC) verisi eklendi; kullanıcı parolaları değişmedi" ;;
+    *) (umask 077; printf '%s\n' "$demo" > "$BASE/.demo-users")
+       echo "Demo verisi yüklendi; demo kullanıcıların geçici parolaları: $BASE/.demo-users (yalnızca root okur)" ;;
+  esac
 fi
 
 status=$(docker run --rm --network host python:3.12-alpine@sha256:213242b537a1c166a0c53e903461fc18d5518e7196c93dbecda452660a848918 \
@@ -111,6 +111,11 @@ if [ "${TEDARIK_BACKUP_CRON:-1}" = 1 ] && [ -d /etc/cron.d ] && [ -e "$BASE/curr
   printf '%s\n' "# Tedarik Portalı günlük PostgreSQL yedeği (deploy.sh yazar)" \
     "17 2 * * * root TEDARIK_BASE=$BASE sh $BASE/current/deploy/backup.sh daily >/dev/null 2>&1" > /etc/cron.d/tedarik-backup
   chmod 0644 /etc/cron.d/tedarik-backup
+  # Uyum (GRC): portal verisinden iç otomatik kontroller her sabah çalışır (K-015).
+  printf '%s\n' "# Tedarik Portalı iç otomatik kontrolleri (deploy.sh yazar)" \
+    "43 5 * * * root docker exec tedarik-app-1 python -m tedarik.grc_run >/dev/null 2>&1" \
+    > /etc/cron.d/tedarik-grc
+  chmod 0644 /etc/cron.d/tedarik-grc
 fi
 
 # Eski sürüm klasörleri (yalnızca bu uygulamanınkiler): son 5 tutulur.

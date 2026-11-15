@@ -1,0 +1,743 @@
+{
+  "kind": "ks-grc-staging-reference-v1",
+  "data_classification": "SIMULATED_NON_PRODUCTION",
+  "notice": "Madde kodları kamuya açık içindekiler / CIS Navigator yapılarına dayalıdır; açıklamalar özgün Türkçe kısa özetlerdir. Hiçbir sonuç gerçek ServiceNow/CRM keşfi değildir.",
+  "standards": [
+    {
+      "code": "ISO/IEC 20000-1",
+      "name": "ISO/IEC 20000-1 — Hizmet Yönetim Sistemi Gereklilikleri",
+      "version": "2018",
+      "description": "Referans: https://www.iso.org/standard/70636.html — Maddeler yapısal olarak modellenmiştir. Resmî gereklilik metni aktarılmamıştır.",
+      "clauses": [
+        {
+          "code": "4",
+          "title": "Kuruluşun bağlamı",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "4.1",
+          "title": "Kuruluş ve bağlamının anlaşılması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "4.2",
+          "title": "İlgili tarafların ihtiyaç ve beklentileri",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "4.3",
+          "title": "Hizmet yönetim sistemi kapsamı",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "4.4",
+          "title": "Hizmet yönetim sistemi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5",
+          "title": "Liderlik",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5.1",
+          "title": "Liderlik ve taahhüt",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5.2",
+          "title": "Politika",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5.2.1",
+          "title": "Hizmet yönetim politikasının oluşturulması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5.2.2",
+          "title": "Politikanın duyurulması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "5.3",
+          "title": "Roller, sorumluluklar ve yetkiler",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6",
+          "title": "Planlama",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6.1",
+          "title": "Risk ve fırsatlara yönelik faaliyetler",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6.2",
+          "title": "Hizmet yönetimi hedefleri ve planlama",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6.2.1",
+          "title": "Hedeflerin belirlenmesi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6.2.2",
+          "title": "Hedeflere ulaşma planı",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "6.3",
+          "title": "Hizmet yönetim sisteminin planlanması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7",
+          "title": "Destek",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.1",
+          "title": "Kaynaklar",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.2",
+          "title": "Yetkinlik",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.3",
+          "title": "Farkındalık",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.4",
+          "title": "İletişim",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.5",
+          "title": "Dokümante edilmiş bilgi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.5.1",
+          "title": "Genel hükümler",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.5.2",
+          "title": "Dokümantasyonun oluşturulması ve güncellenmesi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.5.3",
+          "title": "Dokümantasyonun kontrolü",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.5.4",
+          "title": "Hizmet yönetim sistemi kayıtları",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "7.6",
+          "title": "Bilgi yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8",
+          "title": "Operasyon",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.1",
+          "title": "Operasyonel planlama ve kontrol",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2",
+          "title": "Hizmet portföyü",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.1",
+          "title": "Hizmetlerin sunumu",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.2",
+          "title": "Hizmetlerin planlanması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.3",
+          "title": "Yaşam döngüsüne katılan tarafların kontrolü",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.4",
+          "title": "Hizmet kataloğu yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.5",
+          "title": "Varlık yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.2.6",
+          "title": "Konfigürasyon yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.3",
+          "title": "İlişki ve anlaşmalar",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.3.1",
+          "title": "Genel",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.3.2",
+          "title": "İş ilişkileri yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.3.3",
+          "title": "Hizmet seviyesi yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.3.4",
+          "title": "Tedarikçi yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.4",
+          "title": "Arz ve talep",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.4.1",
+          "title": "Hizmet bütçesi ve maliyet muhasebesi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.4.2",
+          "title": "Talep yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.4.3",
+          "title": "Kapasite yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5",
+          "title": "Hizmet tasarımı, oluşturma ve geçiş",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.1",
+          "title": "Değişiklik yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.1.1",
+          "title": "Değişiklik yönetimi politikası",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.1.2",
+          "title": "Değişiklik başlatma",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.1.3",
+          "title": "Değişiklik faaliyetleri",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.2",
+          "title": "Hizmet tasarımı ve geçiş",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.2.1",
+          "title": "Yeni/değişen hizmetlerin planlanması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.2.2",
+          "title": "Tasarım",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.2.3",
+          "title": "Oluşturma ve geçiş",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.5.3",
+          "title": "Sürüm ve dağıtım yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.6",
+          "title": "Çözüm ve karşılama",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.6.1",
+          "title": "Olay yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.6.2",
+          "title": "Hizmet talebi yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.6.3",
+          "title": "Problem yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7",
+          "title": "Hizmet güvencesi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.1",
+          "title": "Hizmet erişilebilirliği yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.2",
+          "title": "Hizmet sürekliliği yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.3",
+          "title": "Bilgi güvenliği yönetimi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.3.1",
+          "title": "Bilgi güvenliği politikası",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.3.2",
+          "title": "Bilgi güvenliği kontrolleri",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "8.7.3.3",
+          "title": "Bilgi güvenliği olayları",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "9",
+          "title": "Performans değerlendirme",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "9.1",
+          "title": "İzleme, ölçme, analiz ve değerlendirme",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "9.2",
+          "title": "İç denetim",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "9.3",
+          "title": "Yönetimin gözden geçirmesi",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "9.4",
+          "title": "Hizmet raporlaması",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "10",
+          "title": "İyileştirme",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "10.1",
+          "title": "Uygunsuzluk ve düzeltici faaliyet",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        },
+        {
+          "code": "10.2",
+          "title": "Sürekli iyileştirme",
+          "description": "İlgili gereklilik için denetim çalışma başlığı. Kuruluşun lisanslı standart metniyle detaylandırılmalıdır."
+        }
+      ]
+    },
+    {
+      "code": "CIS Controls",
+      "name": "CIS Critical Security Controls",
+      "version": "8.1",
+      "description": "Referans: https://www.cisecurity.org/controls/CIS-controls-navigator — 18 kontrol ailesi ve pilot için seçili alt Safeguard'lar. Tam 153 Safeguard henüz yüklü değildir.",
+      "clauses": [
+        {
+          "code": "1",
+          "title": "Kurumsal varlık envanteri",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "2",
+          "title": "Yazılım varlık envanteri",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "3",
+          "title": "Veri koruma",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "4",
+          "title": "Güvenli konfigürasyon",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "5",
+          "title": "Hesap yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "6",
+          "title": "Erişim kontrolü yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "7",
+          "title": "Sürekli zafiyet yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "8",
+          "title": "Denetim günlükleri yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "9",
+          "title": "E-posta ve tarayıcı korumaları",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "10",
+          "title": "Zararlı yazılıma karşı koruma",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "11",
+          "title": "Veri kurtarma",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "12",
+          "title": "Ağ altyapısı yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "13",
+          "title": "Ağ izleme ve savunma",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "14",
+          "title": "Güvenlik farkındalığı ve eğitim",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "15",
+          "title": "Hizmet sağlayıcı yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "16",
+          "title": "Uygulama yazılım güvenliği",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "17",
+          "title": "Olay müdahale yönetimi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "18",
+          "title": "Sızma testi",
+          "description": "CIS Controls v8.1 kontrol ailesi. Pilot denetim sorularıyla ilişkilendirilebilir."
+        },
+        {
+          "code": "1.1",
+          "title": "Ayrıntılı kurumsal varlık envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "1.2",
+          "title": "Yetkisiz varlıkların ele alınması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "1.3",
+          "title": "Aktif keşif aracı kullanımı",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "1.4",
+          "title": "DHCP kayıtlarından envanter desteği",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "1.5",
+          "title": "Pasif keşif yaklaşımı",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "2.1",
+          "title": "Yazılım envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "2.2",
+          "title": "Desteklenen yazılım sürümleri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "2.3",
+          "title": "Yetkisiz yazılımın ele alınması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "2.4",
+          "title": "Otomatik yazılım envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "3.1",
+          "title": "Veri yönetimi süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "3.2",
+          "title": "Veri envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "3.3",
+          "title": "Veri erişim izinleri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "3.10",
+          "title": "Aktarımda hassas veri şifrelemesi",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "4.1",
+          "title": "Güvenli konfigürasyon süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "4.2",
+          "title": "Ağ için güvenli konfigürasyon",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "4.3",
+          "title": "Otomatik oturum kilitleme",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "4.8",
+          "title": "Gereksiz hizmetleri devre dışı bırakma",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "5.1",
+          "title": "Hesap envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "5.3",
+          "title": "Kullanılmayan hesapların kapatılması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "6.1",
+          "title": "Erişim yetkilendirme süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "6.2",
+          "title": "Erişim iptal süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "6.3",
+          "title": "MFA gereksinimi",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "6.5",
+          "title": "Yönetici hesaplarında MFA",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "7.1",
+          "title": "Zafiyet yönetimi süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "7.2",
+          "title": "Risk temelli iyileştirme",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "7.3",
+          "title": "Otomatik işletim sistemi yamaları",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "7.5",
+          "title": "İç varlıklar için zafiyet taraması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "8.1",
+          "title": "Denetim günlüğü süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "8.2",
+          "title": "Denetim günlüklerinin toplanması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "8.3",
+          "title": "Yeterli günlük depolaması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "8.4",
+          "title": "Zaman senkronizasyonu",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "9.1",
+          "title": "Desteklenen e-posta ve tarayıcı istemcileri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "9.2",
+          "title": "DNS filtreleme",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "10.1",
+          "title": "Zararlı yazılım koruması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "11.1",
+          "title": "Veri kurtarma süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "11.2",
+          "title": "Otomatik yedekleme",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "11.3",
+          "title": "Kurtarma verisinin korunması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "11.5",
+          "title": "Geri yükleme testi",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "12.1",
+          "title": "Ağ altyapısının güncel tutulması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "12.4",
+          "title": "Ağ mimarisinin güncel dokümantasyonu",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "13.1",
+          "title": "Merkezi güvenlik olayı uyarıları",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "13.2",
+          "title": "Ağ tabanlı tehdit önleme",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "14.1",
+          "title": "Güvenlik farkındalığı programı",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "15.1",
+          "title": "Hizmet sağlayıcı envanteri",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "15.2",
+          "title": "Hizmet sağlayıcı yönetim politikası",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "16.1",
+          "title": "Güvenli yazılım geliştirme süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "16.2",
+          "title": "Yazılım açıklarının ele alınması",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "17.1",
+          "title": "Olay müdahale süreci",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "17.2",
+          "title": "Olay müdahale için iletişim kontakları",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "18.1",
+          "title": "Sızma testi programı",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        },
+        {
+          "code": "18.2",
+          "title": "Periyodik dış sızma testi",
+          "description": "CIS Safeguard için özgün Türkçe konu özeti. Gerekliliği resmî CIS Navigator'dan doğrulayın."
+        }
+      ]
+    }
+  ]
+}

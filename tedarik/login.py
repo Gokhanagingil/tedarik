@@ -292,6 +292,20 @@ def update_user(c):
     return _user(c, user_id)
 
 
+def reset_password(c):
+    """Yönetici yerel hesaba yeni geçici parola verir; açık oturumlar kapanır, ilk girişte değiştirilir."""
+    _admin(c)
+    authz.require_human(c.principal)
+    current = _user(c, c.params["id"])
+    if c.app.config.auth_mode == "entra" or current["kind"] == "entra":
+        raise crud.Forbidden("Kurumsal hesabın parolası Entra ID'de yönetilir")
+    if c.params["id"] == c.principal.user_id:
+        raise crud.Invalid("Kendi parolanızı Parola değiştir ekranından değiştirin")
+    password = session.provision(c.db, current["username"], current["display_name"], reset=True)
+    audit.log(c.db, c.principal, "RESET_PASSWORD", "users", c.params["id"], {"username": current["username"]})
+    return {**_user(c, c.params["id"]), "temporary_password": password, "must_change_password": True}
+
+
 def directory(c):
     """Davet ve sahip seçimi için etkin kullanıcıların adı ve görünen adı (parola, rol bilgisi yok)."""
     authz.require_human(c.principal)
@@ -316,4 +330,5 @@ def register(app):
     app.route("GET", API + "/users", list_users)
     app.route("POST", API + "/users", create_user)
     app.route("PATCH", API + "/users/{id}", update_user)
+    app.route("POST", API + "/users/{id}/reset-password", reset_password)
     assert accounts.USER_ROLES   # kaynak kaydı http içe aktarımında yapılır

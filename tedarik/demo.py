@@ -489,11 +489,355 @@ class Seeder:
             self.db.execute("UPDATE tdr_survey_campaigns SET status='closed', closed_at=? WHERE id=?",
                             (closed_at, campaign_id))
 
+    # -------------------------------------------------------------- uyum (GRC)
+    def grc(self):
+        """KS GRC sentetik senaryoları (vendor/ks_grc) + tedarikçi yönetimi kontrolleri, denetimler, kanıt, bulgu, DÖF."""
+        if not self.enabled("grc"):
+            return
+        from pathlib import Path
+        from .modules import grc as G
+        r = random.Random(20261116)
+        base = Path(__file__).parent / "vendor" / "ks_grc"
+        catalog = json.loads((base / "catalog.json").read_text(encoding="utf-8"))
+        scenario = json.loads((base / "operational_scenarios.json").read_text(encoding="utf-8"))
+        if catalog["data_classification"] != "SIMULATED_NON_PRODUCTION" or scenario["classification"] != "SIMULATED":
+            raise SystemExit("Yalnızca sentetik KS GRC senaryoları yüklenir")
+        admin = Principal("selin.aydin", "ADMIN", "system", "Selin Aydın")
+        auditor = Principal("can.ozturk", "AUDITOR", "system", "Can Öztürk")
+        machine = Principal("mcp", "MACHINE", "api_key", "MCP")
+        db = self.db
+        # standartlar ve maddeler
+        std, clause = {}, {}
+        standards = catalog["standards"] + [{
+            "code": "ISO/IEC 27001", "version": "2022", "name": "Bilgi güvenliği yönetim sistemi — tedarikçi ilişkileri",
+            "description": "Ek A tedarikçi ilişkileri kontrolleri (kısa Türkçe başlıklar; lisanslı metinle detaylandırılmalıdır).",
+            "clauses": [{"code": c, "title": t} for c, t in (
+                ("A.5.19", "Tedarikçi ilişkilerinde bilgi güvenliği"), ("A.5.20", "Tedarikçi anlaşmalarında bilgi güvenliği"),
+                ("A.5.21", "BİT tedarik zincirinde bilgi güvenliği"), ("A.5.22", "Tedarikçi hizmetlerinin izlenmesi ve değişiklik yönetimi"),
+                ("A.5.23", "Bulut hizmetleri kullanımında bilgi güvenliği"), ("A.5.30", "İş sürekliliği için BİT hazırlığı"),
+                ("A.5.31", "Yasal ve sözleşmesel gereklilikler"), ("A.5.34", "Kişisel verilerin gizliliği ve korunması"),
+                ("A.8.30", "Dış kaynaklı geliştirme"))]}]
+        for s in standards:
+            sid = self.add("standards", {"code": s["code"], "name": s["name"], "version": s["version"],
+                                         "description": s.get("description"), "issuer": s["code"].split()[0].split("/")[0]})
+            std[s["code"]] = sid
+            for c in s["clauses"]:
+                clause[(s["code"], c["code"])] = self.add("clauses", {"standard_id": sid, "code": c["code"], "title": c["title"],
+                                                                      "description": c.get("description")})
+            for c in s["clauses"]:
+                if "." in c["code"] and (s["code"], c["code"].rsplit(".", 1)[0]) in clause:
+                    db.execute("UPDATE tdr_clauses SET parent_id=? WHERE id=?",
+                               (clause[(s["code"], c["code"].rsplit(".", 1)[0])], clause[(s["code"], c["code"])]))
+        # uygulanabilirlik bildirimi: iki CIS maddesi kapsam dışı (gerekçeli)
+        for code in ("15.7", "16.14"):
+            if ("CIS Controls", code) in clause:
+                db.execute("UPDATE tdr_clauses SET applicable=0, justification=? WHERE id=?",
+                           ("Kapsamdaki hizmetlerde uygulanmıyor; yıllık gözden geçirilir.", clause[("CIS Controls", code)]))
+        prefix = {"ISO": "ISO/IEC 20000-1", "CIS": "CIS Controls"}
+
+        def clause_id(token):
+            p, code = token.split(":", 1)
+            return clause.get((prefix[p], code))
+        proc, obj = {}, {}
+        for code, name, owner, description in scenario["processes"] + [
+                ["TDR", "Tedarikçi Yönetimi", "Satın Alma", "Tedarikçi seçimi, sözleşme, performans, risk ve çıkış"]]:
+            proc[code] = self.add("processes", {"code": code, "name": name, "owner": owner, "description": description,
+                                                "org_unit_id": self.ids["unit"]["SAT"] if code == "TDR" else None})
+        for code, name in scenario["objectives"] + [["OBJ-TDR", "Kritik tedarikçiler periyodik olarak izlenmeli ve riskleri yönetilmeli"]]:
+            obj[code] = self.add("objectives", {"code": code, "name": name})
+        # dokümanlar
+        documents = {}
+        for code, title, category, owner, status, approved_ago, review in (
+                ("POL-TDR", "Tedarikçi Yönetimi Politikası", "policy", "Ayşe Yılmaz", "active", 300, 65),
+                ("PRS-TDR-GUV", "Tedarikçi Bilgi Güvenliği Gereksinimleri Prosedürü", "procedure", "Okan Yıldız", "active", 400, -20),
+                ("PRS-DEG", "Değişiklik Yönetimi Prosedürü", "procedure", "Mehmet Kaya", "active", 200, 165),
+                ("PRS-OLAY", "Olay ve Problem Yönetimi Prosedürü", "procedure", "Zeynep Demir", "active", 150, 215),
+                ("TLM-ERISIM", "Tedarikçi Erişim Yönetimi Talimatı", "instruction", "Okan Yıldız", "active", 420, -45),
+                ("STD-SOZ", "Sözleşme Güvenlik ve Denetim Hakkı Maddeleri", "contract_clause", "Emre Tan", "active", 90, 275),
+                ("RHB-BULUT", "Bulut Hizmeti Kullanım Rehberi", "guideline", "Mehmet Kaya", "draft", None, None),
+                ("PRS-SUREK", "İş Sürekliliği ve Felaket Kurtarma Prosedürü", "procedure", "Kerem Aksoy", "active", 380, 10)):
+            documents[code] = self.add("documents", {
+                "code": code, "title": title, "category": category, "owner": owner, "status": status,
+                "version": "1." + str(r.randint(0, 4)), "approved_by": "Selin Aydın" if approved_ago else None,
+                "approved_on": day(-approved_ago) if approved_ago else None, "review_date": day(review) if review else None,
+                "description": TAG})
+        # kontroller: KS GRC senaryoları + tedarikçi yönetimi
+        ctl = {}
+        units = {"automatic": "BTA", "manual": "BGV"}
+        for c in scenario["controls"]:
+            ctl[c["code"]] = self.add("controls", {
+                "code": c["code"], "name": c["name"], "description": c["description"], "execution_mode": c["execution_mode"],
+                "nature": c["nature"], "frequency": c["frequency"], "method": c["method"], "expected_result": c["expected_result"],
+                "owner": c["owner"], "criticality": c.get("example", {}).get("severity", "medium") if c["example"]["status"] == "fail" else r.choice(["medium", "high"]),
+                "method_type": "query" if c["execution_mode"] == "automatic" else r.choice(["sampling", "inspection"]),
+                "org_unit_id": self.ids["unit"][units[c["execution_mode"]]]})
+            self._link(ctl[c["code"]], "control_clauses", "clause_id", [clause_id(t) for t in c["clauses"]])
+            self._link(ctl[c["code"]], "control_processes", "process_id", [proc[p] for p in c["processes"] if p in proc])
+            self._link(ctl[c["code"]], "control_objectives", "objective_id", [obj[o] for o in c["objectives"] if o in obj])
+        iso27 = lambda *codes: [clause[("ISO/IEC 27001", c)] for c in codes]
+        iso20 = lambda *codes: [clause[("ISO/IEC 20000-1", c)] for c in codes if ("ISO/IEC 20000-1", c) in clause]
+        supplier_controls = (
+            ("TDR-CTL-01", "Aktif tedarikçilerin ilişki sahibi atanmış", "supplier.owner", "weekly", "medium", ("A.5.19",), ("8.3.4",), "POL-TDR"),
+            ("TDR-CTL-02", "Kritik tedarikçi performans değerlendirmeleri zamanında", "supplier.reviews", "monthly", "high", ("A.5.22",), ("8.3.4",), "POL-TDR"),
+            ("TDR-CTL-03", "Tedarikçi riskleri değerlendirilmiş ve gözden geçirilmiş", "supplier.risk_reviews", "monthly", "high", ("A.5.19", "A.5.21"), ("8.3.4",), "PRS-TDR-GUV"),
+            ("TDR-CTL-04", "Biten sözleşmelerin yenileme / çıkış sorumlusu belli", "supplier.contracts", "monthly", "medium", ("A.5.20",), ("8.3.4",), "STD-SOZ"),
+            ("TDR-CTL-05", "SLA hedefleri art arda kaçırılmıyor", "supplier.sla", "monthly", "high", ("A.5.22",), ("8.3.3", "8.3.4"), "POL-TDR"),
+            ("TDR-CTL-06", "Kritik tedarikçiler periyodik memnuniyet / risk anketine konu", "supplier.surveys", "quarterly", "medium", ("A.5.22",), ("8.3.4",), "POL-TDR"))
+        for code, name, rule, freq, crit, c27, c20, doc in supplier_controls:
+            ctl[code] = self.add("controls", {
+                "code": code, "name": name, "execution_mode": "automatic", "automation": rule, "frequency": freq, "criticality": crit,
+                "nature": "detective", "method_type": "query", "owner": "Ayşe Yılmaz", "org_unit_id": self.ids["unit"]["SAT"],
+                "method": "Portal verisi üzerinde iç otomatik kural; sorgu sonucu özeti kanıt olarak saklanır.",
+                "expected_result": "İstisna olmaması.", "description": TAG})
+            self._link(ctl[code], "control_clauses", "clause_id", iso27(*c27) + iso20(*c20))
+            self._link(ctl[code], "control_processes", "process_id", [proc["TDR"]])
+            self._link(ctl[code], "control_objectives", "objective_id", [obj["OBJ-TDR"]])
+            self._link(ctl[code], "control_documents", "document_id", [documents[doc]])
+        for code, name, c27, freq in (("TDR-CTL-07", "Kritik tedarikçi sözleşmelerinde güvenlik ve denetim hakkı maddesi", ("A.5.20", "A.5.31"), "yearly"),
+                                      ("TDR-CTL-08", "Tedarikçi personeli erişimlerinin üç aylık gözden geçirilmesi", ("A.5.19", "A.5.21"), "quarterly"),
+                                      ("TDR-CTL-09", "Bulut tedarikçilerinde veri yerleşimi ve KVKK taahhüdü", ("A.5.23", "A.5.34"), "yearly")):
+            ctl[code] = self.add("controls", {
+                "code": code, "name": name, "execution_mode": "manual", "frequency": freq, "criticality": "high", "nature": "preventive",
+                "method_type": "sampling", "owner": "Okan Yıldız", "org_unit_id": self.ids["unit"]["BGV"],
+                "method": "Kritik tedarikçilerden örneklem seçilir; sözleşme, erişim listesi ve taahhütname incelenir.",
+                "expected_result": "Örneklemdeki tüm kayıtlar gereksinimi karşılar.", "description": TAG})
+            self._link(ctl[code], "control_clauses", "clause_id", iso27(*c27))
+            self._link(ctl[code], "control_processes", "process_id", [proc["TDR"]])
+            self._link(ctl[code], "control_documents", "document_id", [documents["PRS-TDR-GUV"], documents["TLM-ERISIM"]])
+        # risk kataloğu ve kurumsal riskler (tedarikçisiz)
+        from .modules import risks as RK
+        catalog_ids = {}
+        for code, title, category, cause, event, consequence in (
+                ("EOS", "Destek süresi biten bileşen", "security", "Üretici desteği sona erdiği için", "kritik bir zafiyet yamalanamayabilir", "hizmette kesinti veya veri ihlali yaşanabilir"),
+                ("PATCH", "Kritik yamada gecikme", "security", "Kritik güvenlik yamaları hedef sürede uygulanmadığı için", "bilinen bir zafiyet istismar edilebilir", "müşteri verisinin gizliliği zarar görebilir"),
+                ("CHANGE", "Yetkisiz üretim değişikliği", "operational", "Üretim erişimi ile onay yetkisi ayrılmadığı için", "test edilmemiş bir değişiklik devreye alınabilir", "hizmet seviyesi taahhüdü ihlal edilebilir"),
+                ("RESTORE", "Yedekten geri dönüş", "continuity", "Geri yükleme provaları temsili veriyle yapılmadığı için", "kritik bir hizmet hedef sürede kurtarılamayabilir", "veri kaybı ve sözleşmesel kesinti oluşabilir"),
+                ("SUPPLIER", "Tek tedarikçiye bağımlılık", "supplier", "Kritik hizmette alternatif tedarikçi bulunmadığı için", "tedarikçi kesintisi hizmeti durdurabilir", "müşteriye taahhüt edilen süre aşılabilir"),
+                ("CMDB", "Eksik hizmet bağımlılıkları", "operational", "CMDB ilişki bilgileri güncel tutulmadığı için", "değişiklikten etkilenecek bir hizmet gözden kaçabilir", "plansız kesinti yaşanabilir"),
+                ("CAPACITY", "Veri merkezi kapasitesi", "continuity", "Kapasite tahmininde büyüme dikkate alınmadığı için", "yoğun dönemde kapasite tükenebilir", "kritik uygulamaların erişilebilirliği düşebilir"),
+                ("PRIVACY", "Kanıtlarda kişisel veri", "privacy", "Kanıt toplarken veri minimizasyonu uygulanmadığı için", "gereksiz kişisel veriler denetim paketine girebilir", "kişisel veriler yetkisiz kişilerle paylaşılabilir")):
+            catalog_ids[code] = self.add("risk_catalog", {"code": code, "title": title, "category": category, "cause": cause,
+                                                          "risk_event": event, "consequence": consequence,
+                                                          "likelihood": r.randint(2, 4), "impact": r.randint(3, 5), "description": "KS GRC örnek senaryosu"})
+        enterprise = {}
+        for n, (code, entity, ctl_codes, like, imp) in enumerate((
+                ("CHANGE", "Üretim ortamı (çekirdek bankacılık hizmeti)", ("KS-DEMO-CTL-002", "KS-DEMO-CTL-003"), 3, 4),
+                ("RESTORE", "Birincil veri merkezi", ("KS-DEMO-CTL-020", "KS-DEMO-CTL-021"), 2, 5),
+                ("PATCH", "Sunucu filosu", ("KS-DEMO-CTL-009", "KS-DEMO-CTL-010"), 4, 4),
+                ("CMDB", "Konfigürasyon yönetim veritabanı", ("KS-DEMO-CTL-001",), 3, 3),
+                ("CAPACITY", "Veri merkezi altyapısı", ("KS-DEMO-CTL-022",), 2, 4),
+                ("PRIVACY", "Denetim kanıt arşivi", ("KS-DEMO-CTL-028",), 2, 3)), start=1):
+            row = one(db, "SELECT * FROM tdr_risk_catalog WHERE id=?", (catalog_ids[code],))
+            risk_id = self.add("supplier_risks", {
+                "code": f"KR-{n:03d}", "title": row["title"], "category": row["category"], "entity_name": entity,
+                "catalog_id": row["id"], "cause": row["cause"], "risk_event": row["risk_event"], "consequence": row["consequence"],
+                "likelihood": like, "impact": imp, "appetite": 8, "owner": r.choice(["mehmet.kaya", "okan.yildiz"]),
+                "response_strategy": "mitigate", "review_date": day(r.choice([-10, 45, 90, 120])), "description": TAG},
+                created_days_ago=r.randint(120, 300))
+            enterprise[code] = risk_id
+            self._link_many("control_risks", "risk_id", risk_id, [ctl[c] for c in ctl_codes if c in ctl])
+            risk = crud.get(db, RESOURCES["supplier_risks"], risk_id)
+            mitigations = [{"title": f"{c} kontrolü", "weight": "medium", "effectiveness": "effective", "control_ref": c} for c in ctl_codes]
+            total, credits = RK.contribution(mitigations)
+            snapshot = {k: risk.get(k) for k in RK.SNAPSHOT}
+            snapshot.update({"method": "weighted-v1", "mitigations": credits})
+            db.execute("INSERT INTO tdr_risk_assessments (risk_id, assessed_at, assessor, rationale, inherent, mitigation_pct, "
+                       "residual, appetite, snapshot) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (risk_id, stamp(r.randint(15, 60)), "okan.yildiz", "Kontrol test sonuçları ve süreç gözden geçirmesine dayanır. " + TAG,
+                        like * imp, float(total * 100), float(like * imp * (1 - total)), 8, json.dumps(snapshot, ensure_ascii=False)))
+            db.execute("UPDATE tdr_supplier_risks SET status='in_treatment' WHERE id=?", (risk_id,))
+        # tedarikçi risklerini kontrollere bağla
+        for code in ("TDR-CTL-03", "TDR-CTL-08"):
+            some = [x["id"] for x in rows(db, "SELECT id FROM tdr_supplier_risks WHERE supplier_id IS NOT NULL AND category IN "
+                                              "('security','concentration','continuity') ORDER BY id LIMIT 6")]
+            self._link_many("control_risks", "risk_id", None, [], control=ctl[code], targets=some)
+        # kanıtlar (küçük sentetik dosyalar)
+        evidence = {}
+
+        def evid(key, title, file_name, content, ctl_codes, days_ago, expires=None, supplier=None, conf="internal", by="can.ozturk"):
+            principal = Principal(by, "AUDITOR", "system", by)
+            evidence_id = crud.insert(db, RESOURCES["evidence"], {
+                "title": title, "description": TAG, "confidentiality": conf, "supplier_id": supplier,
+                "period_start": day(-days_ago - 90), "period_end": day(-days_ago), "expires_at": expires,
+                "org_unit_id": self.ids["unit"]["BGV"]}, principal)
+            G.store_file(db, evidence_id, file_name, content, by, uploaded_at=stamp(days_ago))
+            db.execute("UPDATE tdr_evidence SET created_at=? WHERE id=?", (stamp(days_ago), evidence_id))
+            for c in ctl_codes:
+                db.execute("INSERT INTO tdr_evidence_controls (evidence_id, control_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                           (evidence_id, ctl[c]))
+            evidence[key] = evidence_id
+            return evidence_id
+        pdf = lambda text: ("%PDF-1.4\n% " + TAG + "\n% " + text + "\n%%EOF\n").encode()
+        critical = [s for s in self.suppliers if s["tier"] == "critical"]
+        evid("cmdb", "CMDB keşif karşılaştırma çıktısı", "cmdb-kesif.csv", "fqdn,ci_durumu\nsrv-001.ornek.test,eslesti\nsrv-002.ornek.test,eksik\n".encode(), ["KS-DEMO-CTL-001"], 3)
+        evid("rfc", "Üretim değişiklik onay örneklemi", "rfc-orneklem.csv", "rfc,onay,test\nCHG0001,evet,evet\nCHG0002,hayir,evet\n".encode(), ["KS-DEMO-CTL-002", "KS-DEMO-CTL-003"], 20)
+        evid("erisim", "Tedarikçi personeli erişim gözden geçirme listesi (Q3)", "erisim-gozden-gecirme.csv",
+             "tedarikci,kullanici,durum\nDMO-001,ext.user1,kaldirildi\nDMO-003,ext.user7,onaylandi\n".encode(), ["TDR-CTL-08"], 45, conf="confidential")
+        evid("sozlesme", "Kritik tedarikçi sözleşme madde incelemesi", "sozlesme-inceleme.pdf", pdf("8 sozlesmeden 6'sinda denetim hakki var"), ["TDR-CTL-07"], 60)
+        evid("kvkk", "Bulut tedarikçileri veri yerleşim taahhütleri", "kvkk-taahhut.pdf", pdf("taahhutname ozeti"), ["TDR-CTL-09"], 75, conf="restricted")
+        evid("yedek", "Geri yükleme provası raporu", "geri-yukleme.json", json.dumps({"prova": "Q3", "rto_saat": 3.5, "hedef": 4}).encode(), ["KS-DEMO-CTL-020"], 30)
+        for n, s in enumerate(critical[:5]):
+            evid(f"iso{n}", f"{s['name']} — ISO/IEC 27001 sertifikası", f"iso27001-{n + 1}.pdf", pdf(s["name"] + " sertifika kopyasi"),
+                 ["TDR-CTL-07"], r.randint(100, 300), expires=day([12, 25, 140, 260, -5][n]), supplier=s["id"])
+        evid("soc2", f"{critical[1]['name']} — SOC 2 Tür II rapor özeti", "soc2-ozet.pdf", pdf("SOC2 ozet"), ["TDR-CTL-08"], 50,
+             expires=day(200), supplier=critical[1]["id"], conf="confidential")
+        db.execute("UPDATE tdr_evidence SET status='expired' WHERE expires_at < ?", (day(0),))
+        # kontrol test geçmişi (KS GRC senaryo sonuçları; MCP ve denetçi)
+        for c in scenario["controls"]:
+            example = c["example"]
+            history = [r.choice(["pass", "pass", "fail"]) for _ in range(r.randint(1, 3))] + [example["status"]]
+            freq = G.FREQUENCY_DAYS.get(c["frequency"]) or 30
+            for k, status in enumerate(history):
+                ago = (len(history) - 1 - k) * min(freq, 30) + r.randint(1, 6)
+                if c["code"] in ("KS-DEMO-CTL-015", "KS-DEMO-CTL-018") and k == len(history) - 1:
+                    ago += 140                                   # testi gecikmiş manuel kontroller
+                body = {"control_id": ctl[c["code"]], "status": status, "executed_at": stamp(ago, r.randint(7, 18)),
+                        "details": example["details"] if status == example["status"] else
+                        ("Örneklemde istisna bulunmadı." if status == "pass" else "Örneklemde istisna bulundu; ayrıntı kaynak kayıtta."),
+                        "sample_size": example.get("checked"), "exceptions": example.get("failed", 0) if status == "fail" else 0}
+                if status == "fail":
+                    body["severity"] = example.get("severity", "medium")
+                links = [evidence[k2] for k2, codes in (("cmdb", ["KS-DEMO-CTL-001"]), ("rfc", ["KS-DEMO-CTL-002", "KS-DEMO-CTL-003"]),
+                                                       ("yedek", ["KS-DEMO-CTL-020"])) if c["code"] in codes]
+                if links and k == len(history) - 1:
+                    body["evidence_ids"] = links
+                if c["execution_mode"] == "automatic":
+                    body["source"] = "mcp"
+                    body["provenance"] = {"collection_status": "complete", "query": "approved-query:" + c["code"].lower() + ":v1",
+                                          "source_system": example.get("source_system"), "reference": example.get("reference"),
+                                          "checked": example.get("checked"), "failed": example.get("failed")}
+                    G.record_execution(db, machine, body)
+                else:
+                    G.record_execution(db, auditor, body)
+        for code in ("TDR-CTL-07", "TDR-CTL-08", "TDR-CTL-09"):
+            G.record_execution(db, auditor, {"control_id": ctl[code], "executed_at": stamp(r.randint(20, 70)),
+                                             "status": "fail" if code == "TDR-CTL-07" else "pass", "severity": "high",
+                                             "details": "8 kritik tedarikçi sözleşmesinden 2'sinde denetim hakkı maddesi yok." if code == "TDR-CTL-07"
+                                             else "Örneklemdeki 12 kayıt gereksinimi karşılıyor.", "sample_size": 8 if code == "TDR-CTL-07" else 12,
+                                             "exceptions": 2 if code == "TDR-CTL-07" else 0,
+                                             "evidence_ids": [evidence[{"TDR-CTL-07": "sozlesme", "TDR-CTL-08": "erisim", "TDR-CTL-09": "kvkk"}[code]]]})
+        # iç otomatik kontroller: portal verisinden gerçek sonuç
+        for code, *_ in supplier_controls:
+            G.run_automation(db, self.app, crud.get(db, RESOURCES["controls"], ctl[code]), admin)
+        # denetimler
+        audit_ids = {}
+
+        def make_audit(key, name, kind, std_codes, clause_ids, start, end, status, supplier=None, objective=None):
+            planned = {"name": name, "kind": kind, "supplier_id": supplier, "audit_objective": objective or "Kontrollerin tasarım ve işleyiş etkinliğini değerlendirmek.",
+                       "scope": "Sentetik demo denetimi; gerçek sistem kaydı kullanılmadı.", "planned_start": day(start), "planned_end": day(end),
+                       "lead_auditor": "Can Öztürk", "auditors": "Can Öztürk, Elif Şahin (gözlemci)", "auditees": "Satın Alma, BT Altyapı, Bilgi Güvenliği",
+                       "code": f"DNT-{TODAY.year}-{len(audit_ids) + 1:04d}", "status": "planned", "created_at": stamp(-start + 20)}
+            audit_id = db.execute(f"INSERT INTO tdr_audits ({', '.join(planned)}) VALUES ({', '.join('?' * len(planned))})",
+                                  tuple(planned.values())).lastrowid
+            for sid in std_codes:
+                db.execute("INSERT INTO tdr_audit_standards (audit_id, standard_id) VALUES (?,?)", (audit_id, std[sid]))
+            for cid in clause_ids:
+                db.execute("INSERT INTO tdr_audit_clauses (audit_id, clause_id) VALUES (?,?)", (audit_id, cid))
+            if status != "planned":
+                db.execute("UPDATE tdr_audits SET status='in_progress', actual_start=? WHERE id=?", (day(start + 1), audit_id))
+            audit_ids[key] = audit_id
+            return audit_id
+
+        def test_in_audit(audit_id, fail_rate, coverage):
+            for link in {p["control_id"] for p in G.planned_controls(db, audit_id)}:
+                control = crud.get(db, RESOURCES["controls"], link)
+                if r.random() > coverage:
+                    continue
+                if control["automation"]:
+                    G.run_automation(db, self.app, control, auditor, audit_id)
+                    continue
+                failed = r.random() < fail_rate
+                body = {"control_id": link, "audit_id": audit_id, "status": "fail" if failed else "pass",
+                        "executed_at": stamp(r.randint(2, 12), r.randint(9, 17)),
+                        "details": "Denetim örnekleminde istisna bulundu." if failed else "Denetim örnekleminde istisna yok.",
+                        "sample_size": 25, "exceptions": r.randint(1, 4) if failed else 0}
+                if control["execution_mode"] == "automatic":
+                    body["source"] = "mcp"
+                    body["provenance"] = {"collection_status": "complete", "query": "approved-query:" + control["code"].lower() + ":v1"}
+                    G.record_execution(db, machine, body)
+                else:
+                    G.record_execution(db, auditor, body)
+        iso20_all = [cid for (s, _), cid in clause.items() if s == "ISO/IEC 20000-1"]
+        cis_all = [cid for (s, code), cid in clause.items() if s == "CIS Controls" and code.split(".")[0] in ("1", "3", "4", "5", "6", "7", "8", "11", "17")]
+        a1 = make_audit("iso", "ISO/IEC 20000-1:2018 — 2026 iç denetimi", "internal", ["ISO/IEC 20000-1"], iso20_all, -30, 10, "in_progress")
+        test_in_audit(a1, 0.25, 0.7)
+        a2 = make_audit("cis", "CIS Controls v8.1 — 2026 Q4 güvenlik kontrol değerlendirmesi", "internal", ["CIS Controls"], cis_all, -24, 15, "in_progress")
+        test_in_audit(a2, 0.3, 0.55)
+        a3 = make_audit("tdr", "Tedarikçi yönetimi süreç denetimi (ISO/IEC 27001 Ek A 5.19–5.23)", "internal", ["ISO/IEC 27001"],
+                        iso27("A.5.19", "A.5.20", "A.5.21", "A.5.22", "A.5.23"), -70, -40, "in_progress")
+        test_in_audit(a3, 0.3, 1.0)
+        db.execute("UPDATE tdr_audits SET status='completed', actual_end=?, opinion='partially_effective', conclusion=? WHERE id=?",
+                   (day(-41), "Tedarikçi izleme kontrolleri büyük ölçüde işliyor; sözleşme maddeleri ve gecikmiş değerlendirmeler için DÖF açıldı.", a3))
+        for link in G.planned_controls(db, a3):
+            db.execute("INSERT INTO tdr_audit_plan (audit_id, clause_id, control_id) VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                       (a3, link["clause_id"], link["control_id"]))
+        db.execute("UPDATE tdr_audits SET plan_captured_at=? WHERE id=?", (stamp(41), a3))
+        make_audit("sup", f"{critical[0]['name']} — yerinde tedarikçi denetimi", "supplier", ["ISO/IEC 27001"],
+                   iso27("A.5.19", "A.5.20", "A.5.22", "A.5.30"), 20, 24, "planned", supplier=critical[0]["id"],
+                   objective="Kritik barındırma tedarikçisinin güvenlik ve süreklilik taahhütlerini yerinde doğrulamak.")
+        for key, codes in (("sozlesme", ["tdr"]), ("erisim", ["tdr"]), ("cmdb", ["iso", "cis"]), ("rfc", ["iso"])):
+            for a in codes:
+                db.execute("INSERT INTO tdr_evidence_audits (evidence_id, audit_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                           (evidence[key], audit_ids[a]))
+        # bulgular: sahip, kök neden, durum çeşitliliği; DÖF'ler
+        findings = rows(db, "SELECT * FROM tdr_findings ORDER BY id")
+        owners = ["mehmet.kaya", "okan.yildiz", "ayse.yilmaz", "deniz.koc", "kerem.aksoy"]
+        causes = ["Süreç adımı tanımlı ama sahibi belirsiz.", "Otomatik kontrolün beslendiği veri kaynağı eksik.",
+                  "Ekip kapasitesi yetersiz; iş yüküne göre önceliklendirilmedi.", "Prosedür güncel uygulamayı yansıtmıyor.",
+                  "Tedarikçi sözleşmesinde yükümlülük açıkça yazılmamış."]
+        titles = ["Kök neden analizi ve süreç düzeltmesi", "Eksik kayıtların tamamlanması", "Prosedürün güncellenmesi ve eğitim",
+                  "Tedarikçiyle sözleşme ek protokolü", "Otomatik kontrol veri kaynağının düzeltilmesi"]
+        for k, f in enumerate(findings):
+            owner = r.choice(owners)
+            db.execute("UPDATE tdr_findings SET owner=?, root_cause=? WHERE id=?", (owner, r.choice(causes), f["id"]))
+            plan = k % 5
+            if plan == 4:
+                continue                                         # açık, faaliyetsiz
+            db.execute("UPDATE tdr_findings SET status='in_progress' WHERE id=?", (f["id"],))
+            unit = self.ids["unit"][{"mehmet.kaya": "BTA", "okan.yildiz": "BGV", "ayse.yilmaz": "SAT", "deniz.koc": "UYG", "kerem.aksoy": "OPS"}[owner]]
+            due = r.choice([-15, -3, 20, 45, 75])
+            status = ["open", "in_progress", "validation", "completed"][plan]
+            action = db.execute(
+                "INSERT INTO tdr_grc_actions (code, title, finding_id, control_id, description, owner, org_unit_id, due_date, priority, status, "
+                "resolution, verified_by, verification_note, closed_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                (f"DOF-{TODAY.year}-{k + 1:04d}", r.choice(titles), f["id"], f["control_id"], TAG, owner, unit, day(due),
+                 r.choice(["medium", "high"]), status,
+                 "Eksik kayıtlar tamamlandı, prosedür güncellendi; kanıt kanıt kaydında." if status in ("validation", "completed") else None,
+                 "can.ozturk" if status == "completed" else None,
+                 "Yeniden test edildi; 25 kayıtlık örneklemde istisna yok." if status == "completed" else None,
+                 stamp(r.randint(1, 10)) if status == "completed" else None, stamp(r.randint(20, 60)))).lastrowid
+            if status == "completed" and k % 2 == 0:
+                db.execute("UPDATE tdr_findings SET status='closed', closure_note=?, closed_at=? WHERE id=?",
+                           ("Düzeltici faaliyet etkinliği doğrulandı.", stamp(r.randint(1, 5)), f["id"]))
+        if findings:
+            last = findings[-1]
+            db.execute("UPDATE tdr_findings SET status='accepted', closure_note=?, closed_at=? WHERE id=? AND status='open'",
+                       ("Telafi edici kontrol mevcut; 2027 bütçesine kadar risk kabul edildi (Yönetici kararı).", stamp(3), last["id"]))
+        audit.log(db, SYSTEM, "SEED", "grc_demo", None, {"controls": len(ctl), "audits": len(audit_ids)}, description=TAG)
+
+    def _link(self, control_id, table, col, ids):
+        for target in dict.fromkeys(i for i in ids if i):
+            self.db.execute(f"INSERT INTO tdr_{table} (control_id, {col}) VALUES (?,?) ON CONFLICT DO NOTHING", (control_id, target))
+
+    def _link_many(self, table, col, risk_id, control_ids, control=None, targets=()):
+        pairs = [(c, risk_id) for c in control_ids] if control is None else [(control, t) for t in targets]
+        for c, t in pairs:
+            self.db.execute(f"INSERT INTO tdr_{table} (control_id, {col}) VALUES (?,?) ON CONFLICT DO NOTHING", (c, t))
+
+    def resume_grc(self):
+        """Tedarikçi demosu yüklü veritabanına yalnızca GRC bölümünü ekler (kimlikleri veritabanından okur)."""
+        self.ids["unit"] = {r["code"]: r["id"] for r in rows(self.db, "SELECT id, code FROM tdr_org_units")}
+        self.suppliers = [{"id": r["id"], "tier": r["tier"], "status": r["status"], "name": r["name"]}
+                          for r in rows(self.db, "SELECT * FROM tdr_suppliers WHERE code LIKE 'DMO-%' ORDER BY code")]
+        self.grc()
+        return "GRC_ADDED"
+
     def run(self):
         self.core()
         self.performance()
         self.risks()
         self.surveys()
+        self.grc()
         passwords = self.users()
         audit.log(self.db, SYSTEM, "SEED", "demo", None,
                   {"suppliers": len(self.suppliers), "engagements": len(self.engagements)}, description=TAG)
@@ -504,6 +848,8 @@ def seed(app):
     with app.database.connect() as db:
         db.lock("demo-seed")
         if one(db, "SELECT id FROM tdr_suppliers WHERE code LIKE 'DMO-%' LIMIT 1"):
+            if app.enabled("grc") and not one(db, "SELECT id FROM tdr_controls LIMIT 1"):
+                return Seeder(db, app).resume_grc()      # önceki sürümle yüklenmiş demoya GRC bölümü eklenir
             return None
         if one(db, "SELECT id FROM tdr_suppliers LIMIT 1"):
             raise SystemExit("Veritabanında demo dışı tedarikçi var; demo verisi yalnızca boş veritabanına yüklenir")
@@ -519,6 +865,9 @@ def main():
         app.close()
     if passwords is None:
         print("DEMO_ALREADY_LOADED")
+        return
+    if passwords == "GRC_ADDED":
+        print("DEMO_GRC_ADDED")
         return
     print("Demo verisi yüklendi (sentetik). Demo kullanıcılar ilk girişte parolalarını değiştirir:")
     for username, name, role, password in passwords:

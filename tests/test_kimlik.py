@@ -140,6 +140,18 @@ class YerelOturum(Base):
         me_id = next(u["id"] for u in self.request("GET", "/api/tdr/users", cookie=admin)[1]
                      if u["username"] == own["username"])
         self.assertEqual(self.request("PATCH", f"/api/tdr/users/{me_id}", {"is_active": 0}, cookie=admin)[0], 400)
+        # yönetici geçici parola verir: eski parola ve oturum geçersiz, yeni parolayla ilk girişte değişim zorunlu
+        self.request("PATCH", f"/api/tdr/users/{created['id']}", {"is_active": 1}, cookie=admin)
+        status, reset = self.request("POST", f"/api/tdr/users/{created['id']}/reset-password", {}, cookie=admin)
+        self.assertEqual((status, reset["must_change_password"]), (200, True))
+        self.assertNotEqual(reset["temporary_password"], created["temporary_password"])
+        self.assertEqual(self.request("POST", "/api/login", {"username": "zeynep",
+                                                             "password": created["temporary_password"]})[0], 401)
+        zeynep = self.ready("zeynep", reset["temporary_password"])
+        self.assertNotIn(reset["temporary_password"], json.dumps(self.ok("GET", "/audit_log", app=self.make())))
+        self.assertEqual(self.request("POST", f"/api/tdr/users/{me_id}/reset-password", {}, cookie=admin)[0], 400)
+        self.assertEqual(self.request("POST", f"/api/tdr/users/{created['id']}/reset-password", {},
+                                      cookie=zeynep)[0], 403)
 
     def test_tedarik_rolu_olmayan_hesap_giremez(self):
         with self.app.database.connect() as db:     # ortak users tablosunda KS GRC hesabı (K-013)

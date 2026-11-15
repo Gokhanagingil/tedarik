@@ -282,6 +282,13 @@ def risk_context(c):
     last = risk["assessments"][0] if risk["assessments"] else None
     risk["inherent_score"] = risk["likelihood"] * risk["impact"]
     risk["residual_score"] = last["residual"] if last else None
+    risk["controls"] = []
+    if c.app.enabled("grc"):        # bağlı kontroller ve son test sonuçları (kontrol etkinliği kanıtı)
+        risk["controls"] = rows(c.db, """SELECT k.id, k.code, k.name, k.active, (SELECT x.status FROM tdr_executions x
+            WHERE x.control_id=k.id ORDER BY x.executed_at DESC, x.id DESC LIMIT 1) AS last_status,
+            (SELECT x.executed_at FROM tdr_executions x WHERE x.control_id=k.id ORDER BY x.executed_at DESC, x.id DESC
+            LIMIT 1) AS last_executed_at FROM tdr_controls k JOIN tdr_control_risks m ON m.control_id=k.id
+            WHERE m.risk_id=? ORDER BY k.code""", (risk["id"],))
     return risk
 
 

@@ -32,3 +32,7 @@ Kabul edilen uygulama rolleri modül değişkenine taşındı; varsayılan değe
 | `verify`: dönen rol | `ADMIN if ADMIN in roles else AUDITOR` | `next(r for r in ROLES if r in roles)` |
 
 Sarmalayıcı (`tedarik/session.py`) `ROLES` değerini tedarik rolleriyle (`KS.TDR.*`) ve `FLOW_COOKIE` değerini `__Host-tdr_flow` ile değiştirir; `configure()` için `TEDARIK_*` adlarını `CONTROL_*` adlarına çevirir. Yama KS GRC'ye geriye uyumlu öneri olarak verilmiştir (UYUM_SOZLESMESI.md, "KS GRC'ye öneriler" 1). KS GRC alırsa yama kalkar.
+
+## ks_grc/catalog.json, ks_grc/operational_scenarios.json (K-015)
+
+Kaynak: `Gokhanagingil/control@7720f4b095a067dbf810dbc1cd25937d88a2ee5f`, `seed/catalog.json` ve `seed/operational_scenarios.json`. Değiştirilmeden kopyalandı (JSON dosyasına yorum yazılamadığı için kaynak burada kayıtlıdır). İkisi de `SIMULATED_NON_PRODUCTION` / `SIMULATED` sınıfındadır; yalnızca `tedarik/demo.py` okur ve sınıf alanını denetler. Madde kodları kamuya açık içindekiler yapısına dayanır; açıklamalar KS GRC'nin özgün Türkçe özetleridir.

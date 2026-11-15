@@ -10,6 +10,7 @@ HTTPS üzerinden `X-API-Key: <TEDARIK_API_KEY>` (en az 32 karakter; sunucuda `/o
 | --- | --- | --- |
 | `org_units`, `supplier_types`, `catalog_items`, `suppliers`, `source_refs`, `engagements`, `contracts`, `sla_definitions`, `supplier_risks`, `risk_assessments` | Evet | Hayır |
 | `sla_measurements` | Evet | Evet, yalnızca `"source": "mcp"` |
+| `controls`, `executions`, `evidence` (GRC) | Evet | `executions`: yalnızca otomatik kontrole `"source": "mcp"`; `evidence/upload` |
 | `performance_events` | Evet | Evet, yalnızca `"source": "mcp"` |
 | `/api/health` | 200 | — |
 | `/api/tdr/schedule` (takvim: geciken değerlendirme, anket ve risk gözden geçirmeleri) | Evet | — |
@@ -45,6 +46,25 @@ Listeler süzülebilir (`?supplier_id=3`, `?status=active`, `?end_date__lte=2026
 ## Akış 3: Tedarikçi eşleme (okuma)
 
 Kaynak sistem kimliğiyle portal tedarikçisini bulmak için `GET /api/tdr/source_refs?source_system=servicenow&external_id=<kimlik>` → `supplier_id`. Yeni tedarikçiyi MCP açmaz; ana veri Excel aktarımı veya Tedarikçi Yöneticisi ile girilir (K-007).
+
+## Akış 4: Otomatik kontrol sonucu yazma (GRC modülü, K-015)
+
+KS GRC `POST /api/executions` ile aynı alanlar: `POST /api/tdr/executions`
+
+```json
+{"control_id": 12, "status": "fail", "source": "mcp", "details": "1.246 sunucudan 5'i CMDB'de yok",
+ "executed_at": "2026-11-15T06:00:00Z", "sample_size": 1246, "exceptions": 5, "severity": "high",
+ "provenance": {"collection_status": "complete", "query": "approved-query:cmdb:v1", "reference": "sys_id: ..."},
+ "evidence_ids": [7], "idempotency_key": "mcp-ctl-12-2026-11-15"}
+```
+
+- Yalnızca `execution_mode=automatic` kontrole ve yalnızca `"source": "mcp"` ile yazılır; aksi 403.
+- `collection_status` `partial` veya `error` ise sonuç yalnızca `inconclusive` olabilir. Zaman saat dilimli olmalı ve gelecekte olmamalı.
+- Başarısız sonuç bulgu açar; aynı kontrolde açık MCP bulgusu varsa yeni bulgu açılmaz, tekrar sayısı artar.
+- Kanıt yükleme: `POST /api/tdr/evidence/upload` (`title`, `file_name`, `content_base64`, `controls: [id]`); kaynak "mcp" olarak işaretlenir. MCP anahtarı kanıt dosyası indiremez.
+- Okuma: `GET /api/tdr/controls?execution_mode=automatic&active=1`, `GET /api/tdr/executions?control_id=`.
+
+Portal kendi verisi üzerindeki kontrolleri ayrıca iç kuralla çalıştırır (`POST /api/tdr/controls/{id}/run`, `POST /api/tdr/grc/run-automatic`; yalnızca kullanıcı oturumu). Aşağıdaki tablo, KS GRC ayrı uygulama olarak kaldığı sürece geçerlidir.
 
 ## KS GRC için kanıt (örnek otomatik kontroller)
 

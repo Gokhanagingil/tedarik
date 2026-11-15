@@ -22,7 +22,8 @@ def describe(res, principal):
         fields.append(item)
     can_write = authz.can_write(principal, res)
     return {"name": res.name, "label": res.label, "module": res.module, "api": list(res.api), "write": res.write,
-            "can_write": can_write and ("create" in res.api or "update" in res.api),
+            # rol listeli kaynakların yazması özel uç noktadandır (ör. denetim, kontrol sonucu)
+            "can_write": can_write and ("create" in res.api or "update" in res.api or res.write_roles is not None),
             "search": list(res.search), "filters": sorted(res.filters), "unit_scoped": res.scope is not None,
             "fields": fields}
 

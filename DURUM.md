@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-15 · Aşama: test sunucusuna (204.168.247.101) kuruldu; şimdilik yalnızca SSH port yönlendirmesiyle erişiliyor.
+Son güncelleme: 2026-11-15 · Aşama: test sunucusunda HTTPS ile açık (https://tedarik.204-168-247-101.sslip.io), sentetik demo verisi yüklü; KS GRC iş modeli `grc` modülü olarak taşındı (K-015).
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -14,6 +14,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Entra rol değerleri `KS.TDR.*`; `entra_auth.py` kopyasına tek, belgelenmiş yama (K-012).
 - Süreçler veri olarak tanımlı; kaynak bulma modülü hazır ama kapalı.
 - Entegrasyon: MCP uygulaması REST API'ye yazar.
+- Test sunucusunda TLS: sslip.io adı, projeye ait Caddy, 443/TLS-ALPN-01; 80. porttaki uygulamaya dokunulmaz (K-014).
+- KS GRC iş modeli bu altyapıda (`grc` modülü); kurumsal ve tedarikçi riskleri tek risk kaydında (K-015).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -27,7 +29,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 - Temel katman: yapılandırma, şema kaydı, veritabanı, ortak kayıt işlemleri, yönlendirici, güvenlik başlıkları, köken denetimi, tekrar koruması, denetim izi.
 - Yetki: beş rol, en az yetkili MCP anahtarı. Anonim erişim açılmaz.
-- Modüller: `core`, `performance`, `surveys`, `risks`, `transfer`, `dashboard` (açık); `workflow`, `sourcing` (kapalı).
+- Modüller: `core`, `performance`, `surveys`, `risks`, `grc`, `transfer`, `dashboard` (açık); `workflow`, `sourcing` (kapalı).
 - **Adım 1 (2026-11-13): KS GRC tam incelendi** (commit `7720f4b`). `docs/UYUM_SOZLESMESI.md` içindeki "Doğrulanacak" satırları kapatıldı. Düzeltilen farklar:
   - Tekrar koruması: anahtar biçimi `[A-Za-z0-9_.:-]{8,160}`, kanonik JSON özeti, alındı okunmadan önce yazma kilidi (eşzamanlı 8 tekrar tek kayıt üretir).
   - Denetim izi: KS GRC `activity_log` sütun adları (`occurred_at`, `method`, `object_type`, `object_id`, `description`); gizli alanlar maskelenir; anket yanıtı artık iz bırakıyor.
@@ -77,18 +79,22 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **Adım 7 (2026-11-13): Periyodik işler.** `policies` tablosu çekirdeğe taşındı (her kurulumda var). Kritiklik seviyesine göre değerlendirme ve anket sıklığı (`review.cadence_months`, `survey.cadence_months`) ve uyarı süresi politikadır; yönetici arayüzden değiştirir. `GET /api/tdr/schedule` ve "Takvim" ekranı: geciken ve yaklaşan değerlendirme, anket ve risk gözden geçirmeleri; pano uyarıları. Not: hatırlatma e-postası yok (uygulama dışarıya ileti göndermez; KS GRC ile aynı ilke).
 - CI düzeltildi: iş akışı dosyasındaki YAML hatası yüzünden adım 3'ten beri CI işleri hiç başlamamıştı. Paketsiz kurulumda Entra modu artık anlaşılır bir hatayla durur.
 - **Test sunucusuna kurulum (2026-11-15):** 204.168.247.101 (Hetzner, Ubuntu 24.04). Sunucuda `tedarik-deploy` kullanıcısı (anahtarla giriş, parolasız sudo) açıldı; root girişi yalnızca anahtarla (varsayılan). Docker (Ubuntu paketleri) kuruldu. GitHub Actions "Deploy Tedarik (isolated)" işiyle kuruldu; sunucudaki mevcut nginx (80) ve yerel PostgreSQL (127.0.0.1:5432) uygulamasına dokunulmadı. Uygulama `127.0.0.1:18090`; ilk yönetici `tdradmin`.
-- Testler: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
+- **TLS (2026-11-15, K-014):** `https://tedarik.204-168-247-101.sslip.io`. Let's Encrypt sertifikası (TLS-ALPN-01), HSTS, CSP, Secure çerez. Kurulum işi dışarıdan sertifika, başlık ve anonim 401 denetimi yapar. Sunucudaki diğer uygulama (nginx :80) etkilenmedi.
+- **Demo verisi (2026-11-15):** `python -m tedarik.demo` (kurulumda `seed_demo`). Sentetik şirket: 10 birim, 28 ürün/hizmet, 45 tedarikçi (`DMO-` kodlu), 61 angajman, 57 sözleşme, 12 aylık SLA ölçümü, performans olayları ve değerlendirmeler, risk değerlendirme/karar/faaliyetleri, 3 anket kampanyası ve yanıtları; GRC: 3 standart (ISO/IEC 20000-1, CIS v8.1, ISO/IEC 27001 tedarikçi kontrolleri), 37 kontrol, 133 test sonucu, 4 denetim, 12 kanıt (dosyalı), 45 bulgu, 36 DÖF, 8 doküman, risk kataloğu ve 6 kurumsal risk. 9 demo kullanıcısı (her rol); geçici parolaları sunucuda yalnızca root'un okuyabildiği `/opt/tedarik/.demo-users` dosyasında. Yönetici, Kullanıcılar ekranından "Geçici parola ver" ile de yeni parola üretebilir. Demo yalnızca boş (veya yalnızca demo verisi olan) veritabanına yüklenir; iş kuralları uygulamanın kendi işlevleriyle uygulanır.
+- **KS GRC taşıması (2026-11-15, K-015):** `tedarik/modules/grc.py`. Çerçeve (standart, madde + uygulanabilirlik bildirimi, süreç, hedef, doküman), kontrol ve eşlemeleri, değiştirilemez kontrol çalışmaları (dondurulmuş tanım, kaynak bilgisi, kanıt sürümü/SHA-256), denetim yaşam döngüsü (kapsam sürüm koruması, plan dondurma), kanıt dosya sürümleri (veritabanında, indirmede bütünlük doğrulaması), bulgu ve DÖF (doğrulama aşaması, görevler ayrılığı), uyum göstergesi (KS GRC anlamı), GRC genel bakış. İç otomatik kontroller portal verisini denetler (6 kural) ve her sabah çalışır (`/etc/cron.d/tedarik-grc`). MCP otomatik kontrol sonucu yazar (`POST /api/tdr/executions`). Tek risk kaydı (göç 1) ve risk kataloğu. Arayüz: Uyum Panosu, kontrol ayrıntısı (sonuç kaydet, şimdi çalıştır, eşlemeler), denetim çalışma alanı, kanıt sürümleri, bulgu ve DÖF akışları; genel bakışta uyum kartları.
+- Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
+- Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
+- Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
 ## Bilinen eksikler
 
 - **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
-- **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
-- **Dışarıya erişim kararı bekleniyor** (alan adı ve TLS); şimdilik yalnızca SSH port yönlendirmesiyle erişilir.
+- **Test adresi sslip.io üzerinde** (üçüncü taraf DNS); kurumsal kullanım için kurum alan adı gerekir (K-014).
+- **KS GRC verisinin taşınması yapılmadı:** iş modeli taşındı; KS GRC'deki gerçek kayıtları (standart eşlemeleri, kontroller, denetimler, kanıt dosyaları) aktaracak içe aktarım henüz yok.
 - **CI güvenlik kapıları eksik** (gitleaks, trivy, bandit, pip-audit).
-- **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
 
 ## Sıradaki adımlar (sırayla)
 
@@ -101,7 +107,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 6. ~~**Dağıtım.**~~ Tamamlandı (2026-11-13). Kalan: CI'a gitleaks, trivy, bandit, pip-audit; kalıcı alan adı ve TLS.
 7. ~~**Periyodik işler.**~~ Tamamlandı (2026-11-13).
 8. ~~**MCP sözleşmesi.**~~ Tamamlandı (2026-11-13): `docs/MCP_SOZLESMESI.md`. Kalan: KS GRC tarafında örnek kontrollerin tanımlanması.
-9. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
+9. ~~**TLS, demo verisi, KS GRC taşıması.**~~ Tamamlandı (2026-11-15).
+10. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
+11. **CI güvenlik kapıları:** gitleaks, trivy, bandit, pip-audit.
+12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler
 
@@ -109,5 +118,6 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Tedarikçi tipleri ve iş birimleri listesi.
 - Yeni rollerin (`KS.TDR.*`) KS GRC'nin Entra uygulama kaydına mı, ayrı bir kayda mı ekleneceği.
 - `tedarik` ve `control` repolarının görünürlüğü (şu an ikisi de herkese açık).
-- Sunucu (204.168.247.101) için GitHub'da `tedarik` ortamına SSH gizli değerleri (docs/DAGITIM.md) ve kalıcı erişim kararı (alan adı, TLS).
+- Kalıcı kurumsal adres (alan adı) ve test sunucusunun internete açık kalıp kalmayacağı.
+- KS GRC'nin ayrı uygulama olarak devam edip etmeyeceği (K-015 sonrası KS GRC kullanıcıları bu portala geçebilir).
 - Üretim PostgreSQL'inin nerede çalışacağı (şimdilik aynı sunucuda yalıtılmış konteyner): kurumun yönetilen PostgreSQL hizmeti mi, aynı sunucuda konteyner mi; sürüm (öneri 16 veya üzeri) ve yedekleme sorumlusu.

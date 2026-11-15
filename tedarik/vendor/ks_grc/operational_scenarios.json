@@ -1,0 +1,1131 @@
+{
+  "version": "ks-demo-2026-11-04-v1",
+  "classification": "SIMULATED",
+  "processes": [
+    [
+      "CFG",
+      "Konfigürasyon Yönetimi",
+      "Altyapı ve CMDB",
+      "Servis, CI ve bağımlılıkların kayıt doğruluğu"
+    ],
+    [
+      "CHG",
+      "Değişiklik Yönetimi",
+      "Değişiklik Yönetimi",
+      "RFC onay, risk, test ve PIR denetimleri"
+    ],
+    [
+      "INC",
+      "Olay Yönetimi",
+      "Servis Masası",
+      "Öncelik ve çözüm süresine göre olay akışı"
+    ],
+    [
+      "MAJ",
+      "Major Incident Yönetimi",
+      "Operasyon Merkezi",
+      "Kritik olay yönetimi ve iletişim"
+    ],
+    [
+      "PRB",
+      "Problem Yönetimi",
+      "Operasyon Analiz",
+      "RCA, bilinen hata ve kalıcı çözüm"
+    ],
+    [
+      "SLM",
+      "Hizmet Seviyesi Yönetimi",
+      "Servis Yönetimi",
+      "SLA, OLA ve müşteri taahhütleri"
+    ],
+    [
+      "SVC",
+      "Hizmet Kataloğu",
+      "Hizmet Tasarım",
+      "Katalog tanımları ve hizmet sahipliği"
+    ],
+    [
+      "REL",
+      "Sürüm ve Dağıtım Yönetimi",
+      "Uygulama Operasyon",
+      "Release plan, geri dönüş ve test"
+    ],
+    [
+      "CAP",
+      "Kapasite Yönetimi",
+      "Altyapı Planlama",
+      "Kapasite eğilimleri ve tahminler"
+    ],
+    [
+      "BCM",
+      "Hizmet Sürekliliği",
+      "Süreklilik Ekibi",
+      "Yedekleme ve felaket kurtarma"
+    ],
+    [
+      "SEC",
+      "Bilgi Güvenliği",
+      "SOC",
+      "Güvenlik olayları ve sertleştirme"
+    ],
+    [
+      "IAM",
+      "Kimlik ve Erişim Yönetimi",
+      "IAM Ekibi",
+      "Hesap ve ayrıcalık kontrolleri"
+    ],
+    [
+      "VULN",
+      "Zafiyet Yönetimi",
+      "Zafiyet Yönetimi",
+      "Tarama ve iyileştirme"
+    ],
+    [
+      "LOG",
+      "Günlük/Log Yönetimi",
+      "SOC",
+      "Log toplama ve saklama"
+    ],
+    [
+      "VEN",
+      "Tedarikçi Yönetimi",
+      "Tedarik Yönetimi",
+      "Üçüncü taraf performans ve kanıt"
+    ],
+    [
+      "ASSET",
+      "Varlık Yönetimi",
+      "BT Varlık",
+      "Sunucu, lisans ve ekipman varlık envanteri"
+    ],
+    [
+      "SDLC",
+      "Güvenli Yazılım Geliştirme",
+      "Yazılım Güvence",
+      "Kod ve pipeline kalite kapıları"
+    ],
+    [
+      "CRM",
+      "Satış ve Sipariş Yönetimi",
+      "Ticari Operasyon",
+      "Dynamics üzerinden fırsat sipariş dönüşüm kontrolü"
+    ],
+    [
+      "AUD",
+      "İç Denetim ve İyileştirme",
+      "BT Yönetişim",
+      "İç denetim planı, bulgu kapanışı ve takip"
+    ]
+  ],
+  "objectives": [
+    [
+      "OBJ-01",
+      "CI envanteri eksiksiz ve izlenebilir olmalı"
+    ],
+    [
+      "OBJ-02",
+      "Üretim değişiklikleri yetkilendirilip iz bırakmalı"
+    ],
+    [
+      "OBJ-03",
+      "Müşteri hizmet seviyeleri ölçülmeli ve sapmalar yönetilmeli"
+    ],
+    [
+      "OBJ-04",
+      "Olay ve problem kayıtları zamanında işlenmeli"
+    ],
+    [
+      "OBJ-05",
+      "Varlıkların güvenli konfigürasyonu ve yamaları doğrulanmalı"
+    ],
+    [
+      "OBJ-06",
+      "Kritik hizmetlerde geri dönüş ve kurtarma mümkün olmalı"
+    ],
+    [
+      "OBJ-07",
+      "Erişimler, günlükler ve güvenlik olayları izlenmeli"
+    ],
+    [
+      "OBJ-08",
+      "Tedarikçi yükümlülüklerinin yerine geldiği doğrulanmalı"
+    ],
+    [
+      "OBJ-09",
+      "Denetim kapsamı, kanıt ve düzeltici faaliyet izlenebilmeli"
+    ],
+    [
+      "OBJ-10",
+      "Sipariş ve mali onay iş akışları kontrol edilebilmeli"
+    ]
+  ],
+  "controls": [
+    {
+      "code": "KS-DEMO-CTL-001",
+      "name": "Keşfedilen sunucuların CMDB kayıtlarında bulunması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: keşif sunucu listesini ServiceNow cmdb_ci_server ile FQDN/seri numarası üzerinden karşılaştır; son 24 saatte değişmiş varlıkların RFC'lerini eşleştir.",
+      "expected_result": "Yeni aktif sunucuların %100'ü CMDB'de aktif ve benzersiz CI kaydına sahip olmalıdır.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CFG",
+        "ASSET",
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-01",
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.2.5",
+        "ISO:8.2.6",
+        "ISO:8.5.1",
+        "CIS:1.1",
+        "CIS:1.2",
+        "CIS:1.3"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "1.246 aktif sunucudan 5'i CMDB'de yok; 2 sunucuda ilişkili RFC bulunamadı.",
+        "severity": "high",
+        "checked": 1246,
+        "failed": 5,
+        "source_system": "svc-now/cmdb-discovery",
+        "reference": "sys_id: CI-MISSING-2026-11"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-002",
+      "name": "Değişiklikte uygulama öncesi onay bulunması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "preventive",
+      "frequency": "daily",
+      "method": "MCP: ServiceNow change_request ve sysapproval_approver tablolarında implementation_start ile approved_at sırasını kıyasla.",
+      "expected_result": "Acil istisnalar hariç PROD değişikliklerinin %100'ü önceden onaylanmış olmalıdır.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CHG",
+        "CFG"
+      ],
+      "objectives": [
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.5.1",
+        "ISO:8.5.1.2",
+        "ISO:8.5.1.3",
+        "CIS:4.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "Son 30 günde tamamlanan 43 değişiklikten 2'sinde CAB onayı uygulama başlangıcından sonra kaydedildi.",
+        "severity": "high",
+        "checked": 43,
+        "failed": 2,
+        "source_system": "servicenow/change_request",
+        "reference": "CHG0103472;CHG0103499"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-003",
+      "name": "Standart değişiklik şablonlarının ön onaylı olması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "preventive",
+      "frequency": "monthly",
+      "method": "İç denetçi ServiceNow standard change katalog şablonlarını ve onay kayıtlarını örnekler.",
+      "expected_result": "Aktif standart değişiklik şablonlarının tamamında geçerli risk değerlendirmesi ve ön onay olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.5.1.1",
+        "ISO:8.5.1.3"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "Seçilen 14 standart değişiklik şablonunun tamamında onay ve risk kaydı bulundu.",
+        "severity": "low",
+        "checked": 14,
+        "failed": 0,
+        "source_system": "servicenow/std_change_record",
+        "reference": "STDCHG-2026-09"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-004",
+      "name": "P1/P2 olaylarında eskalasyon zamanlaması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: incident, major_incident, audit trail alanlarından atama ve eskalasyon zamanlarını hesapla.",
+      "expected_result": "P1 eskalasyonu 15 dakika içinde; P2 eskalasyonu sözleşmeye uygun sürede gerçekleşmeli.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "INC",
+        "MAJ",
+        "SLM"
+      ],
+      "objectives": [
+        "OBJ-04",
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.6.1",
+        "ISO:8.3.3"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "Son 30 günde 16 P1/P2 olayının tamamı eskalasyon eşiklerine uydu.",
+        "severity": "low",
+        "checked": 16,
+        "failed": 0,
+        "source_system": "servicenow/incident",
+        "reference": "INC0091432"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-005",
+      "name": "Müşteri ve önceliğe göre SLA hedeflerinin karşılanması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: task_sla, contract_sla ve incident tablolarında pause sürelerini düşerek müşteri bazlı SLA analizi yap.",
+      "expected_result": "Aylık çözüm SLA başarısı en az %98 ve kritik ihlaller için faaliyet kaydı olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "SLM",
+        "INC"
+      ],
+      "objectives": [
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.3.3",
+        "ISO:9.1",
+        "ISO:9.4"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "81 kapanan olay kaydının 3'ünde çözüm SLA ihlali bulundu; birinde ihlal açıklaması boş.",
+        "severity": "medium",
+        "checked": 81,
+        "failed": 3,
+        "source_system": "servicenow/task_sla",
+        "reference": "SLA-2026-10-P2"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-006",
+      "name": "Kök neden analizlerinin zamanında tamamlanması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "detective",
+      "frequency": "monthly",
+      "method": "Problem ekibi açık RCA kayıtları ile kapanış hedeflerini ve kalıcı çözüm kanıtını inceleyerek raporlar.",
+      "expected_result": "Kritik problem kayıtlarının RCA süresi iç hedef içinde ve onaylı olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "PRB",
+        "INC"
+      ],
+      "objectives": [
+        "OBJ-04",
+        "OBJ-09"
+      ],
+      "clauses": [
+        "ISO:8.6.3",
+        "ISO:10.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "Açık 11 yüksek öncelikli problemden 4'ünde RCA hedef tarihi geçmiş.",
+        "severity": "medium",
+        "checked": 11,
+        "failed": 4,
+        "source_system": "servicenow/problem",
+        "reference": "PRB0019821"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-007",
+      "name": "Kritik hizmetler için geri yükleme testi",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "corrective",
+      "frequency": "quarterly",
+      "method": "Son çeyrek geri yükleme tutanakları, RTO/RPO ölçümleri ve onay imzaları örneklenir.",
+      "expected_result": "En az bir kritik iş yükü için çeyreklik restore provası başarılı olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "BCM",
+        "SVC"
+      ],
+      "objectives": [
+        "OBJ-06"
+      ],
+      "clauses": [
+        "ISO:8.7.2",
+        "CIS:11.1",
+        "CIS:11.5"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "Ödeme geçidi veritabanı için prova RTO 43 dk, hedef 60 dk; RPO 12 dk, hedef 15 dk.",
+        "severity": "low",
+        "checked": 1,
+        "failed": 0,
+        "source_system": "backup/rehearsal-report",
+        "reference": "DR-TEST-Q3-2026"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-008",
+      "name": "RFC ile CI ilişki bütünlüğü",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: son 14 günlük PROD RFC related_ci kayıtlarını; etkilenen sunucu CIs ve servislere bağla.",
+      "expected_result": "İlişkili CI/servis referansı boş PROD RFC oranı %0 olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CHG",
+        "CFG"
+      ],
+      "objectives": [
+        "OBJ-01",
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.2.6",
+        "ISO:8.5.1.3",
+        "CIS:1.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "59 üretim RFC'sinden 6'sında etkilenen hizmet veya CI ilişkisi boş.",
+        "severity": "medium",
+        "checked": 59,
+        "failed": 6,
+        "source_system": "servicenow/change_request",
+        "reference": "CHG0103420"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-009",
+      "name": "Oracle varsayılan dinleme portunun yetkisiz kullanılmaması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "preventive",
+      "frequency": "weekly",
+      "method": "MCP: onaylı ağ keşif bulguları ve Oracle sunucu envanterini Oracle kurulum talimatındaki izinli port listesiyle karşılaştır.",
+      "expected_result": "Kurulum talimatına göre istisnası belgelenmeyen varsayılan port kullanımı bulunmamalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "SEC",
+        "CFG",
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-05",
+        "OBJ-01",
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.2.6",
+        "ISO:8.5.1",
+        "ISO:8.7.3.2",
+        "CIS:4.1",
+        "CIS:4.8"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "23 Oracle sunucusundan 2'sinde TCP/1521 açık; kaydedilmiş istisna bulunamadı.",
+        "severity": "high",
+        "checked": 23,
+        "failed": 2,
+        "source_system": "net-scan/oracle-port-report",
+        "reference": "db-orcl-demo-07.example.test"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-010",
+      "name": "Kritik güvenlik yamalarının süresinde uygulanması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: tarama çıktısı ile yamaların change kayıtlarını, zafiyet yaşını ve risk kabul istisnalarını eşleştir.",
+      "expected_result": "Kritik CVSS bulguları 30 gün içinde giderilmeli veya onaylı risk istisnasına bağlanmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "VULN",
+        "SEC",
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-05"
+      ],
+      "clauses": [
+        "ISO:8.7.3.2",
+        "CIS:7.1",
+        "CIS:7.2",
+        "CIS:7.3"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "113 kritik bulgudan 7'si 30 günü aşmış; 2'sinde risk kabulü kaydı yok.",
+        "severity": "critical",
+        "checked": 113,
+        "failed": 7,
+        "source_system": "vuln/scanner-export",
+        "reference": "VULN-2026-10-CRIT"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-011",
+      "name": "Yönetici hesaplarına erişim periyodik onayı",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "detective",
+      "frequency": "quarterly",
+      "method": "İmtiyazlı hesap listesini sistem sahiplerine sun ve erişim onaylarını ilişkilendir.",
+      "expected_result": "Tüm ayrıcalıklı hesaplar en son periyodik gözden geçirmede onaylanmış olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "IAM",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-07"
+      ],
+      "clauses": [
+        "ISO:8.7.3.2",
+        "CIS:5.1",
+        "CIS:6.1",
+        "CIS:6.5"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "42 imtiyazlı hesap için 42 onay kaydı doğrulandı.",
+        "severity": "low",
+        "checked": 42,
+        "failed": 0,
+        "source_system": "iam/access-review",
+        "reference": "IAM-Q3-2026"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-012",
+      "name": "Dynamics sipariş dönüşümlerinin onay adımları",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: Dynamics opportunities, quotes, salesorders kayıtlarını para birimi, indirim oranı ve onay zaman damgasına göre karşılaştır.",
+      "expected_result": "Limit üzeri indirimli siparişlerin %100'ü siparişten önce onaylanmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CRM",
+        "AUD"
+      ],
+      "objectives": [
+        "OBJ-10",
+        "OBJ-09"
+      ],
+      "clauses": [
+        "ISO:8.1",
+        "ISO:9.1"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "Son ay yüksek indirimli 27 siparişin tamamında geçerli ticari onay görüldü.",
+        "severity": "low",
+        "checked": 27,
+        "failed": 0,
+        "source_system": "dynamics/salesorder",
+        "reference": "SO-2026-10-0198"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-013",
+      "name": "Kritik tedarikçilerin dönemsel performans kanıtı",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "detective",
+      "frequency": "quarterly",
+      "method": "Kritik tedarikçi sözleşmeleri, SLA raporları, performans notları ve gözden geçirme tutanaklarını örnekle.",
+      "expected_result": "Kritik tedarikçilerin tamamı için güncel üç aylık performans değerlendirmesi bulunmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "VEN",
+        "SLM"
+      ],
+      "objectives": [
+        "OBJ-08",
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.3.4",
+        "CIS:15.1",
+        "CIS:15.2"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "11 kritik tedarikçiden 2'si için Q3 performans değerlendirme raporu yok.",
+        "severity": "medium",
+        "checked": 11,
+        "failed": 2,
+        "source_system": "supplier/performance-review",
+        "reference": "VENDOR-Q3-2026"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-014",
+      "name": "SOC güvenlik uyarılarının triage süresi",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: SIEM uyarıları ve SOC olay/ticket eşleşmelerinden ilk yanıt gecikmesini hesapla.",
+      "expected_result": "Yüksek öncelikli uyarılar 15 dakikada triage edilmeli.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "LOG",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-07"
+      ],
+      "clauses": [
+        "ISO:8.7.3.3",
+        "CIS:8.2",
+        "CIS:13.1"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "32 yüksek öncelikli alarmın medyan ilk işlem süresi 6 dk; eşik aşımı yok.",
+        "severity": "low",
+        "checked": 32,
+        "failed": 0,
+        "source_system": "siem/alert-review",
+        "reference": "SOC-ALERT-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-015",
+      "name": "Release geri dönüş planı ve dağıtım doğrulaması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "preventive",
+      "frequency": "monthly",
+      "method": "Release yönetimi planı, CAB izleri ve rollback testi sonuçları örneklenir.",
+      "expected_result": "Yüksek etkili release için geri dönüş ve post-deploy kontrol listesi eksiksiz olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "REL",
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.5.2",
+        "ISO:8.5.3"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "8 yüksek etkili release'in tamamında rollback planı ve kontrol formu bulunuyor.",
+        "severity": "low",
+        "checked": 8,
+        "failed": 0,
+        "source_system": "servicenow/release",
+        "reference": "REL0004391"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-016",
+      "name": "Emergency Change için sonradan gözden geçirme",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: acil değişiklikler ile PIR görevlerini ve kapatılma sürelerini eşleştir.",
+      "expected_result": "Acil değişiklik sonrası 5 iş günü içinde PIR tamamlanmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CHG",
+        "MAJ"
+      ],
+      "objectives": [
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.5.1.3",
+        "ISO:10.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "9 acil değişiklikten 2'sinde PIR tamamlanmadan kayıt kapatılmış.",
+        "severity": "high",
+        "checked": 9,
+        "failed": 2,
+        "source_system": "servicenow/emergency_change",
+        "reference": "CHG0103406"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-017",
+      "name": "Aktif hizmetlerin katalog ve sahiplik eşleşmesi",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: aktif business_service CIs ile service_catalog_item, owner ve SLA bilgilerini karşılaştır.",
+      "expected_result": "Aktif müşteri hizmetlerinin tamamı katalogda ve bir hizmet sahibiyle eşleşmeli.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "SVC",
+        "CFG",
+        "SLM"
+      ],
+      "objectives": [
+        "OBJ-01",
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.2.4",
+        "ISO:8.2.6",
+        "CIS:1.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "63 aktif hizmetten 7'si katalogda yok; 2 hizmette sahip alanı boş.",
+        "severity": "medium",
+        "checked": 63,
+        "failed": 7,
+        "source_system": "servicenow/service_catalog",
+        "reference": "SVC-2026-Q4"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-018",
+      "name": "İç denetim bağımsızlığı ve bulgu kapanışı",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "directive",
+      "frequency": "yearly",
+      "method": "Denetçi atama matrisi ve kapanmış bulguların yeniden doğrulama kayıtlarını kontrol et.",
+      "expected_result": "Kendi işini denetleme durumu olmamalı; kapanan bulgular için yeterli kanıt saklanmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "AUD"
+      ],
+      "objectives": [
+        "OBJ-09"
+      ],
+      "clauses": [
+        "ISO:9.2",
+        "ISO:10.1",
+        "ISO:10.2"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "2026 planındaki 6 iç denetimin 6'sında bağımsız denetçi ataması doğrulandı.",
+        "severity": "low",
+        "checked": 6,
+        "failed": 0,
+        "source_system": "governance/internal-audit-plan",
+        "reference": "IA-PLAN-2026"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-019",
+      "name": "Güvenlik olayı bildirim ve eskalasyonu",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: SEC incident kayıtlarında olay seviyesi ve paydaş bilgilendirme zamanını ölç.",
+      "expected_result": "Kritik güvenlik olaylarında bildirim hedef süresi aşılmamalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "SEC",
+        "INC",
+        "MAJ"
+      ],
+      "objectives": [
+        "OBJ-07",
+        "OBJ-04"
+      ],
+      "clauses": [
+        "ISO:8.7.3.3",
+        "CIS:17.1",
+        "CIS:17.2"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "Ay içinde 4 kritik olay bildiriminin tamamı hedef sürede tamamlandı.",
+        "severity": "low",
+        "checked": 4,
+        "failed": 0,
+        "source_system": "servicenow/security_incident",
+        "reference": "SINC-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-020",
+      "name": "Kapasite planının eşik ve tahmin kontrolü",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "monthly",
+      "method": "MCP: kapasite eğilimlerini, eşik aşan CI'ları ve kapasite plan güncellemelerini karşılaştır.",
+      "expected_result": "90 günlük tahminde eşik aşımları için kapasitе aksiyonu atanmış olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CAP",
+        "SVC"
+      ],
+      "objectives": [
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.4.3",
+        "ISO:9.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "18 kritik kapasite metriğinin 3'ünde 90 gün içinde eşik aşılıyor, aksiyon görevi yok.",
+        "severity": "medium",
+        "checked": 18,
+        "failed": 3,
+        "source_system": "metrics/capacity-trend",
+        "reference": "CAP-2026-Q4"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-021",
+      "name": "Sahipsiz CI ve servis kayıtlarının azaltılması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: cmdb_ci owner, assigned_to, support_group ve aktif hizmet ilişkilerini kontrol et.",
+      "expected_result": "Aktif CI'larda sorumlu grup boşluğu bulunmamalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CFG",
+        "ASSET"
+      ],
+      "objectives": [
+        "OBJ-01"
+      ],
+      "clauses": [
+        "ISO:8.2.5",
+        "ISO:8.2.6",
+        "CIS:1.1"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "1.246 aktif CI'dan 17'sinde sorumlu grup boş; 4'ünde sahip kaydı eski.",
+        "severity": "medium",
+        "checked": 1246,
+        "failed": 17,
+        "source_system": "servicenow/cmdb_ci",
+        "reference": "CI-OWNER-EXCEPTION"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-022",
+      "name": "Yeni keşfedilen varlığın değişiklik izlenebilirliği",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: son 7 gün keşfedilen sunucuları approved RFC ve asset onboarding kayıtları ile eşleştir.",
+      "expected_result": "Yeni üretim sunucularının tamamı RFC/onboarding izine sahip olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "CFG",
+        "CHG"
+      ],
+      "objectives": [
+        "OBJ-01",
+        "OBJ-02"
+      ],
+      "clauses": [
+        "ISO:8.2.6",
+        "ISO:8.5.1",
+        "CIS:1.3",
+        "CIS:1.2"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "Yeni 18 sunucudan 3'ünde onaylı onboarding veya RFC izi yok.",
+        "severity": "high",
+        "checked": 18,
+        "failed": 3,
+        "source_system": "servicenow/onboarding",
+        "reference": "NEW-SRV-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-023",
+      "name": "İnternete açık varlıklarda zafiyet taraması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "monthly",
+      "method": "MCP: internet erişimi olan CI envanteri ile taranan hedef listesini karşılaştır.",
+      "expected_result": "Harici yüzeydeki tüm varlıklar tarama kapsamında olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "VULN",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-05"
+      ],
+      "clauses": [
+        "ISO:8.7.3.2",
+        "CIS:7.5",
+        "CIS:7.1"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "İnternete açık 48 hostun 48'i Q4 tarama kapsamında.",
+        "severity": "low",
+        "checked": 48,
+        "failed": 0,
+        "source_system": "vuln/external-scan",
+        "reference": "EXTSCAN-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-024",
+      "name": "Yedekleme başarısız işlerin kaydı ve kapatılması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "daily",
+      "method": "MCP: backup job fail kayıtları ile incident/araştırma görevleri ve iş tekrarı sonuçlarını bağla.",
+      "expected_result": "Başarısız kritik backup job'ların tamamı izlem kaydına dönmeli ve tekrar çalıştırılmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "BCM",
+        "INC"
+      ],
+      "objectives": [
+        "OBJ-06"
+      ],
+      "clauses": [
+        "ISO:8.7.2",
+        "CIS:11.2",
+        "CIS:11.3"
+      ],
+      "example": {
+        "status": "fail",
+        "details": "Son hafta 214 görevden 6 başarısız; 2'sinin takip kaydı oluşturulmamış.",
+        "severity": "high",
+        "checked": 214,
+        "failed": 6,
+        "source_system": "backup/job-result",
+        "reference": "BKP-2026-W44"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-025",
+      "name": "Kurulu yazılımın envanter ile uyuşması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: endpoint keşif lisans listesini onaylı yazılım envanteriyle karşılaştır.",
+      "expected_result": "Lisanslı ürünlerin %100'ü envanterde olmalı; kritik yetkisiz yazılım bulunmamalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "ASSET",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-05",
+        "OBJ-01"
+      ],
+      "clauses": [
+        "ISO:8.2.5",
+        "CIS:2.1",
+        "CIS:2.4"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "356 iş istasyonunda 356 uygun yazılım envanter kontrolü.",
+        "severity": "low",
+        "checked": 356,
+        "failed": 0,
+        "source_system": "inventory/software",
+        "reference": "SOFTINV-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-026",
+      "name": "İmtiyazlı hesaplarda MFA etkinliği",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "preventive",
+      "frequency": "weekly",
+      "method": "MCP: aktif admin kullanıcılarını MFA kayıtlarından doğrula; servis hesapları için belgelendirilmiş istisna ara.",
+      "expected_result": "Aktif etkileşimli yönetici hesaplarında MFA %100 etkin olmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "IAM",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-07"
+      ],
+      "clauses": [
+        "ISO:8.7.3.2",
+        "CIS:6.3",
+        "CIS:6.5"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "42 imtiyazlı hesapta zorunlu MFA doğrulandı.",
+        "severity": "low",
+        "checked": 42,
+        "failed": 0,
+        "source_system": "iam/mfa-status",
+        "reference": "MFA-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-027",
+      "name": "Merkezi log saklama ve kaynak kapsaması",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "automatic",
+      "nature": "detective",
+      "frequency": "weekly",
+      "method": "MCP: SIEM kaynak listesi, log alım zamanları ve 90 günlük saklama politikasını kontrol et.",
+      "expected_result": "Kritik sistem günlükleri zamanında toplanmalı ve politika süresince saklanmalı.",
+      "owner": "GRC Kontrol Otomasyonu",
+      "processes": [
+        "LOG",
+        "SEC"
+      ],
+      "objectives": [
+        "OBJ-07"
+      ],
+      "clauses": [
+        "ISO:8.7.3.2",
+        "CIS:8.1",
+        "CIS:8.2",
+        "CIS:8.3"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "67 kritik log kaynağından 67'si aktif akışta; saklama 93 gün.",
+        "severity": "low",
+        "checked": 67,
+        "failed": 0,
+        "source_system": "siem/source-inventory",
+        "reference": "SIEM-2026-10"
+      }
+    },
+    {
+      "code": "KS-DEMO-CTL-028",
+      "name": "Major Incident paydaş iletişimi",
+      "description": "[SİMÜLASYON] Teknik entegratör için gerçekçi fakat tamamen kurgusal süreç kontrolü.",
+      "execution_mode": "manual",
+      "nature": "directive",
+      "frequency": "monthly",
+      "method": "Major Incident kayıtları ile ilk duyuru, ara güncelleme ve postmortem paylaşımını kontrol et.",
+      "expected_result": "Müşteri etkili büyük olaylarda iletişim planına göre zamanında bildirim olmalı.",
+      "owner": "BT Yönetişim / İç Denetim",
+      "processes": [
+        "MAJ",
+        "INC",
+        "SLM"
+      ],
+      "objectives": [
+        "OBJ-04",
+        "OBJ-03"
+      ],
+      "clauses": [
+        "ISO:8.6.1",
+        "ISO:8.3.2"
+      ],
+      "example": {
+        "status": "pass",
+        "details": "5 büyük olay örneklemesinde iletişim şablonu ve duyuru zamanları uygun.",
+        "severity": "low",
+        "checked": 5,
+        "failed": 0,
+        "source_system": "servicenow/major_incident",
+        "reference": "MI-2026-10"
+      }
+    }
+  ],
+  "audits": [
+    {
+      "key": "AUD-ISO-Q4",
+      "name": "[ÖRNEK] ISO/IEC 20000-1:2018 — 2026 İç Denetimi",
+      "standard": "ISO/IEC 20000-1",
+      "scope": "BT yönetilen servisler; veri merkezi, ServiceNow ITSM süreçleri, tedarikçiler ve süreklilik. Gerçek denetim değildir.",
+      "planned_start": "2026-10-14",
+      "planned_end": "2026-11-14",
+      "actual_start": "2026-10-16",
+      "actual_end": null,
+      "status": "in_progress",
+      "auditors": "GRC İç Denetim Ekibi (kurgusal)",
+      "auditees": "Altyapı, Servis Masası, Operasyon ve Tedarik Yönetimi (kurgusal)"
+    },
+    {
+      "key": "AUD-CIS-Q4",
+      "name": "[ÖRNEK] CIS Controls v8.1 — 2026 Q4 Güvenlik Kontrol Değerlendirmesi",
+      "standard": "CIS Controls",
+      "scope": "IG1/IG2 öncelikli varlık envanteri, erişim, yama, günlük yönetimi, yedekleme ve olay müdahalesi. Pilot seçili Safeguard seti.",
+      "planned_start": "2026-10-20",
+      "planned_end": "2026-11-20",
+      "actual_start": "2026-10-23",
+      "actual_end": null,
+      "status": "in_progress",
+      "auditors": "GRC ve SOC Kontrol Ekibi (kurgusal)",
+      "auditees": "SOC, Sistem Yönetimi ve IAM (kurgusal)"
+    },
+    {
+      "key": "AUD-CROSS",
+      "name": "[ÖRNEK] CMDB / Change Çapraz Uygunluk İncelemesi",
+      "standard": null,
+      "clauses": [
+        "ISO:8.2.5",
+        "ISO:8.2.6",
+        "ISO:8.5.1",
+        "ISO:8.5.1.3",
+        "CIS:1.1",
+        "CIS:1.2",
+        "CIS:1.3",
+        "CIS:4.1"
+      ],
+      "scope": "Sunucu keşif → CMDB CI → RFC → risk ve onay → kontrol/kanıt ilişkisi. Gerçek sistem kayıtları kullanılmadı.",
+      "planned_start": "2026-10-05",
+      "planned_end": "2026-10-28",
+      "actual_start": "2026-10-06",
+      "actual_end": "2026-10-27",
+      "status": "completed",
+      "auditors": "GRC İç Denetim Ekibi (kurgusal)",
+      "auditees": "Değişiklik, Konfigürasyon ve Altyapı Takımları (kurgusal)"
+    }
+  ]
+}
