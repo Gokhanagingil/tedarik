@@ -3,8 +3,9 @@ import os
 from pathlib import Path
 
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-KNOWN_MODULES = ("core", "performance", "surveys", "risks", "grc", "transfer", "dashboard", "workflow", "sourcing")
-DEFAULT_MODULES = "core,performance,surveys,risks,grc,transfer,dashboard"
+KNOWN_MODULES = ("core", "performance", "surveys", "risks", "documents", "grc", "cmdb", "continuity", "transfer", "dashboard",
+                 "workflow", "sourcing")
+DEFAULT_MODULES = "core,performance,surveys,risks,grc,cmdb,transfer,dashboard"
 AUTH_MODES = {"dev", "local", "entra"}
 
 
@@ -27,6 +28,15 @@ class Config:
         self.dev_units = tuple(int(u) for u in units.split(",") if u.strip())
         self.cookie_secure = env.get("TEDARIK_COOKIE_SECURE", "0") == "1"
         self.trust_proxy = env.get("TEDARIK_TRUST_PROXY", "0") == "1"      # yalnızca kendi TLS vekilimiz önündeyse
+        self.app_name = env.get("TEDARIK_APP_NAME", "GRC Platformu")[:60]   # K-016: ad sonra belirlenecek
+        # ServiceNow CMDB (K-019): adres ve kimlik bilgisi dosyaları; gizli değer yalnızca senkron sırasında okunur
+        self.sn_instance = env.get("TEDARIK_SN_INSTANCE", "").rstrip("/")
+        self.sn_user = env.get("TEDARIK_SN_USER", "")
+        self.sn_password_file = env.get("TEDARIK_SN_PASSWORD_FILE", "")
+        self.sn_token_file = env.get("TEDARIK_SN_TOKEN_FILE", "")
+        self.sn_ca_file = env.get("TEDARIK_SN_CA_FILE") or None
+        if self.sn_instance and not self.sn_instance.startswith("https://") and env.get("TEDARIK_SN_ALLOW_HTTP") != "1":
+            raise ValueError("TEDARIK_SN_INSTANCE https:// ile başlamalı")
         names = [m.strip() for m in env.get("TEDARIK_MODULES", DEFAULT_MODULES).split(",") if m.strip()]
         self.modules = ["core"] + [m for m in names if m != "core"]
         self.api_key = self._secret(env)

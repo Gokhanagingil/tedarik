@@ -17,7 +17,7 @@ def b64(raw):
 
 class Etiketler(Base):
     def test_her_alan_ve_secim_etiketli(self):
-        self.make(modules="core,performance,surveys,risks,transfer,dashboard,workflow,sourcing")
+        self.make(modules="core,performance,surveys,risks,grc,cmdb,transfer,dashboard,workflow,sourcing")
         missing = sorted({f"{r.name}.{f}" for r in RESOURCES.values() for f in r.fields if f not in FIELDS})
         self.assertEqual(missing, [])
         unlabeled = sorted({f"{r.name}.{f}={v}" for r in RESOURCES.values() for f, values in r.enums.items()

@@ -447,6 +447,10 @@ def risk_context(c):
     risk["target_score"] = (risk["target_likelihood"] * risk["target_impact"]
                             if risk["target_likelihood"] and risk["target_impact"] else None)
     risk["level_bounds"] = policy(c.db, "risk.levels", LEVELS)
+    risk["cis"] = []
+    if c.app.enabled("cmdb"):        # etkilenen CI'lar (elle veya CMDB kuralıyla bağlı)
+        from .cmdb import risk_cis
+        risk["cis"] = risk_cis(c.db, risk["id"])
     risk["controls"] = []
     if c.app.enabled("grc"):        # bağlı kontroller ve son test sonuçları (kontrol etkinliği kanıtı)
         risk["controls"] = rows(c.db, """SELECT k.id, k.code, k.name, k.active, (SELECT x.status FROM tdr_executions x
