@@ -89,7 +89,7 @@ Hesap: içsel = olasılık × etki; katkı düşük %20, orta %40, yüksek %60, 
 | `tdr_processes`, `tdr_objectives`, `tdr_documents` | Süreç, kontrol hedefi, politika/prosedür | Yürürlükteki doküman onay ister |
 | `tdr_controls` | Kontrol kütüphanesi | `automation`: iç otomatik kural anahtarı |
 | `tdr_control_{clauses,processes,objectives,risks,documents}` | Kontrol eşlemeleri | Küme olarak değişir (`POST /controls/{id}/links`) |
-| `tdr_audits`, `tdr_audit_standards`, `tdr_audit_clauses` | Denetim ve kapsamı | `revision` ile eşzamanlı düzenleme koruması |
+| `tdr_audits`, `tdr_audit_standards`, `tdr_audit_clauses`, `tdr_audit_processes` | Denetim ve kapsamı (standart, madde, süreç) | `revision` ile eşzamanlı düzenleme koruması |
 | `tdr_audit_plan` | Tamamlanınca dondurulan plan | Değiştirilemez |
 | `tdr_evidence`, `tdr_evidence_files`, `tdr_evidence_blobs` | Kanıt ve sürümleri | Dosya sürümleri ve içerik değiştirilemez; SHA-256 |
 | `tdr_evidence_{controls,audits,clauses}` | Kanıt bağlantıları | |

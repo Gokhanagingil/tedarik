@@ -100,9 +100,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   10. *CMDB:* `tedarik/servicenow.py` (Table API, sayfalama, artımlı senkron, yeniden deneme), `python -m tedarik.cmdb_sync` (gece görevi), MCP itmesi, CI ilişkileri, CMDB Panosu ve CI detayı; BİA uygulamaları CMDB'den seçilir.
   11. *CI riskleri:* İS destek bitişi, uygulama destek bitişi, kritik yama, 100 günden uzun açık kalma; kural ve şirket başına kurumsal risk, etkilenen CI listesi, müşteri CI'ları müşteri riski olur.
   12. *Kodlar:* tüm kayıt kodları sunucuda üretilir ve değiştirilemez (K-017); içe aktarım ve ilişkiler ad veya kodla çözülür.
-  13. *GRC incelemesi:* yukarıdaki ilişki eksikleri tamamlandı; sağlık kontrolü bu ilişkileri sürekli denetler.
+  13. *GRC incelemesi:* yukarıdaki ilişki eksikleri tamamlandı; ayrıca denetim kapsamına süreçler eklendi (ISO 9001 9.2; `process_ids`, "Son 12 ayda denetlenmemiş ana süreçler" kontrolü). Sağlık kontrolü 20 ilişki kuralını sürekli denetler.
   - Demo verisi genişledi: 6 şirket (3 grup şirketi, 3 müşteri), 30 süreçlik harita, 10 iştah beyanı, 4 risk dönemi, 10 yeni kurumsal risk (fırsat dahil), 7 KRİ, 39 CI (destek dışı, yama, açık kalma örnekleri), CMDB kural riskleri, 8 BİA, 4 plan, 5 tatbikat, revizyonlu ve dosyalı dokümanlar. Önceki sürümle yüklenmiş demoya bölüm bölüm eklenir (kullanıcılara dokunmaz).
-  - Testler: 99 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı smoke testi (yeni ekranlar dahil) ve yerel kabul provası (23/23, 54 ekran).
+  - Testler: 100 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı smoke testi (yeni ekranlar dahil) ve yerel kabul provası (23/23, 54 ekran).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.

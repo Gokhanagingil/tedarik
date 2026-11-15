@@ -828,6 +828,8 @@ DETAILS.processes = async function processDetail(id) {
     hasModule('continuity') ? section(`İş etki analizleri (${p.bias.length})`, recordList('bias', p.bias, {chips: b => [b.criticality ? display('bias', 'criticality', b.criticality) : null, display('bias', 'status', b.status)],
       none: p.process_type === 'core' ? 'Ana süreç için BİA yapılmadı (ISO 22301 8.2.2)' : 'BİA yok'}), canWrite('bias') ? btn('+ BİA', () => createRecord('bias', {process_id: id, title: p.name + ' BİA'}), 'ghost small') : null) : null,
     section(`Dokümanlar (${p.documents.length})`, recordList('documents', p.documents, {chips: d => [display('documents', 'status', d.status)], none: 'Doküman yok'})),
+    hasModule('grc') ? section(`Denetimler (${p.audits.length})`, recordList('audits', p.audits, {sub: a => fmt.date(a.planned_start), chips: a => [display('audits', 'status', a.status)],
+      open: a => Router.go('audit/' + a.id), none: p.process_type === 'core' ? 'Bu ana süreç henüz bir denetimin kapsamında değil (ISO 9001 9.2)' : 'Denetim yok'})) : null,
     p.findings.length ? section(`Bulgular (${p.findings.length})`, recordList('findings', p.findings, {chips: f => [display('findings', 'severity', f.severity), display('findings', 'status', f.status)]})) : null,
     p.engagements.length ? section(`Tedarikçi angajmanları (${p.engagements.length})`, recordList('engagements', p.engagements)) : null);
   Drawer.open(p.code + ' · ' + p.name, body, [canWrite('processes') ? btn('Düzenle', () => recordForm('processes', p, {onsaved: reload}), 'secondary') : null], 'Süreç');

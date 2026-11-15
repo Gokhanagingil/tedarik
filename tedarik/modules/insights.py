@@ -115,12 +115,14 @@ def process_context(c):
                                "ORDER BY code", (pid,))
     item["engagements"] = rows(c.db, """SELECT e.id, e.code, s.name AS supplier, s.tier FROM tdr_engagements e
         JOIN tdr_suppliers s ON s.id=e.supplier_id WHERE e.process_id=? ORDER BY s.name""", (pid,))
-    item["controls"] = item["objectives"] = item["bias"] = item["documents"] = []
+    item["controls"] = item["objectives"] = item["bias"] = item["documents"] = item["audits"] = item["findings"] = []
     if _enabled(c, "grc"):
         item["controls"] = rows(c.db, """SELECT k.id, k.code, k.name, (SELECT x.status FROM tdr_executions x
             WHERE x.control_id=k.id ORDER BY x.executed_at DESC, x.id DESC LIMIT 1) AS last_status FROM tdr_controls k
             JOIN tdr_control_processes m ON m.control_id=k.id WHERE m.process_id=? ORDER BY k.code""", (pid,))
         item["objectives"] = rows(c.db, "SELECT id, code, name FROM tdr_objectives WHERE process_id=? ORDER BY code", (pid,))
+        item["audits"] = rows(c.db, """SELECT a.id, a.code, a.name, a.status, a.planned_start FROM tdr_audits a
+            JOIN tdr_audit_processes m ON m.audit_id=a.id WHERE m.process_id=? ORDER BY a.planned_start DESC""", (pid,))
         item["findings"] = rows(c.db, "SELECT id, code, title, severity, status FROM tdr_findings WHERE process_id=? "
                                       "ORDER BY id DESC", (pid,))
     if _enabled(c, "documents"):
@@ -371,6 +373,15 @@ def health(c):
                              "Geciken DÖF bulgunun tekrarlama riskini artırır.", "high",
                              rows(db, """SELECT id, code, title FROM tdr_grc_actions WHERE status IN ('open','in_progress')
                              AND due_date < ? ORDER BY due_date""", (today,)), "grc_actions", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_grc_actions WHERE status IN ('open','in_progress')")))
+        year_ago = (date.today() - timedelta(days=365)).isoformat()
+        checks.append(_check("core_process_not_audited", "Son 12 ayda denetlenmemiş ana süreçler",
+                             "ISO 9001 9.2: iç denetim programı süreçlerin önemini dikkate alır; ana süreçler düzenli denetlenmeli.",
+                             "medium", rows(db, """SELECT id, code, name AS title FROM tdr_processes p WHERE active=1 AND
+                             process_type='core' AND NOT EXISTS (SELECT 1 FROM tdr_audit_processes m JOIN tdr_audits a ON
+                             a.id=m.audit_id WHERE m.process_id=p.id AND a.status IN ('in_progress','completed','closed') AND
+                             COALESCE(a.actual_end, a.planned_end, a.planned_start) >= ?) ORDER BY code""", (year_ago,)),
+                             "processes", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1 AND "
+                                                             "process_type='core'")))
         checks.append(_check("high_risks_no_control", "Kontrolü veya işleme faaliyeti olmayan yüksek/kritik riskler",
                              "ISO 31000 6.5: yüksek risk işlenmeli; kontrol veya faaliyet yoksa işleme planı eksiktir.",
                              "critical", rows(db, """SELECT id, code, title FROM tdr_supplier_risks r WHERE status IN

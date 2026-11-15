@@ -1792,7 +1792,7 @@ EXTRA_ACTIONS.risk_catalog = r => META.def('supplier_risks')?.can_write ? [btn('
 // denetim
 const AUDIT_FIELDS = ['name', 'kind', 'supplier_id', 'audit_objective', 'scope', 'planned_start', 'planned_end', 'lead_auditor', 'auditors', 'auditees'];
 async function auditForm(audit = null, defaults = {}) {
-  const [standards, clauses] = await Promise.all([list('standards'), list('clauses')]); await loadRefs('audits');
+  const [standards, clauses, processes] = await Promise.all([list('standards'), list('clauses'), list('processes')]); await loadRefs('audits');
   const form = h('form', {class: 'formgrid', novalidate: true}, h('div', {class: 'notice bad wide form-error hidden', role: 'alert'}));
   const fields = AUDIT_FIELDS.map(n => META.field('audits', n));
   for (const f of fields) form.append(inputFor('audits', f, audit ? audit[f.name] : defaults[f.name]));
@@ -1801,7 +1801,10 @@ async function auditForm(audit = null, defaults = {}) {
     onchange: e => { if (e.target.checked) chosenStd.add(st.id); else chosenStd.delete(st.id); }}), `${st.code} ${st.version || ''} · ${st.name}`)));
   const std = Object.fromEntries(standards.map(x => [x.id, x.code]));
   const clauseList = checklist(clauses.slice().sort((a, b) => a.standard_id - b.standard_id), audit ? audit.clauses.map(c => c.id) : [], {label: c => `${c.code} ${c.title}`, group: c => std[c.standard_id]});
-  form.append(h('div', {class: 'field wide'}, 'Standartlar', stdBox), h('div', {class: 'field wide'}, 'Kapsam maddeleri (seçilen standartlardan; her standart için en az bir madde)', clauseList.node));
+  const processList = checklist(processes.filter(p => p.active !== 0), audit ? (audit.processes || []).map(p => p.id) : [], {label: p => `${p.code} ${p.name}`,
+    group: p => ({management: 'Yönetim süreçleri', core: 'Ana süreçler', support: 'Destek süreçleri'}[p.process_type] || '')});
+  form.append(h('div', {class: 'field wide'}, 'Standartlar', stdBox), h('div', {class: 'field wide'}, 'Kapsam maddeleri (seçilen standartlardan; her standart için en az bir madde)', clauseList.node),
+    h('div', {class: 'field wide'}, 'Denetlenen süreçler (ISO 9001 9.2 denetim programı)', processList.node));
   const save = async () => {
     const {data, errors} = readForm(form, 'audits', fields);
     if (Object.keys(errors).length) { showErrors(form, errors, 'Eksik veya hatalı alanları düzeltin'); return; }
@@ -1809,8 +1812,8 @@ async function auditForm(audit = null, defaults = {}) {
     const owners = new Set(clauses.filter(c => clauseIds.includes(c.id)).map(c => c.standard_id));
     for (const sid of owners) if (!chosenStd.has(sid)) stdIds.push(sid);
     let body;
-    if (audit) { body = {}; for (const [k, v] of Object.entries(data)) if ((audit[k] ?? null) !== v) body[k] = v; body.standard_ids = stdIds; body.clause_ids = clauseIds; body.expected_revision = audit.revision; }
-    else { body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null)); body.standard_ids = stdIds; body.clause_ids = clauseIds; }
+    if (audit) { body = {}; for (const [k, v] of Object.entries(data)) if ((audit[k] ?? null) !== v) body[k] = v; body.standard_ids = stdIds; body.clause_ids = clauseIds; body.process_ids = processList.value(); body.expected_revision = audit.revision; }
+    else { body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null)); body.standard_ids = stdIds; body.clause_ids = clauseIds; body.process_ids = processList.value(); }
     try {
       const r = audit ? await api(`audits/${audit.id}`, {method: 'PATCH', body}) : await api('audits', {method: 'POST', body});
       invalidate('audits'); toast(audit ? 'Denetim kaydedildi' : 'Denetim oluşturuldu'); Drawer.close(); Router.go('audit/' + r.id);
@@ -1872,6 +1875,7 @@ async function auditPage(id) {
       h('div', {class: 'panel'}, h('h3', {text: 'Kapsam'}), kv([['Amaç', a.audit_objective], ['Kapsam açıklaması', a.scope],
         ['Standartlar', a.standards.length ? h('div', {class: 'chips'}, a.standards.map(s => h('span', {class: 'chip', text: `${s.code} ${s.version || ''}`}))) : null],
         ['Maddeler', a.clauses.length ? h('div', {class: 'chips'}, a.clauses.slice(0, 40).map(c => h('span', {class: 'chip', title: c.title, text: c.code})), a.clauses.length > 40 ? h('span', {class: 'muted small', text: ` +${a.clauses.length - 40}`}) : null) : null],
+        ['Süreçler', (a.processes || []).length ? h('div', {class: 'chips'}, a.processes.map(p => h('a', {class: 'chip', href: '#/r/processes/' + p.id, text: p.name}))) : null],
         ['Baş denetçi', a.lead_auditor], ['Denetçiler', a.auditors], ['Denetlenenler', a.auditees]])),
       h('div', {class: 'panel'}, h('h3', {text: 'Sonuç dağılımı'}), donut(['pass', 'fail', 'inconclusive', 'not_applicable', 'untested'].map((k, i) => ({label: RESULT_LABEL[k], value: a.counts[k], color: [1, 3, 2, 5, 5][i]}))),
         a.conclusion ? section('Denetim sonucu', kv([['Genel görüş', display('audits', 'opinion', a.opinion)], ['Sonuç', a.conclusion]])) : null)),

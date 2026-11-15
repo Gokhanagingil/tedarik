@@ -112,6 +112,8 @@ Resource("audit_standards", "Denetim standardı", {"audit_id": fk("audits", casc
          module=M, unique=(("audit_id", "standard_id"),), api=(), search=())
 Resource("audit_clauses", "Denetim maddesi", {"audit_id": fk("audits", cascade=True), "clause_id": fk("clauses")},
          module=M, unique=(("audit_id", "clause_id"),), api=(), search=())
+Resource("audit_processes", "Denetlenen süreç", {"audit_id": fk("audits", cascade=True), "process_id": fk("processes")},
+         module=M, unique=(("audit_id", "process_id"),), api=(), search=())   # ISO 9001 9.2: süreç bazlı denetim programı
 Resource("audit_plan", "Dondurulmuş denetim planı", {
     "audit_id": fk("audits"), "clause_id": fk("clauses"), "control_id": fk("controls")},
     module=M, unique=(("audit_id", "clause_id", "control_id"),), api=(), search=(), immutable=True)
@@ -907,6 +909,14 @@ def _save_audit(c, audit_id=None):
             standards = {r["standard_id"] for r in rows(
                 c.db, f"SELECT DISTINCT standard_id FROM tdr_clauses WHERE id IN ({','.join('?' * len(clauses))})",
                 sorted(clauses))} if clauses else set()
+    process_ids = None
+    if "process_ids" in body:
+        process_ids = set(_ids(body.pop("process_ids"), "Süreçler"))
+        if process_ids and len(rows(c.db, f"SELECT id FROM tdr_processes WHERE id IN ({','.join('?' * len(process_ids))})",
+                                    sorted(process_ids))) != len(process_ids):
+            raise crud.Invalid("Seçilen süreç bulunamadı")
+    old_processes = {r["process_id"] for r in rows(c.db, "SELECT process_id FROM tdr_audit_processes WHERE audit_id=?",
+                                                    (audit_id,))} if previous else set()
     revision = body.pop("expected_revision", None)
     if previous and (scope_change or revision is not None) and revision != previous["revision"]:
         raise crud.Conflict("Denetim değişmiş olabilir. Kaydı yenileyip tekrar deneyin.")
@@ -921,7 +931,8 @@ def _save_audit(c, audit_id=None):
     if previous and previous["status"] in CLOSED_AUDIT:
         if merged["status"] != previous["status"] and (previous["status"], merged["status"]) != ("completed", "closed"):
             raise crud.Conflict("Sonuçlandırılmış denetim tekrar açılamaz")
-        if (old_st, old_cl) != (standards, clauses) or merged.get("scope") != previous["scope"]:
+        if (old_st, old_cl) != (standards, clauses) or merged.get("scope") != previous["scope"] or \
+                (process_ids is not None and process_ids != old_processes):
             raise crud.Conflict("Sonuçlandırılmış denetimin kapsamı değiştirilemez")
     _validate_audit(merged)
     _check_scope(c.db, merged, standards, clauses)
@@ -942,6 +953,10 @@ def _save_audit(c, audit_id=None):
             c.db.execute("INSERT INTO tdr_audit_standards (audit_id, standard_id) VALUES (?,?)", (audit_id, sid))
         for cid in sorted(clauses):
             c.db.execute("INSERT INTO tdr_audit_clauses (audit_id, clause_id) VALUES (?,?)", (audit_id, cid))
+    if process_ids is not None and process_ids != old_processes:
+        c.db.execute("DELETE FROM tdr_audit_processes WHERE audit_id=?", (audit_id,))
+        for pid in sorted(process_ids):
+            c.db.execute("INSERT INTO tdr_audit_processes (audit_id, process_id) VALUES (?,?)", (audit_id, pid))
     if merged["status"] in CLOSED_AUDIT and (not previous or previous["status"] not in CLOSED_AUDIT):
         for link in planned_controls(c.db, audit_id):
             c.db.execute("INSERT INTO tdr_audit_plan (audit_id, clause_id, control_id) VALUES (?,?,?)",
@@ -950,7 +965,8 @@ def _save_audit(c, audit_id=None):
     audit.log(c.db, c.principal, "UPDATE" if previous else "CREATE", AUDITS.name, audit_id,
               {**{k: v for k, v in data.items() if k not in ("created_at", "updated_at")},
                "standards_added": sorted(standards - old_st), "standards_removed": sorted(old_st - standards),
-               "clauses_added": sorted(clauses - old_cl), "clauses_removed": sorted(old_cl - clauses)})
+               "clauses_added": sorted(clauses - old_cl), "clauses_removed": sorted(old_cl - clauses),
+               "processes": sorted(process_ids) if process_ids is not None else None})
     return audit_context_data(c.db, audit_id)
 
 
@@ -969,6 +985,8 @@ def audit_context_data(db, audit_id):
                                  "WHERE a.audit_id=? ORDER BY s.code", (audit_id,))
     item["clauses"] = rows(db, "SELECT c.id, c.code, c.title, c.standard_id FROM tdr_clauses c JOIN tdr_audit_clauses a "
                                "ON a.clause_id=c.id WHERE a.audit_id=? ORDER BY c.standard_id, c.code", (audit_id,))
+    item["processes"] = rows(db, "SELECT p.id, p.code, p.name, p.process_type FROM tdr_processes p JOIN tdr_audit_processes a "
+                                 "ON a.process_id=p.id WHERE a.audit_id=? ORDER BY p.code", (audit_id,))
     plan = planned_controls(db, audit_id)
     planned_ids = sorted({p["control_id"] for p in plan})
     tested = {r["control_id"] for r in rows(db, "SELECT DISTINCT control_id FROM tdr_executions WHERE audit_id=?",

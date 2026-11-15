@@ -277,6 +277,12 @@ class PlatformSections:
                 ("Kritik tedarikçiler periyodik olarak izlenmeli ve riskleri yönetilmeli", "Tedarikçi Yönetimi", "Ayşe Yılmaz")):
             db.execute("UPDATE tdr_objectives SET process_id=?, owner=? WHERE name=?", (self._process(process), owner, name))
 
+    def audit_scope(self):
+        """Denetimlerin kapsadığı süreçler: kapsam maddelerine eşli kontrollerin süreçleri (ISO 9001 9.2)."""
+        self.db.execute("""INSERT INTO tdr_audit_processes (audit_id, process_id) SELECT DISTINCT ac.audit_id, cp.process_id
+            FROM tdr_audit_clauses ac JOIN tdr_control_clauses cc ON cc.clause_id=ac.clause_id
+            JOIN tdr_control_processes cp ON cp.control_id=cc.control_id ON CONFLICT DO NOTHING""")
+
     # -------------------------------------------------------------- kurumsal risk (ISO 31000)
     def erm(self):
         db, r = self.db, self.rnd
@@ -794,4 +800,4 @@ class PlatformSections:
 
 
 SECTIONS = (("companies", "core"), ("architecture", "core"), ("erm", "risks"), ("documents", "documents"),
-            ("cmdb", "cmdb"), ("continuity", "continuity"))
+            ("cmdb", "cmdb"), ("continuity", "continuity"), ("audit_scope", "grc"))

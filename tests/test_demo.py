@@ -68,11 +68,12 @@ class Demo(Base):
 
     def test_eski_demoya_bolum_eklenir(self):
         from unittest import mock
-        older = tuple(x for x in demo.SECTIONS if x[0] not in ("cmdb", "continuity"))
+        older = tuple(x for x in demo.SECTIONS if x[0] not in ("cmdb", "continuity", "audit_scope"))
         with mock.patch.object(demo, "SECTIONS", older):            # önceki sürüm: CMDB ve süreklilik bölümü yok
             demo.seed(self.app)
         self.assertEqual(self.ok("GET", "/bias"), [])
-        self.assertEqual(demo.seed(self.app), {"added": ["cmdb", "continuity"]})
+        self.assertEqual(demo.seed(self.app), {"added": ["cmdb", "continuity", "audit_scope"]})
+        self.assertTrue(any(a["processes"] for a in (self.ok("GET", f"/audits/{x['id']}/context") for x in self.ok("GET", "/audits"))))
         self.assertIsNone(demo.seed(self.app))
         self.assertTrue(self.ok("GET", "/bias"))
 

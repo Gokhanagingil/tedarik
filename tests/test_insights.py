@@ -56,6 +56,19 @@ class Icgoruler(Base):
         viewer = self.make(role="VIEWER", user="izleyici")
         self.assertNotIn("risks", self.ok("GET", "/my-work", app=viewer).get("risks_none", {}))
 
+    def test_denetim_surec_kapsami(self):
+        today = date.today()
+        audit = self.ok("POST", "/audits", {"name": "Süreç denetimi", "planned_start": today.isoformat(), "process_ids": [self.process]})
+        self.assertEqual([p["id"] for p in audit["processes"]], [self.process])
+        self.assertEqual(self.ok("GET", f"/processes/{self.process}/context")["audits"][0]["id"], audit["id"])
+        checks = {c["key"]: c for c in self.ok("GET", "/health-check")["checks"]}
+        self.assertEqual(checks["core_process_not_audited"]["count"], 1)            # planlı denetim sayılmaz
+        self.ok("PATCH", f"/audits/{audit['id']}", {"status": "in_progress", "scope": "Süreç adımları", "actual_start": today.isoformat(),
+                                                     "expected_revision": audit["revision"]})
+        checks = {c["key"]: c for c in self.ok("GET", "/health-check")["checks"]}
+        self.assertEqual(checks["core_process_not_audited"]["count"], 0)
+        self.assertEqual(self.call("POST", "/audits", {"name": "x", "process_ids": [999]})[0], 400)
+
     def test_arama_ve_iliski_modeli(self):
         found = self.ok("GET", "/search?q=tedarikci")["results"]
         self.assertIn(("processes", self.process), {(r["resource"], r["id"]) for r in found})
