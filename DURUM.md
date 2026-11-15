@@ -125,6 +125,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
      CMDB senkronu Table API veya MCP kanalından; "MCP bağlantısını sına" (araç listesi ve örnek kayıt). Sahte MCP
      sunucusuyla uçtan uca test edildi; gerçek sunucu adresi ve kimlik bilgisi bekleniyor.
   - Testler: 107 uçtan uca test (SQLite ve PostgreSQL 16, Entra testleri dahil), tarayıcı smoke testi.
+  - Test sunucusuna dağıtıldı (commit `a9e2dd2`); canlı kabul testi 23/23 geçti, 55 ekran hatasız, görüntüleyici kısıtlı
+    kanıtları göremiyor (GitHub Actions çalıştırması 43738880070, 2026-11-15).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
