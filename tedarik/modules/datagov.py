@@ -977,7 +977,8 @@ def export_catalog(c):
     data = export_rows(c.db, source["id"], schema, c.query.get("only") == "undocumented")
     base = re.sub(r"[^A-Za-z0-9_-]+", "-", f"{source['code']}-{schema or 'katalog'}").strip("-")
     if c.query.get("format") == "xlsx":
-        from ..vendor import xlsx_io
+        from .transfer import _xlsx
+        xlsx_io = _xlsx()           # defusedxml yoksa anlaşılır hata (CSV kullanılabilir)
         if len(data) > xlsx_io.MAX_ROWS:
             raise crud.Invalid(f"Excel en çok {xlsx_io.MAX_ROWS} satır alır ({len(data) - 1} satır var); bir şema seçin, "
                                "yalnızca tanımsızları alın veya CSV indirin")

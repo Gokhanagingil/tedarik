@@ -212,6 +212,8 @@ const Drawer = {
     $('detail').setAttribute('aria-hidden', 'true'); $('detail').inert = true;
     document.querySelectorAll('tr.selected').forEach(r => r.classList.remove('selected'));
     if (Drawer.onclose) { const fn = Drawer.onclose; Drawer.onclose = null; fn(); }
+    // kapanış animasyonundan sonra eski form alanları DOM'da kalmasın (gizli alana yazılmasın, yinelenen kimlik olmasın)
+    setTimeout(() => { if (!Drawer.isOpen()) { clear($('detailContent')); clear($('detailFooter')); } }, 300);
   },
   isOpen: () => $('detail').classList.contains('open'),
 };

@@ -3,6 +3,7 @@ Power BI, kendi JSON sözleşmesi), şema değişikliği, iş açıklamaları, i
 Test verisi sentetiktir."""
 import base64
 import gzip
+import importlib.util
 import json
 import unittest
 
@@ -201,8 +202,11 @@ class Katalog(Base):
         used = self.ok("GET", f"/glossary_terms/{term}/context")
         self.assertEqual(used["used_in"][0]["count"], 1)
         st, xl = self.call("GET", f"/data_sources/{sid}/export?format=xlsx&only=undocumented")
-        self.assertEqual(st, 200)
-        self.assertTrue(xl.content[:2] == b"PK")
+        if importlib.util.find_spec("defusedxml"):
+            self.assertEqual(st, 200)
+            self.assertTrue(xl.content[:2] == b"PK")
+        else:                                          # paketsiz kurulum: Excel yerine CSV önerilir
+            self.assertEqual(st, 400)
         viewer = self.make(role="VIEWER", user="izleyici")
         self.assertEqual(self.call("POST", f"/data_sources/{sid}/import", upload("hana.csv", HANA), app=viewer)[0], 403)
         self.assertEqual(self.call("PATCH", f"/data_columns/{tckn['id']}", {"description": "x"}, app=viewer)[0], 403)

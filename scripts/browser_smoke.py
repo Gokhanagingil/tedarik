@@ -276,6 +276,7 @@ def exercise(page, out, base, errors):
     go(page, "datagov", "Veri Yönetişimi")
     expect(page.locator("#content")).to_contain_text("üç adımda")
     page.locator("#topActions button", has_text="+ Veri kaynağı").click()
+    expect(page.locator("#detailTitle")).to_have_text("Yeni: Veri Kaynakları")
     page.locator('#detail [name="name"]').fill("SAP S/4HANA Test")
     page.locator('#detail [name="platform"]').select_option("sap_hana")
     page.locator("#detailFooter button", has_text="Oluştur").click()
@@ -300,6 +301,7 @@ def exercise(page, out, base, errors):
     page.locator("table.columns tr", has_text="STCD1").click()
     expect(page.locator("#detail .meaning")).to_contain_text("Vergi numarası 1")       # kaynak açıklaması, iş tanımı yok
     page.locator("#detailFooter button", has_text="Düzenle").click()
+    expect(page.locator("#detailTitle")).to_have_text("Kolon: STCD1")
     page.locator('#detail [name="business_name"]').fill("T.C. kimlik numarası")
     page.locator('#detail [name="personal_data"]').select_option("personal")
     page.locator('#detail [name="classification"]').select_option("restricted")
@@ -309,6 +311,7 @@ def exercise(page, out, base, errors):
     page.keyboard.press("Escape")
     go(page, "glossary", "İş Sözlüğü")
     page.locator("#topActions button", has_text="+ Terim").click()
+    expect(page.locator("#detailTitle")).to_have_text("Yeni: İş Sözlüğü")
     page.locator('#detail [name="name"]').fill("T.C. kimlik numarası")
     page.locator('#detail [name="abbreviation"]').fill("TCKN")
     page.locator('#detail [name="definition"]').fill("Türkiye Cumhuriyeti vatandaşlarına verilen 11 haneli kimlik numarası.")
@@ -348,6 +351,7 @@ def exercise(page, out, base, errors):
     checks.append("anket_kurucu")
     # kampanya
     page.locator("#topActions button", has_text="Kampanya başlat").click()
+    expect(page.locator("#detailTitle")).to_have_text("Yeni anket kampanyası")
     page.locator('#detail [name="name"]').fill("4. çeyrek memnuniyet")
     page.locator("#detailFooter button", has_text="Oluştur").click()
     expect(page.locator("#pageTitle")).to_have_text("4. çeyrek memnuniyet")
