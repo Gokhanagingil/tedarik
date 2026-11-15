@@ -291,6 +291,11 @@ td.over{color:var(--bad);font-weight:700}.health-top{display:grid;grid-template-
 .legend .line.dashed{border-top-style:dashed}.legend .line.dotted{border-top-style:dotted}
 @media(max-width:1280px){.map-layout{grid-template-columns:1fr}.map-side{position:static}}
 @media(max-width:860px){.hero{flex-direction:column;align-items:stretch;padding:20px}.hero-score{min-width:0}.health-top{grid-template-columns:1fr}}
+/* ---------- denetim arşivi */
+.archive-q{width:420px}.archive-audit h3 a{color:var(--text);text-decoration:none}.archive-audit h3 a:hover{color:var(--accent)}
+.archive-table td{vertical-align:top}.detail-text{max-width:340px;white-space:normal}.archive-extra{display:flex;gap:8px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}
+.ev-chip{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}.ev-chip.restricted{background:var(--warn-soft);color:var(--warn)}
+.chip.muted{opacity:.6}
 /* ---------- duyarlı düzen */
 @media(max-width:1280px){.cards,.cards.five{grid-template-columns:repeat(2,minmax(0,1fr))}.grid.three,.grid.four{grid-template-columns:1fr 1fr}.grid.wide-left{grid-template-columns:1fr}}
 @media(max-width:1000px){#main.details-open{padding-right:0}#detail{width:min(640px,100vw)}#detailResize{display:none}.grid.two,.grid.three,.grid.four{grid-template-columns:1fr}}

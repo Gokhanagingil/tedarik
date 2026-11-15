@@ -230,6 +230,13 @@ def exercise(page, out, base, errors):
     expect(page.locator(".pal-list li[role=option]", has_text="Örnek Bilişim")).to_be_visible()
     page.keyboard.press("Escape")
     checks.append("grc_platform_ekranlari")
+    go(page, "archive", "Denetim Arşivi")                       # madde koduyla geçmiş denetim ve kanıt araması
+    page.locator(".archive-q").fill("A.5.19")
+    page.locator(".archive-q").press("Enter")
+    expect(page.locator(".archive-audit").first).to_contain_text("Tedarikçi yönetimi iç denetimi")
+    expect(page.locator(".archive-table").first).to_contain_text("Kritik sözleşmelerde denetim hakkı")
+    page.screenshot(path=str(out / "05c-denetim-arsivi.png"), full_page=True)
+    checks.append("denetim_arsivi")
     go(page, "compliance", "Uyum Panosu")
     expect(page.locator("#content")).to_contain_text("Standartlara göre")
     page.screenshot(path=str(out / "05b-uyum-panosu.png"), full_page=True)

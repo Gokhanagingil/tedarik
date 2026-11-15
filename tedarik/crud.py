@@ -184,8 +184,11 @@ def _query_value(column, value):
     return value
 
 
-def listing(db, res, query):
+def listing(db, res, query, extra=None):
     where, args = [], []
+    if extra:                                                    # satır görünürlüğü (Resource.row_filter)
+        where.append("(" + extra[0] + ")")
+        args += list(extra[1])
     for key, value in query.items():
         if key in RESERVED:
             continue

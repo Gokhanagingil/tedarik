@@ -88,6 +88,8 @@ class Resource:
         self.indexes = tuple(indexes)   # ek dizinler: sütun demetleri; yabancı anahtarlar kendiliğinden
         self.before_save = None         # kanca: (db, data, mevcut_kayıt, principal)
         self.scope = None               # birim kapsamı: (db, kayıt) -> kaydın ait olduğu birim kimlikleri
+        self.row_filter = None          # satır görünürlüğü: principal -> (SQL koşulu, parametreler) veya None
+        self.can_read = None            # tek kayıt görünürlüğü: (principal, kayıt) -> bool (ör. kısıtlı kanıt)
         self.required = [f for f, c in self.columns.items() if c.required and f not in self.readonly]
         RESOURCES[name] = self
 

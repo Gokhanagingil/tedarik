@@ -288,6 +288,9 @@ def main():
         page.screenshot(path=str(out / "06d-surec-haritasi.png"), full_page=True)
         page.goto(BASE + "/#/calendar")
         expect(page.locator(".cal .ev").first).to_be_visible(timeout=20000)
+        page.goto(BASE + "/#/archive?q=A.5.19")                    # denetim arşivi: madde koduyla geçmiş denetim ve kanıt
+        expect(page.locator(".archive-audit").first).to_be_visible(timeout=20000)
+        page.screenshot(path=str(out / "06e-denetim-arsivi.png"), full_page=True)
         page.goto(BASE + "/#/home")
         expect(page.locator(".hero")).to_be_visible(timeout=20000)
         page.keyboard.press("Control+k")
@@ -295,7 +298,7 @@ def main():
         expect(page.locator(".pal-list li[role=option]").first).to_be_visible()
         page.keyboard.press("Escape")
         assert not console, "; ".join(console[:3])
-        return "tedarikçi 360, uyum panosu, denetim, kontrol sonucu, anket sonucu, risk panosu, BİA, CMDB, süreç haritası, takvim, palet"
+        return "tedarikçi 360, uyum panosu, denetim, kontrol sonucu, anket sonucu, risk panosu, BİA, CMDB, süreç haritası, takvim, arşiv, palet"
     check("Ana ekran akışları (tarayıcı)", ui_journeys)
 
     # ------------------------------------------------------------ hesaplar
@@ -341,7 +344,12 @@ def main():
         expect_status(viewer, "GET", "audit_log", 403)
         meta = viewer.ok("GET", "metadata")
         assert not meta["resources"]["suppliers"]["can_write"] and not meta["permissions"]["write"]
-        return "okur; tedarikçi, sonuç, kullanıcı ve iz yazamaz/göremez"
+        restricted = [e for e in admin.ok("GET", "evidence?confidentiality=restricted&limit=200")]
+        assert not viewer.ok("GET", "evidence?confidentiality=restricted&limit=200")       # kısıtlı kanıt görünmez
+        for e in restricted[:2]:
+            expect_status(viewer, "GET", f"evidence/{e['id']}", 404)
+            expect_status(viewer, "GET", f"evidence/{e['id']}/files/1", 404)
+        return f"okur; tedarikçi, sonuç, kullanıcı ve iz yazamaz/göremez; {len(restricted)} kısıtlı kanıtı göremez"
     check("Görüntüleyici yetki sınırları", viewer_limits)
 
     def unit_scope():

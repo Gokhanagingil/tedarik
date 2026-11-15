@@ -56,6 +56,29 @@ fi
 if [ -f "$SN_SETTINGS" ]; then
   . "$SN_SETTINGS"
   export TEDARIK_SN_INSTANCE TEDARIK_SN_USER
+  # ServiceNow MCP sunucusu (K-021): TEDARIK_SN_MCP_URL ve OAuth için TEDARIK_SN_MCP_TOKEN_URL, TEDARIK_SN_MCP_CLIENT_ID
+  # (aynı dosyada); belirteç $BASE/secrets/sn_mcp_token, OAuth istemci sırrı $BASE/secrets/sn_mcp_client_secret dosyasında.
+  if [ -n "${TEDARIK_SN_MCP_URL:-}" ]; then
+    case "$TEDARIK_SN_MCP_URL" in https://*) ;; *) echo "TEDARIK_SN_MCP_URL https:// ile başlamalı" >&2; exit 1;; esac
+    export TEDARIK_SN_MCP_URL
+    if [ -n "${TEDARIK_SN_MCP_TOKEN_URL:-}" ]; then
+      export TEDARIK_SN_MCP_TOKEN_URL TEDARIK_SN_MCP_CLIENT_ID TEDARIK_SN_MCP_CLIENT_SECRET_FILE=/run/secrets/sn_mcp_client_secret
+    else
+      export TEDARIK_SN_MCP_TOKEN_FILE=/run/secrets/sn_mcp_token
+    fi
+  fi
+fi
+# Kurumsal giriş (Entra ID + MFA, docs/KIMLIK.md): $BASE/entra.env varsa uygulama entra modunda çalışır.
+# Dosyada yalnızca gizli olmayan ayarlar durur (TEDARIK_ENTRA_TENANT_ID, TEDARIK_ENTRA_CLIENT_ID,
+# TEDARIK_ENTRA_AUTH_CONTEXT); istemci sırrı yalnızca $BASE/secrets/entra_client_secret dosyasındadır.
+ENTRA_SETTINGS="$BASE/entra.env"
+if [ -f "$ENTRA_SETTINGS" ]; then
+  . "$ENTRA_SETTINGS"
+  [ -n "${TEDARIK_DOMAIN:-}" ] || { echo "Entra girişi için HTTPS alan adı (TEDARIK_DOMAIN) gerekli" >&2; exit 1; }
+  [ -s "$BASE/secrets/entra_client_secret" ] || { echo "Entra istemci sırrı yok: $BASE/secrets/entra_client_secret" >&2; exit 1; }
+  TEDARIK_ENTRA_REDIRECT_URI="${TEDARIK_ENTRA_REDIRECT_URI:-https://$TEDARIK_DOMAIN/auth/entra/callback}"
+  export TEDARIK_AUTH_MODE=entra TEDARIK_ENTRA_TENANT_ID TEDARIK_ENTRA_CLIENT_ID TEDARIK_ENTRA_AUTH_CONTEXT \
+    TEDARIK_ENTRA_REDIRECT_URI TEDARIK_ENTRA_CLIENT_SECRET_FILE=/run/secrets/entra_client_secret
 fi
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
 
@@ -80,8 +103,11 @@ secret db_password
 secret mcp_api_key
 printf 'postgresql://tedarik:%s@db:5432/tedarik' "$(cat "$BASE/secrets/db_password")" > "$BASE/secrets/database_url"
 chown 70:70 "$BASE/secrets/db_password"                     # postgres (alpine) kullanıcısı
-[ -e "$BASE/secrets/sn_password" ] || : > "$BASE/secrets/sn_password"   # boş: ServiceNow yapılandırılmadı
-chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key" "$BASE/secrets/sn_password"
+for optional in sn_password sn_mcp_token sn_mcp_client_secret entra_client_secret; do   # boş: yapılandırılmadı
+  [ -e "$BASE/secrets/$optional" ] || : > "$BASE/secrets/$optional"
+done
+chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key" "$BASE/secrets/sn_password" \
+  "$BASE/secrets/sn_mcp_token" "$BASE/secrets/sn_mcp_client_secret" "$BASE/secrets/entra_client_secret"
 chmod 0400 "$BASE/secrets/"*
 
 # Güncellemeden önce veritabanı yedeği (veritabanı çalışıyorsa).
@@ -93,11 +119,17 @@ fi
 $COMPOSE up -d --wait --wait-timeout 120
 
 # İlk yönetici: geçici parola yalnızca root'un okuyabildiği dosyaya yazılır.
-out=$($COMPOSE exec -T app python -m tedarik.bootstrap create "${TEDARIK_ADMIN:-tdradmin}")
-if [ "$out" != "ACCOUNT_ALREADY_EXISTS" ]; then
-  printf '%s\n' "$out" > "$BASE/.first-login"
-  chmod 0600 "$BASE/.first-login"
-  echo "İlk yönetici oluşturuldu; geçici parola: $BASE/.first-login (yalnızca root okur)"
+# Entra modunda yönetici Entra uygulama rolüyle (KS.TDR.Admin) gelir; yerel hesap açılmaz.
+if [ "${TEDARIK_AUTH_MODE:-local}" = local ]; then
+  out=$($COMPOSE exec -T app python -m tedarik.bootstrap create "${TEDARIK_ADMIN:-tdradmin}")
+  if [ "$out" != "ACCOUNT_ALREADY_EXISTS" ]; then
+    printf '%s\n' "$out" > "$BASE/.first-login"
+    chmod 0600 "$BASE/.first-login"
+    echo "İlk yönetici oluşturuldu; geçici parola: $BASE/.first-login (yalnızca root okur)"
+  fi
+else
+  echo "Kurumsal giriş (Entra ID) ön denetimi:"
+  $COMPOSE exec -T app python -m tedarik.entra_check || echo "UYARI: Entra ön denetimi hata verdi; yukarıdaki maddeleri düzeltin" >&2
 fi
 
 # Demo verisi (yalnızca istenirse ve veritabanında demo dışı tedarikçi yoksa). Demo kullanıcıların geçici

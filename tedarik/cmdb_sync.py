@@ -1,6 +1,6 @@
 """CMDB senkronu (günlük zamanlanmış görev): python -m tedarik.cmdb_sync [--full]
 
-ServiceNow yapılandırılmışsa artımlı (veya tam) senkron yapar; ardından CI risk kurallarını değerlendirir.
+ServiceNow (Table API veya MCP sunucusu, K-021) yapılandırılmışsa artımlı (veya tam) senkron yapar; ardından CI risk kurallarını değerlendirir.
 Yapılandırılmamışsa yalnızca kuralları değerlendirir (MCP ile itilen veya elle girilen CI'lar için).
 """
 import sys
@@ -21,10 +21,11 @@ def main(argv=None):
             print("CMDB_DISABLED")
             return 0
         with app.database.connect() as db:
-            if app.config.sn_instance:
-                result = cmdb.sync_servicenow(db, app, SYSTEM, full="--full" in argv)
-                print(f"Senkron {result['status']} ({result['mode']}): {result['created']} yeni, {result['updated']} "
-                      f"güncellenen, {result['stale']} eski; açık maruziyet {result['rules']['open']}")
+            channel = cmdb.default_channel(app.config)       # Table API önceliklidir; yoksa ServiceNow MCP sunucusu
+            if channel:
+                result = cmdb.sync_servicenow(db, app, SYSTEM, full="--full" in argv, channel=channel)
+                print(f"Senkron ({channel}) {result['status']} ({result['mode']}): {result['created']} yeni, "
+                      f"{result['updated']} güncellenen, {result['stale']} eski; açık maruziyet {result['rules']['open']}")
             else:
                 result = cmdb.evaluate_rules(db, SYSTEM)
                 print(f"ServiceNow yapılandırılmadı; kurallar değerlendirildi: açık maruziyet {result['open']}")

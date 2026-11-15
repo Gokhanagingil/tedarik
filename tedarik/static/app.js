@@ -33,6 +33,11 @@ function s(tag, attrs, ...children) {
   for (const c of children.flat()) if (c) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
   return el;
 }
+/** Yalnızca http(s) bağlantısı çizilir (sunucu da denetler; javascript: gibi şemalar asla bağlantı olmaz). */
+function extLink(url) {
+  if (!url) return null;
+  return /^https?:\/\//i.test(url) ? h('a', {href: url, target: '_blank', rel: 'noopener noreferrer', text: url}) : String(url);
+}
 function clear(el) { while (el.firstChild) el.firstChild.remove(); return el; }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
 
@@ -392,7 +397,7 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 const MENU = [
   ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
   ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
-  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
+  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['archive', 'archive', 'Denetim Arşivi'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
   ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
@@ -418,7 +423,7 @@ const ICONS = {
   star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7', flow: 'M3 6h6v4H3zM15 14h6v4h-6zM9 8h3a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2', share: 'M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
   coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9h4.5a2 2 0 0 1 0 4H9h5a2 2 0 0 1 0 4H9M11 7v2M11 17v-2', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
-  swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
+  swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
 function icon(name, cls = '') {
   return s('svg', {viewBox: '0 0 24 24', class: 'icon ' + cls, 'aria-hidden': 'true'}, s('path', {d: ICONS[name] || ICONS.list}));
@@ -537,7 +542,7 @@ const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
   if (key.startsWith('r/')) return !!META.def(key.slice(2));
-  const modules = {'my-surveys': 'surveys', compliance: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
+  const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
@@ -567,7 +572,7 @@ function navigation() {
   }
   let activeButton = null;
   nav.querySelectorAll('.nav-button').forEach(b => {
-    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/'));
+    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/')) || (key === 'archive' && current.startsWith('archive'));
     b.classList.toggle('active', on); if (on) { b.setAttribute('aria-current', 'page'); activeButton = b; } else b.removeAttribute('aria-current');
   });
   if (activeButton) {
@@ -1691,7 +1696,7 @@ DETAILS.evidence = async function evidenceDetail(id) {
       e.expiring ? pill('Geçerlilik sonu yaklaşıyor', 'warn') : null), h('br'),
     section('Bilgiler', kv([['Açıklama', e.description], ['Dönem', e.period_start || e.period_end ? `${fmt.date(e.period_start)} – ${fmt.date(e.period_end)}` : null],
       ['Geçerlilik sonu', fmt.date(e.expires_at)], ['Tedarikçi', display('evidence', 'supplier_id', e.supplier_id)], ['Birim', display('evidence', 'org_unit_id', e.org_unit_id)],
-      ['Referans', e.reference_url ? h('a', {href: e.reference_url, target: '_blank', rel: 'noopener noreferrer', text: e.reference_url}) : null], ['Oluşturan', e.created_by]])),
+      ['Referans', extLink(e.reference_url)], ['Oluşturan', e.created_by]])),
     section(`Dosya sürümleri (${e.files.length})`, e.files.length ? h('ul', {class: 'mini'}, e.files.map(f => h('li', {class: 'file-row'},
       h('div', {}, h('strong', {text: `Sürüm ${f.version} · ${f.file_name}`}), h('span', {class: 'cell-sub', text: `${fmt.num(f.file_size / 1024, 1)} KB · ${f.uploaded_by} · ${fmt.datetime(f.uploaded_at)}`}),
         h('span', {class: 'cell-sub mono', title: f.sha256, text: 'SHA-256 ' + f.sha256})),
@@ -1862,6 +1867,7 @@ async function auditPage(id) {
     h('td', {}, display('controls', 'execution_mode', c.execution_mode)), h('td', {}, resultPill(c.result), c.result_at ? h('span', {class: 'cell-sub', text: fmt.datetime(c.result_at)}) : null),
     h('td', {}, c.planned ? '' : pill('Plan dışı', 'neutral')),
     h('td', {class: 'no-print'}, c.execution_id ? btn('Ayrıntı', () => showExecution(c.execution_id), 'ghost small') : null,
+      h('button', {type: 'button', class: 'btn ghost small hidden', dataset: {history: c.id}, text: 'Geçmiş', title: 'Önceki denetimlerdeki sonuçlar ve kanıtlar'}),
       testable && c.active ? (c.automation ? btn('Çalıştır', async () => { await runAutomation(c, reload, a.id); }, 'ghost small') :
         btn('Test et', async () => { const ctx = await api(`controls/${c.id}/context`); recordResult(ctx, {auditId: a.id, done: reload}); }, 'ghost small')) : null)));
   const findingList = (list_, more) => list_.length ? h('ul', {class: 'mini'}, list_.slice(0, 12).map(f => h('li', {class: 'link', onclick: () => Router.go('r/findings/' + f.id)},
@@ -1886,7 +1892,8 @@ async function auditPage(id) {
       h('div', {class: 'panel'}, h('h3', {text: `Bu denetimin bulguları (${a.findings.length})`}), findingList(a.findings)),
       h('div', {class: 'panel'}, h('h3', {text: `Kapsamdaki diğer açık bulgular (${a.other_open_findings.length})`}), findingList(a.other_open_findings))),
     h('div', {class: 'panel'}, h('h3', {text: `Kanıtlar (${a.evidence.length})`}), a.evidence.length ? h('ul', {class: 'mini'}, a.evidence.map(e => h('li', {class: 'link', onclick: () => Router.go('r/evidence/' + e.id)},
-      h('strong', {text: e.code + ' · ' + e.title}), e.current_version ? h('span', {class: 'cell-sub', text: 'Sürüm ' + e.current_version}) : null))) : h('div', {class: 'muted small', text: 'Bu denetime bağlı kanıt yok'})));
+      h('strong', {text: e.code + ' · ' + e.title}), e.current_version ? h('span', {class: 'cell-sub', text: 'Sürüm ' + e.current_version}) : null))) : h('div', {class: 'muted small', text: 'Bu denetime bağlı kanıt yok'})),
+    typeof auditHistoryPanel === 'function' ? await auditHistoryPanel(a) : null);
 }
 
 // uyum panosu

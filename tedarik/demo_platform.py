@@ -283,6 +283,79 @@ class PlatformSections:
             FROM tdr_audit_clauses ac JOIN tdr_control_clauses cc ON cc.clause_id=ac.clause_id
             JOIN tdr_control_processes cp ON cp.control_id=cc.control_id ON CONFLICT DO NOTHING""")
 
+    def audit_archive(self):
+        """Denetim arşivi için önceki yılın tamamlanmış denetimi: sonuçlar ve o sonuçlara dondurulmuş kanıt sürümleri."""
+        from .modules import grc as G
+        db, r = self.db, random.Random(20261117)
+        auditor = Principal("can.ozturk", "AUDITOR", "system", "Can Öztürk")
+        machine = MACHINE
+        year = TODAY.year - 1
+        if one(db, "SELECT id FROM tdr_audits WHERE code=?", (f"DNT-{year}-0001",)):
+            return
+        clause_ids = [x["id"] for x in rows(db, """SELECT cl.id FROM tdr_clauses cl JOIN tdr_standards s ON s.id=cl.standard_id
+            WHERE s.code='ISO/IEC 27001' AND cl.code IN ('A.5.19','A.5.20','A.5.21','A.5.22','A.5.23')""")]
+        if not clause_ids:
+            return
+        std_id = one(db, "SELECT id FROM tdr_standards WHERE code='ISO/IEC 27001'")["id"]
+        start, end = 395, 380
+        audit_id = db.execute(
+            "INSERT INTO tdr_audits (code, name, kind, audit_objective, scope, planned_start, planned_end, actual_start, "
+            "lead_auditor, auditors, auditees, status, revision, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (f"DNT-{year}-0001", f"Tedarikçi ilişkileri iç denetimi — {year} (ISO/IEC 27001 Ek A 5.19–5.23)", "internal",
+             "Tedarikçi güvenlik gereksinimlerinin sözleşmelere yansıması ve izlenmesinin etkinliği.",
+             "Kritik ve önemli tedarikçiler; sözleşme, erişim, izleme ve değişiklik süreçleri. " + TAG, day(-start), day(-end),
+             day(-start), "Can Öztürk", "Can Öztürk, Okan Yıldız", "Satın Alma, Bilgi Güvenliği", "in_progress", 0,
+             stamp(start + 20))).lastrowid
+        db.execute("INSERT INTO tdr_audit_standards (audit_id, standard_id) VALUES (?,?)", (audit_id, std_id))
+        for cid in clause_ids:
+            db.execute("INSERT INTO tdr_audit_clauses (audit_id, clause_id) VALUES (?,?)", (audit_id, cid))
+        documents = [("Tedarikçi sözleşmeleri güvenlik maddesi örneklemi", "sozlesme-orneklem.csv",
+                      b"sozlesme,guvenlik_maddesi,denetim_hakki\nSOZ-1,var,var\nSOZ-2,var,yok\n", "confidential"),
+                     ("Tedarikçi erişim listesi gözden geçirme tutanağı", "erisim-gozden-gecirme.pdf",
+                      b"%PDF-1.4\n% Sentetik demo: erisim gozden gecirme tutanagi\n%%EOF\n", "internal"),
+                     ("Kritik tedarikçi performans değerlendirme raporları", "performans-raporlari.pdf",
+                      b"%PDF-1.4\n% Sentetik demo: performans raporlari\n%%EOF\n", "internal"),
+                     ("Bulut sağlayıcı sızma testi raporu (kısıtlı)", "sizma-testi.pdf",
+                      b"%PDF-1.4\n% Sentetik demo: sizma testi raporu\n%%EOF\n", "restricted")]
+        evidence = []
+        for title, name, content, conf in documents:
+            eid = crud.insert(db, RESOURCES["evidence"], {"title": title, "description": TAG, "confidentiality": conf,
+                                                          "period_start": day(-start - 365), "period_end": day(-start)}, auditor)
+            db.execute("UPDATE tdr_evidence SET created_at=? WHERE id=?", (stamp(start - 2), eid))
+            G.store_file(db, eid, name, content, "can.ozturk", stamp(start - 2))
+            evidence.append(eid)
+            for cid in clause_ids[:3]:
+                db.execute("INSERT INTO tdr_evidence_clauses (evidence_id, clause_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                           (eid, cid))
+            db.execute("INSERT INTO tdr_evidence_audits (evidence_id, audit_id) VALUES (?,?)", (eid, audit_id))
+        for n, link in enumerate(sorted({p["control_id"] for p in G.planned_controls(db, audit_id)})):
+            control = crud.get(db, RESOURCES["controls"], link)
+            if not control["active"]:
+                continue
+            failed = n % 4 == 1
+            body = {"control_id": link, "audit_id": audit_id, "status": "fail" if failed else "pass",
+                    "executed_at": stamp(start - 3 - n % 8, 10 + n % 6), "sample_size": 20, "exceptions": 2 if failed else 0,
+                    "details": ("Örneklemdeki 20 sözleşmeden 2'sinde denetim hakkı maddesi yok." if failed else
+                                "Örneklemde istisna bulunmadı; kanıt dosyası incelendi."),
+                    "evidence_ids": [evidence[n % len(evidence)], evidence[(n + 1) % len(evidence)]]}
+            if control["execution_mode"] == "automatic" and not control["automation"]:
+                body.update(source="mcp", provenance={"collection_status": "complete", "query": "approved-query:arsiv:v1"})
+                G.record_execution(db, machine, body)
+            else:                                    # iç otomatik kontrolü denetçi örneklemle yeniden uyguladı
+                G.record_execution(db, auditor, body)
+        for link in G.planned_controls(db, audit_id):
+            db.execute("INSERT INTO tdr_audit_plan (audit_id, clause_id, control_id) VALUES (?,?,?) ON CONFLICT DO NOTHING",
+                       (audit_id, link["clause_id"], link["control_id"]))
+        db.execute("UPDATE tdr_audits SET status='closed', actual_end=?, opinion='partially_effective', conclusion=?, "
+                   "plan_captured_at=? WHERE id=?", (day(-end), "Sözleşme güvenlik maddeleri büyük ölçüde mevcut; iki "
+                   "sözleşmede denetim hakkı eksikti, DÖF ile tamamlandı.", stamp(end), audit_id))
+        for f in rows(db, "SELECT id FROM tdr_findings WHERE audit_id=?", (audit_id,)):
+            db.execute("UPDATE tdr_findings SET status='closed', closure_note=?, closed_at=?, owner='ayse.yilmaz', "
+                       "created_at=? WHERE id=?", ("Sözleşme ek protokolleri imzalandı; yeniden test başarılı.",
+                                                   stamp(end - 60), stamp(start - 5), f["id"]))
+        db.execute("INSERT INTO tdr_audit_processes (audit_id, process_id) SELECT ?, id FROM tdr_processes WHERE name "
+                   "IN ('Tedarikçi Yönetimi', 'Bilgi Güvenliği') ON CONFLICT DO NOTHING", (audit_id,))
+
     # -------------------------------------------------------------- kurumsal risk (ISO 31000)
     def erm(self):
         db, r = self.db, self.rnd
@@ -800,4 +873,4 @@ class PlatformSections:
 
 
 SECTIONS = (("companies", "core"), ("architecture", "core"), ("erm", "risks"), ("documents", "documents"),
-            ("cmdb", "cmdb"), ("continuity", "continuity"), ("audit_scope", "grc"))
+            ("cmdb", "cmdb"), ("continuity", "continuity"), ("audit_scope", "grc"), ("audit_archive", "grc"))

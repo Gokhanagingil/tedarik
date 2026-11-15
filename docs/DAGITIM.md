@@ -14,6 +14,7 @@ Hedef: Tedarik Portalı'nı başka uygulamaların da çalıştığı bir Linux s
 | Port çakışması | 18090 başka bir süreçteyse kurulum durur (`TEDARIK_PORT` ile başka port seçilir) |
 | Denetim | Kurulumdan önce ve sonra diğer tüm konteynerlerin kimliği ve başlama zamanı karşılaştırılır; fark varsa kurulum hata verir |
 | Yasak işlemler | Sunucu genelinde `docker system prune`, `docker compose down -v`, başka uygulamanın ters vekil ayarı değiştirilmez |
+| Sırlar | `/opt/tedarik/secrets/` (0400): veritabanı, MCP anahtarı, ServiceNow parolası, MCP belirteci veya OAuth sırrı, Entra istemci sırrı; boş dosya "yapılandırılmadı" demektir |
 | Cron | Yalnızca kendi dosyaları: `/etc/cron.d/tedarik-backup` (günlük yedek, 02:17), `/etc/cron.d/tedarik-grc` (iç otomatik kontroller, 05:43), `/etc/cron.d/tedarik-cmdb` (CMDB senkronu ve CI risk kuralları, 04:23) |
 
 ## İlk kurulum (GitHub Actions ile)
@@ -52,9 +53,31 @@ Portal ServiceNow Table API'sini salt okunur kullanıcıyla okur (`cmdb_ci_busin
    ve uygulamayı yeniden başlatın (`docker compose -p tedarik restart app`). Parola Git'e, CI günlüğüne ve arayüze girmez.
 4. Sunucunun ServiceNow adresine HTTPS (443) ile çıkabildiğini doğrulayın; CMDB Panosu'ndan "ServiceNow'dan senkronize et".
 
+**ServiceNow MCP sunucusu (K-021).** Table API yerine (veya Table API açılamıyorsa) kurumun ServiceNow MCP sunucusu
+kullanılabilir. `/opt/tedarik/servicenow.env` dosyasına `TEDARIK_SN_MCP_URL=https://<mcp-uç-noktası>` yazın ve
+kimlik bilgisini seçin: sabit belirteç için `/opt/tedarik/secrets/sn_mcp_token`; OAuth istemci kimlik bilgisi için
+ayrıca `TEDARIK_SN_MCP_TOKEN_URL=https://<kurum>.service-now.com/oauth_token.do`, `TEDARIK_SN_MCP_CLIENT_ID=<istemci>`
+ve `/opt/tedarik/secrets/sn_mcp_client_secret`. Kurulumu yeniden çalıştırın; CMDB Panosu'nda "MCP bağlantısını sına"
+sunucuya bağlanır, araçları listeler ve `cmdb.mcp` politikasındaki araçla tek kayıt okur. Araç adı veya argümanları
+farklıysa politikayı düzeltin.
+
 Alan ve değer eşlemesi (`cmdb.servicenow`) ile kural eşikleri (`cmdb.rules`: kapsam ortamı, yama 35 gün, yeniden başlatma
 100 gün, uyarı günleri) Politika Parametreleri'nden değişir. Özel alanlar (ör. `u_os_end_of_support`, `u_last_patch_date`)
 kurumun CMDB'sindeki adlarla eşlenmelidir.
+
+## Kurumsal giriş: Entra ID ve MFA
+
+Entra uygulama kaydı ve Koşullu Erişim ayarları `docs/KIMLIK.md` içindedir. Sunucuda:
+
+1. `/opt/tedarik/entra.env` (root, 0600): `TEDARIK_ENTRA_TENANT_ID=<kiracı GUID>`, `TEDARIK_ENTRA_CLIENT_ID=<istemci GUID>`,
+   `TEDARIK_ENTRA_AUTH_CONTEXT=c1` (MFA isteyen Koşullu Erişim ilkesinin hedeflediği kimlik doğrulama bağlamı).
+2. İstemci sırrı: `sudo sh -c 'umask 077; printf %s "<sır>" > /opt/tedarik/secrets/entra_client_secret'`.
+3. Kurulumu `domain` ile çalıştırın. Dönüş adresi `https://<alan adı>/auth/entra/callback` olur. Betik yerel yönetici
+   açmaz ve `python -m tedarik.entra_check` ön denetimini çalıştırır: ayarlar, Microsoft OpenID yapılandırması, imza
+   anahtarları ve istemci sırrının geçerliliği (belirteç alınıp atılır) denetlenir; Entra yöneticisinin doğrulaması
+   gereken maddeler listelenir.
+4. Entra modunda parola girişi kapalıdır; canlı kabul testi (`acceptance`) yerel parolalı hesaplarla çalıştığından bu
+   modda kullanılmaz. Yerel moda dönmek için `entra.env` dosyasını kaldırıp kurulumu yeniden çalıştırın.
 
 ## Demo verisi ve kabul testi
 

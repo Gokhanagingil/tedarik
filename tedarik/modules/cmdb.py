@@ -25,6 +25,10 @@ from .. import audit, auth as authz, crud
 from ..db import one, rows, utcnow
 from ..http import API
 from ..schema import RESOURCES, Resource, fk
+from pathlib import Path
+from urllib.parse import urlparse
+
+from ..mcp_client import DEFAULT_SETTINGS as MCP_DEFAULTS
 from ..servicenow import Client, ServiceNowError, display, value
 from .core import policy
 
@@ -255,20 +259,54 @@ def servicenow_client(config):
     if not config.sn_instance:
         raise crud.Conflict("ServiceNow bağlantısı yapılandırılmadı (TEDARIK_SN_INSTANCE ve kimlik bilgisi dosyası)")
     try:
-        password = open(config.sn_password_file, encoding="utf-8").read().strip() if config.sn_password_file else None
-        token = open(config.sn_token_file, encoding="utf-8").read().strip() if config.sn_token_file else None
+        password = Path(config.sn_password_file).read_text(encoding="utf-8").strip() if config.sn_password_file else None
+        token = Path(config.sn_token_file).read_text(encoding="utf-8").strip() if config.sn_token_file else None
     except OSError:
         raise crud.Conflict("ServiceNow kimlik bilgisi dosyası okunamadı") from None
     return Client(config.sn_instance, user=config.sn_user, password=password, token=token, ca_file=config.sn_ca_file)
 
 
-def sync_servicenow(db, app, principal, full=False, client=None):
+def _secret(path, label):
+    try:
+        return Path(path).read_text(encoding="utf-8").strip() if path else None
+    except OSError:
+        raise crud.Conflict(f"{label} dosyası okunamadı") from None
+
+
+def mcp_client(config):
+    """ServiceNow MCP sunucusu istemcisi (K-021). Sırlar yalnızca dosyadan ve yalnızca kullanılırken okunur."""
+    from ..mcp_client import McpClient, McpError, OAuthClientCredentials
+    if not config.sn_mcp_url:
+        raise crud.Conflict("ServiceNow MCP bağlantısı yapılandırılmadı (TEDARIK_SN_MCP_URL)")
+    try:
+        provider = None
+        if config.sn_mcp_token_url:
+            secret = _secret(config.sn_mcp_client_secret_file, "MCP istemci sırrı")
+            if not secret:
+                raise crud.Conflict("MCP OAuth istemci sırrı boş")
+            provider = OAuthClientCredentials(config.sn_mcp_token_url, config.sn_mcp_client_id, secret, config.sn_mcp_scope)
+        token = _secret(config.sn_mcp_token_file, "MCP belirteci") if not provider else None
+        return McpClient(config.sn_mcp_url, token=token, token_provider=provider, ca_file=config.sn_ca_file)
+    except McpError as exc:
+        raise crud.Conflict(str(exc)) from None
+
+
+def mcp_settings(db):
+    return {**MCP_DEFAULTS, **(policy(db, "cmdb.mcp", {}) or {})}
+
+
+def sync_servicenow(db, app, principal, full=False, client=None, channel="servicenow"):
+    """ServiceNow CMDB senkronu. channel: "servicenow" (Table API) veya "mcp" (ServiceNow MCP sunucusu aracı);
+    iki kanalda da eşleme, artımlı senkron, eski kayıt işaretleme ve kurallar aynıdır."""
     mapping = policy(db, "cmdb.servicenow", DEFAULT_MAPPING)
+    if client is None and channel == "mcp":
+        from ..mcp_client import McpTableSource
+        client = McpTableSource(mcp_client(app.config), mcp_settings(db))
     client = client or servicenow_client(app.config)
     started = utcnow()
     db.lock("cmdb:sync")
-    last = one(db, "SELECT watermark FROM tdr_cmdb_sync_runs WHERE source='servicenow' AND status='success' "
-                   "AND watermark IS NOT NULL ORDER BY id DESC LIMIT 1")
+    last = one(db, "SELECT watermark FROM tdr_cmdb_sync_runs WHERE source=? AND status='success' "
+                   "AND watermark IS NOT NULL ORDER BY id DESC LIMIT 1", (channel,))
     watermark = None if full or not last else last["watermark"]
     mode = "delta" if watermark else "full"
     counts = {"created": 0, "updated": 0, "unchanged": 0, "stale": 0, "relations": 0, "requests": 0}
@@ -334,17 +372,58 @@ def sync_servicenow(db, app, principal, full=False, client=None):
         counts["stale"] = len(stale)
     counts["requests"] = client.requests
     status = "failed" if table_failed and not seen else "partial" if errors else "success"
-    run_id = _record_run(db, started, status, mode, "servicenow", principal.username, counts, errors,
+    run_id = _record_run(db, started, status, mode, channel, principal.username, counts, errors,
                          newest if status == "success" else watermark)
     audit.log(db, principal, "SYNC", RUNS.name, run_id, {k: counts[k] for k in ("created", "updated", "stale")})
     evaluation = evaluate_rules(db, principal)
     return {"run_id": run_id, "status": status, "mode": mode, **counts, "errors": errors[:10], "rules": evaluation}
 
 
+def default_channel(config):
+    return "servicenow" if config.sn_instance else "mcp" if config.sn_mcp_url else None
+
+
 def sync_route(c):
     authz.require_human(c.principal)
     authz.require(c.principal, "admin")
-    return sync_servicenow(c.db, c.app, c.principal, full=bool(c.body.get("full")))
+    channel = c.body.get("channel") or default_channel(c.app.config)
+    if channel not in ("servicenow", "mcp"):
+        raise crud.Conflict("ServiceNow bağlantısı yapılandırılmadı (Table API veya MCP)")
+    return {**sync_servicenow(c.db, c.app, c.principal, full=bool(c.body.get("full")), channel=channel), "channel": channel}
+
+
+def mcp_test(c):
+    """MCP bağlantı sınaması: oturum açar, sunucu bilgisini ve araçları listeler; yapılandırılan aracın varlığını ve
+    sınama tablosundan tek kayıt alınıp alınamadığını denetler. Yalnızca Yönetici; veri yazmaz."""
+    authz.require_human(c.principal)
+    authz.require(c.principal, "admin")
+    from ..mcp_client import McpError, McpTableSource
+    client = mcp_client(c.app.config)
+    settings = mcp_settings(c.db)
+    out = {"url_host": urlparse(c.app.config.sn_mcp_url).netloc, "tool": settings["tool"], "steps": [], "tools": []}
+    try:
+        out["server"] = client.initialize()
+        out["steps"].append({"step": "initialize", "ok": True, "detail": f"oturum açıldı, protokol {client.protocol}"})
+        tools = client.list_tools()
+        out["tools"] = [{"name": t["name"], "description": str(t.get("description") or "")[:300],
+                         "parameters": sorted(((t.get("inputSchema") or {}).get("properties") or {}).keys())} for t in tools]
+        found = any(t["name"] == settings["tool"] for t in tools)
+        out["steps"].append({"step": "tools/list", "ok": found, "detail": f"{len(tools)} araç; yapılandırılan araç "
+                             f"'{settings['tool']}' {'var' if found else 'yok (cmdb.mcp politikasında tool adını düzeltin)'}"})
+        if found:
+            table = str(c.body.get("table") or "cmdb_ci_server")[:80]
+            source = McpTableSource(client, {**settings, "page_size": 1})
+            sample = next(iter(source.table(table, ["sys_id", "name", "sys_updated_on"])), None)
+            name = display(sample, "name") if isinstance(sample, dict) else None
+            out["steps"].append({"step": "tools/call", "ok": True, "detail": f"{table}: " + (
+                f"örnek kayıt alındı ({str(name)[:60]})" if sample else "araç çalıştı, kayıt dönmedi")})
+    except (McpError, ServiceNowError) as exc:
+        out["steps"].append({"step": "hata", "ok": False, "detail": str(exc)})
+    finally:
+        client.close()
+    out["ok"] = len(out["steps"]) >= 3 and all(s["ok"] for s in out["steps"])
+    audit.log(c.db, c.principal, "TEST", RUNS.name, None, {"mcp_host": out["url_host"], "ok": out["ok"]})
+    return out
 
 
 def push_route(c):
@@ -541,6 +620,10 @@ def status(c):
     return {
         "servicenow": {"configured": bool(cfg.sn_instance), "instance": cfg.sn_instance or None,
                        "auth": "token" if cfg.sn_token_file else "basic" if cfg.sn_user else None},
+        "mcp": {"configured": bool(cfg.sn_mcp_url), "host": urlparse(cfg.sn_mcp_url).netloc or None,
+                "auth": "oauth" if cfg.sn_mcp_token_url else "token" if cfg.sn_mcp_token_file else None,
+                "tool": mcp_settings(c.db)["tool"]},
+        "channel": default_channel(cfg),
         "counts": rows(c.db, "SELECT ci_class AS key, COUNT(*) AS count FROM tdr_cmdb_cis WHERE stale=0 GROUP BY ci_class"),
         "total": one(c.db, "SELECT COUNT(*) AS n FROM tdr_cmdb_cis WHERE stale=0")["n"],
         "stale": one(c.db, "SELECT COUNT(*) AS n FROM tdr_cmdb_cis WHERE stale=1")["n"],
@@ -556,6 +639,7 @@ def status(c):
 def register(app):
     app.route("GET", API + "/cmdb/status", status)
     app.route("POST", API + "/cmdb/sync", sync_route)
+    app.route("POST", API + "/cmdb/mcp/test", mcp_test)
     app.route("POST", API + "/cmdb/cis/bulk", push_route, max_body=8 * 1024 * 1024)
     app.route("POST", API + "/cmdb/evaluate", evaluate_route)
     app.route("GET", API + "/cmdb_cis/{id}/context", ci_context)
@@ -566,6 +650,10 @@ DEFAULT_POLICIES = (
     ("cmdb.servicenow", DEFAULT_MAPPING, "ServiceNow CMDB tablo ve alan eşlemesi. u_ ile başlayan alanlar kurumunuzun "
                                          "özel alan adlarıyla değiştirilmelidir."),
     ("cmdb.rules", DEFAULT_RULES, "CI risk kuralları: ortamlar, sınıflar, gün sınırları, önerilen olasılık, risk sahibi"),
+    ("cmdb.mcp", MCP_DEFAULTS, "ServiceNow MCP sunucusu (K-021): CMDB tablosu okuyan aracın adı (tool), argüman şablonu "
+                       "({table}, {query}, {fields}, {fields_list}, {limit}, {offset}), kayıt yolu (records_path) ve sayfa "
+                       "boyutu (page_size). Boşsa varsayılan: query_table aracı. CMDB Panosu'ndaki 'MCP bağlantısını sına' "
+                       "sunucudaki araçları ve parametrelerini listeler."),
 )
 
 

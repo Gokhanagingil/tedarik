@@ -33,6 +33,16 @@ Tedarik, KS GRC'nin kimlik kodunu kullanır (`tedarik/vendor/`, kaynak `control@
 
 Eksik veya çelişkili ayarla uygulama başlamaz. Entra ayarı verilip mod `entra` değilse de başlamaz.
 
+## MFA nasıl zorunlu olur
+
+Uygulama her girişte kimlik belirtecinde `acrs` talebini **zorunlu** (essential) ister ve değer olarak yapılandırılan
+kimlik doğrulama bağlamını (ör. `c1`) bekler. Entra bu bağlamı ancak bağlamı hedefleyen Koşullu Erişim ilkesi (MFA
+gerektiren) karşılandığında belirtece yazar. Belirteçte bağlam yoksa giriş reddedilir (`required_context_missing`).
+Ayrıca: RS256 imza (kiracının JWKS anahtarları), issuer, audience, kiracı (`tid`), nonce, süre ve PKCE doğrulanır;
+başka kiracı, başka uygulama, süresi dolmuş veya başka anahtarla imzalanmış belirteç kabul edilmez (`tests/test_kimlik.py`).
+
+Sunucuda ön denetim: `docker exec tedarik-app-1 python -m tedarik.entra_check` (ayrıntı `docs/DAGITIM.md`).
+
 ## Davranış
 
 - İlk başarılı girişte hesap kiracı ve nesne kimliğiyle açılır (`entra:<kiracı>:<oid>`); yerel hesapla ad veya e-postayla eşleme yapılmaz.

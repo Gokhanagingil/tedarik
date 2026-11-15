@@ -37,6 +37,18 @@ class Config:
         self.sn_ca_file = env.get("TEDARIK_SN_CA_FILE") or None
         if self.sn_instance and not self.sn_instance.startswith("https://") and env.get("TEDARIK_SN_ALLOW_HTTP") != "1":
             raise ValueError("TEDARIK_SN_INSTANCE https:// ile başlamalı")
+        # ServiceNow MCP sunucusu (K-021): Streamable HTTP uç noktası; bearer belirteci veya OAuth istemci kimlik bilgisi
+        self.sn_mcp_url = env.get("TEDARIK_SN_MCP_URL", "").strip()
+        self.sn_mcp_token_file = env.get("TEDARIK_SN_MCP_TOKEN_FILE", "")
+        self.sn_mcp_token_url = env.get("TEDARIK_SN_MCP_TOKEN_URL", "").strip()
+        self.sn_mcp_client_id = env.get("TEDARIK_SN_MCP_CLIENT_ID", "").strip()
+        self.sn_mcp_client_secret_file = env.get("TEDARIK_SN_MCP_CLIENT_SECRET_FILE", "")
+        self.sn_mcp_scope = env.get("TEDARIK_SN_MCP_SCOPE", "").strip() or None
+        for name, url in (("TEDARIK_SN_MCP_URL", self.sn_mcp_url), ("TEDARIK_SN_MCP_TOKEN_URL", self.sn_mcp_token_url)):
+            if url and not url.startswith("https://") and env.get("TEDARIK_SN_ALLOW_HTTP") != "1":
+                raise ValueError(f"{name} https:// ile başlamalı")
+        if self.sn_mcp_token_url and not self.sn_mcp_client_id:
+            raise ValueError("TEDARIK_SN_MCP_TOKEN_URL için TEDARIK_SN_MCP_CLIENT_ID gerekli")
         names = [m.strip() for m in env.get("TEDARIK_MODULES", DEFAULT_MODULES).split(",") if m.strip()]
         self.modules = ["core"] + [m for m in names if m != "core"]
         self.api_key = self._secret(env)

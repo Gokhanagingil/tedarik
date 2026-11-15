@@ -318,6 +318,30 @@ def _action_scope(db, record):
     return units
 
 
+def evidence_filter(principal, alias=""):
+    """Kısıtlı kanıt (ör. sızma testi raporu) bilmesi gereken kişilere açıktır: Yönetici, Denetçi ve yükleyen.
+    (SQL koşulu, parametreler) döner; ayrıcalıklı rolde koşul yoktur."""
+    if principal is None or principal.role in ASSURANCE:
+        return "1=1", ()
+    p = alias + "." if alias else ""
+    return f"({p}confidentiality <> 'restricted' OR {p}created_by = ?)", (principal.username,)
+
+
+def evidence_visible(principal, evidence):
+    return (principal is None or principal.role in ASSURANCE or evidence.get("confidentiality") != "restricted"
+            or evidence.get("created_by") == principal.username)
+
+
+def _hidden_evidence_ids(principal):
+    if principal is None or principal.role in ASSURANCE:
+        return None
+    return ("evidence_id NOT IN (SELECT id FROM tdr_evidence WHERE confidentiality='restricted' AND "
+            "COALESCE(created_by,'') <> ?)", (principal.username,))
+
+
+EVIDENCE.row_filter = lambda principal: evidence_filter(principal)
+EVIDENCE.can_read = evidence_visible
+FILES.row_filter = _hidden_evidence_ids
 CONTROLS.before_save = _control_rules
 CLAUSES.before_save = _clause_rules
 EVIDENCE.before_save = _evidence_rules
@@ -395,7 +419,7 @@ def _as_date(value):
     return datetime.fromisoformat(str(value).replace("Z", "+00:00")).date()
 
 
-def control_context_data(db, control_id):
+def control_context_data(db, control_id, principal=None):
     control = crud.get(db, CONTROLS, control_id)
     control.update(control_links(db, control_id))
     control["executions"] = rows(db, "SELECT id, status, source, executed_at, recorded_by, audit_id, details "
@@ -408,15 +432,16 @@ def control_context_data(db, control_id):
                                    "CASE WHEN status IN ('open','in_progress') THEN 0 ELSE 1 END, id DESC LIMIT 50",
                                (control_id,))
     control["actions"] = rows(db, "SELECT * FROM tdr_grc_actions WHERE control_id=? ORDER BY due_date", (control_id,))
+    visible, args = evidence_filter(principal, "e")
     control["evidence"] = rows(db, "SELECT e.* FROM tdr_evidence e JOIN tdr_evidence_controls m ON m.evidence_id=e.id "
-                                   "WHERE m.control_id=? ORDER BY e.id DESC", (control_id,))
+                                   f"WHERE m.control_id=? AND {visible} ORDER BY e.id DESC", (control_id, *args))
     control["automation_info"] = AUTOMATIONS.get(control["automation"], {}).get("label") if control["automation"] else None
     return control
 
 
 def control_context(c):
     authz.check(c.principal, CONTROLS, "read")
-    return control_context_data(c.db, c.params["id"])
+    return control_context_data(c.db, c.params["id"], c.principal)
 
 
 def automations(c):
@@ -567,8 +592,12 @@ def execution_context(c):
     record = crud.get(c.db, EXECUTIONS, c.params["id"])
     record["definition"] = json.loads(record.pop("definition_json"))
     record["provenance"] = json.loads(record.pop("provenance_json"))
-    record["evidence"] = rows(c.db, "SELECT x.*, e.code, e.title FROM tdr_execution_evidence x JOIN tdr_evidence e "
-                                    "ON e.id=x.evidence_id WHERE x.execution_id=?", (record["id"],))
+    record["evidence"] = rows(c.db, "SELECT x.*, e.code, e.title, e.confidentiality, e.created_by FROM "
+                                    "tdr_execution_evidence x JOIN tdr_evidence e ON e.id=x.evidence_id "
+                                    "WHERE x.execution_id=?", (record["id"],))
+    for ev in record["evidence"]:                  # kısıtlı kanıtın varlığı ve özeti görünür, içeriği görünmez
+        if not evidence_visible(c.principal, ev):
+            ev.update(title="Kısıtlı kanıt", file_name=None, restricted=True)
     record["control"] = one(c.db, "SELECT id, code, name, active FROM tdr_controls WHERE id=?", (record["control_id"],))
     record["finding"] = one(c.db, "SELECT id, code, status FROM tdr_findings WHERE execution_id=?", (record["id"],))
     return record
@@ -766,8 +795,15 @@ def upload_evidence(c):
     return 201, {"id": evidence_id, **result}
 
 
-def add_version(c):
+def _visible_evidence(c):
     evidence = crud.get(c.db, EVIDENCE, c.params["id"])
+    if not evidence_visible(c.principal, evidence):
+        raise crud.NotFound("Kanıt bulunamadı")
+    return evidence
+
+
+def add_version(c):
+    evidence = _visible_evidence(c)
     if c.principal.role != "MACHINE":
         authz.check(c.principal, EVIDENCE, "write")
         crud.check_scope(c.db, EVIDENCE, c.principal, evidence)
@@ -784,6 +820,7 @@ def download(c):
     authz.check(c.principal, EVIDENCE, "read")
     if c.principal.role == "MACHINE":
         raise crud.Forbidden("MCP anahtarı kanıt dosyası indiremez")
+    _visible_evidence(c)
     file = one(c.db, "SELECT * FROM tdr_evidence_files WHERE evidence_id=? AND version=?",
                (c.params["id"], c.params["version"]))
     if not file:
@@ -797,7 +834,7 @@ def download(c):
 
 
 def evidence_links_route(c):
-    evidence = crud.get(c.db, EVIDENCE, c.params["id"])
+    evidence = _visible_evidence(c)
     authz.check(c.principal, EVIDENCE, "write")
     crud.check_scope(c.db, EVIDENCE, c.principal, evidence)
     _evidence_links(c.db, evidence["id"], c.body, replace=True)
@@ -822,6 +859,7 @@ def evidence_context_data(db, evidence_id):
 
 def evidence_context(c):
     authz.check(c.principal, EVIDENCE, "read")
+    _visible_evidence(c)
     return evidence_context_data(c.db, c.params["id"])
 
 
@@ -967,7 +1005,7 @@ def _save_audit(c, audit_id=None):
                "standards_added": sorted(standards - old_st), "standards_removed": sorted(old_st - standards),
                "clauses_added": sorted(clauses - old_cl), "clauses_removed": sorted(old_cl - clauses),
                "processes": sorted(process_ids) if process_ids is not None else None})
-    return audit_context_data(c.db, audit_id)
+    return audit_context_data(c.db, audit_id, c.principal)
 
 
 def create_audit(c):
@@ -978,7 +1016,7 @@ def update_audit(c):
     return _save_audit(c, c.params["id"])
 
 
-def audit_context_data(db, audit_id):
+def audit_context_data(db, audit_id, principal=None):
     item = crud.get(db, AUDITS, audit_id)
     standards, clauses = audit_scope(db, audit_id)
     item["standards"] = rows(db, "SELECT s.* FROM tdr_standards s JOIN tdr_audit_standards a ON a.standard_id=s.id "
@@ -1020,14 +1058,15 @@ def audit_context_data(db, audit_id):
     item["other_open_findings"] = rows(db, f"""SELECT f.*, c.code AS control_code FROM tdr_findings f
         LEFT JOIN tdr_controls c ON c.id=f.control_id WHERE COALESCE(f.audit_id,0)<>? AND f.status IN ('open','in_progress')
         AND f.control_id IN ({','.join('?' * len(scope_ids))}) ORDER BY f.id DESC""", (audit_id, *scope_ids))
+    visible, args = evidence_filter(principal, "e")
     item["evidence"] = rows(db, "SELECT e.* FROM tdr_evidence e JOIN tdr_evidence_audits m ON m.evidence_id=e.id "
-                                "WHERE m.audit_id=? ORDER BY e.id DESC", (audit_id,))
+                                f"WHERE m.audit_id=? AND {visible} ORDER BY e.id DESC", (audit_id, *args))
     return item
 
 
 def audit_context(c):
     authz.check(c.principal, AUDITS, "read")
-    return audit_context_data(c.db, c.params["id"])
+    return audit_context_data(c.db, c.params["id"], c.principal)
 
 
 def finding_context(c):
@@ -1171,6 +1210,9 @@ def overview(c):
 # ------------------------------------------------------------------ kayıt
 
 def register(app):
+    from . import grc_archive
+    app.route("GET", API + "/assurance/search", grc_archive.search)
+    app.route("GET", API + "/audits/{id}/history", grc_archive.audit_history)
     app.route("GET", API + "/controls/{id}/context", control_context)
     app.route("POST", API + "/controls/{id}/links", set_links)
     app.route("POST", API + "/controls/{id}/run", run_control)

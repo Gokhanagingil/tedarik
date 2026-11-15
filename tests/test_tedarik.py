@@ -5,6 +5,7 @@ PostgreSQL'de, her test için ayrı ve sonra silinen bir şemada çalışır (K-
 """
 import base64
 import json
+import re
 import os
 import secrets
 import tempfile
@@ -259,7 +260,8 @@ class Arayuz(Base):
             self.assertEqual(status, 200)
             self.assertNotIn("innerHTML", js.content)              # sunucu verisi HTML olarak yorumlanmaz
             self.assertNotIn("style=", js.content)                # satır içi stil yok (style-src-attr 'none')
-            self.assertNotIn("http", js.content.replace("http://www.w3.org/2000/svg", ""))   # dış kaynak yok
+            urls = set(re.findall(r"https?://[^\s'\"`)]+", js.content)) - {"http://www.w3.org/2000/svg"}
+            self.assertEqual(urls, set())                         # dış kaynak (CDN, yazı tipi, betik) yok
         self.assertEqual(self.app.dispatch("GET", "/static/app.css", {})[0], 200)
         self.assertEqual(self.app.dispatch("GET", "/static/yok.js", {})[0], 404)
         local = self.make(TEDARIK_AUTH_MODE="local")

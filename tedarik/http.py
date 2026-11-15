@@ -204,11 +204,14 @@ def resource_routes(app, res):
 
     def listing(c):
         authz.check(c.principal, res, "read")
-        return crud.listing(c.db, res, c.query)
+        return crud.listing(c.db, res, c.query, res.row_filter(c.principal) if res.row_filter else None)
 
     def get(c):
         authz.check(c.principal, res, "read")
-        return crud.get(c.db, res, c.params["id"])
+        record = crud.get(c.db, res, c.params["id"])
+        if res.can_read and not res.can_read(c.principal, record):
+            raise crud.NotFound(f"{res.label}: kayıt bulunamadı")      # varlığı da sızdırılmaz
+        return record
 
     def create(c):
         authz.check(c.principal, res, "write")
@@ -220,6 +223,8 @@ def resource_routes(app, res):
     def update(c):
         authz.check(c.principal, res, "write")
         guard_readonly(res, c.body)
+        if res.can_read and not res.can_read(c.principal, crud.get(c.db, res, c.params["id"])):
+            raise crud.NotFound(f"{res.label}: kayıt bulunamadı")
         record = crud.update(c.db, res, c.params["id"], c.body, c.principal)
         audit.log(c.db, c.principal, "UPDATE", res.name, c.params["id"], c.body)
         return record

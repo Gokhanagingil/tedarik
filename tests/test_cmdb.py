@@ -138,6 +138,31 @@ class Cmdb(Base):
         self.assertEqual(self.call("PATCH", f"/cmdb_cis/{app01['id']}", {"os": "Linux"})[0], 409)
         self.ok("PATCH", f"/cmdb_cis/{app01['id']}", {"description": "DR kopyası var"})
 
+    def test_yonlendirme_izlenmez(self):
+        """Yönlendirme izlenmez: kimlik bilgisi (Authorization) başka sunucuya taşınamaz."""
+        from http.server import BaseHTTPRequestHandler as H
+        seen = []
+
+        class Redirect(H):
+            def log_message(self, *args):
+                pass
+
+            def do_GET(self):
+                seen.append(self.headers.get("Authorization"))
+                self.send_response(302)
+                self.send_header("Location", "http://127.0.0.1:9/baska")
+                self.end_headers()
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), Redirect)
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        self.addCleanup(srv.shutdown)
+        from tedarik.servicenow import Client, ServiceNowError
+        client = Client(f"http://127.0.0.1:{srv.server_address[1]}", user="u", password="p", retries=0)
+        with self.assertRaises(ServiceNowError):
+            list(client.table("cmdb_ci_server", ["name"]))
+        self.assertEqual(len(seen), 1)
+        with self.assertRaises(ServiceNowError):
+            Client("file:///etc/passwd", token="t")
+
     def test_kimlik_hatasi_ve_yapilandirma(self):
         wrong = os.path.join(self.tmp.name, "wrong")
         with open(wrong, "w") as handle:
@@ -171,6 +196,170 @@ class Cmdb(Base):
         self.assertEqual(self.ok("GET", f"/cmdb_cis/{ci['id']}/context")["risks"][0]["link_source"], "rule")
         self.assertEqual(len(self.ok("GET", f"/cmdb_cis/{ci['id']}/context")["risks"]), 2)
         self.assertEqual(self.app.dispatch("POST", "/api/tdr/cmdb/sync", {"X-API-Key": KEY}, b"{}")[0], 403)
+
+
+class FakeMcpServer:
+    """ServiceNow MCP sunucusu taklidi (Streamable HTTP): initialize + oturum başlığı, initialized bildirimi (202),
+    tools/list (sayfalı), tools/call (SSE yanıt, Table API biçiminde kayıtlar), OAuth istemci kimlik bilgisi uç noktası."""
+
+    def __init__(self, tables, sse=True):
+        self.tables, self.sse, self.calls, self.tokens = tables, sse, [], []
+        self.session = "oturum-" + os.urandom(4).hex()
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):
+                pass
+
+            def send(self, status, body=None, headers=()):
+                raw = json.dumps(body).encode() if body is not None else b""
+                self.send_response(status)
+                for k, v in headers:
+                    self.send_header(k, v)
+                if body is not None:
+                    self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+
+            def do_DELETE(self):
+                self.send(200 if self.headers.get("Mcp-Session-Id") == outer.session else 404)
+
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                if self.path == "/oauth_token.do":
+                    form = parse_qs(body.decode())
+                    ok = form.get("grant_type") == ["client_credentials"] and form.get("client_secret") == ["sentetik-sir-123"]
+                    token = "oauth-" + os.urandom(4).hex()
+                    outer.tokens.append(token)
+                    return self.send(200, {"access_token": token, "expires_in": 1800}) if ok else self.send(401, {})
+                if self.headers.get("Authorization") not in ["Bearer sentetik-mcp-belirteci"] + \
+                        ["Bearer " + t for t in outer.tokens]:
+                    return self.send(401, {"error": "unauthorized"})
+                assert "text/event-stream" in self.headers.get("Accept", "")
+                msg = json.loads(body)
+                outer.calls.append((msg.get("method"), self.headers.get("Mcp-Session-Id"), self.headers.get("MCP-Protocol-Version")))
+                if msg["method"] == "initialize":
+                    return self.send(200, {"jsonrpc": "2.0", "id": msg["id"], "result": {
+                        "protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
+                        "serverInfo": {"name": "ServiceNow MCP (sentetik)", "version": "1.0"}}},
+                        headers=[("Mcp-Session-Id", outer.session)])
+                if self.headers.get("Mcp-Session-Id") != outer.session:
+                    return self.send(404, {})
+                if msg["method"] == "notifications/initialized":
+                    return self.send(202)
+                if msg["method"] == "tools/list":
+                    if not msg.get("params", {}).get("cursor"):
+                        return self.send(200, {"jsonrpc": "2.0", "id": msg["id"], "result": {"tools": [
+                            {"name": "get_incident", "inputSchema": {"properties": {"number": {}}}}], "nextCursor": "2"}})
+                    return self.send(200, {"jsonrpc": "2.0", "id": msg["id"], "result": {"tools": [
+                        {"name": "query_table", "description": "Tablo sorgusu", "inputSchema": {"properties": {
+                            "table_name": {}, "query": {}, "fields": {}, "limit": {}, "offset": {}}}}]}})
+                if msg["method"] == "tools/call":
+                    args = msg["params"]["arguments"]
+                    if args["table_name"] not in outer.tables:
+                        result = {"isError": True, "content": [{"type": "text", "text": "Tablo bulunamadı"}]}
+                    else:
+                        records = outer.tables[args["table_name"]]
+                        mark = next((p.split(">=", 1)[1] for p in args["query"].split("^") if p.startswith("sys_updated_on>=")), None)
+                        if mark:
+                            records = [r for r in records if r["sys_updated_on"]["value"] >= mark]
+                        page = records[args["offset"]:args["offset"] + args["limit"]]
+                        result = {"content": [{"type": "text", "text": json.dumps({"result": page})}]}
+                    reply = {"jsonrpc": "2.0", "id": msg["id"], "result": result}
+                    if not outer.sse:
+                        return self.send(200, reply)
+                    stream = (": hazır\n\n" + "event: message\ndata: " +
+                              json.dumps({"jsonrpc": "2.0", "method": "notifications/progress", "params": {}}) + "\n\n" +
+                              "event: message\ndata: " + json.dumps(reply) + "\n\n").encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Content-Length", str(len(stream)))
+                    self.end_headers()
+                    self.wfile.write(stream)
+                    return
+                self.send(200, {"jsonrpc": "2.0", "id": msg["id"], "error": {"code": -32601, "message": "Yöntem yok"}})
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+        self.url = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+class ServiceNowMcp(Base):
+    def setUp(self):
+        super().setUp()
+        tables = {"cmdb_ci_server": [server(f"s{i}", f"srv{i:02d}", "Windows Server", "2012 R2" if i == 1 else "2022",
+                                            "2023-10-10" if i == 1 else "2031-10-10", f"2026-11-0{1 + i % 8} 10:00:00")
+                                     for i in range(1, 6)],
+                  "cmdb_ci_business_app": [], "cmdb_ci_appl": [], "cmdb_ci_db_instance": [],
+                  "cmdb_rel_ci": [{"sys_id": f("r1"), "parent": f("s2"), "child": f("s1"), "type": f("t", "Runs on::Runs"),
+                                   "sys_updated_on": f("2026-11-01 09:00:00")}]}
+        self.mcp = FakeMcpServer(tables)
+        self.addCleanup(self.mcp.close)
+        token = os.path.join(self.tmp.name, "mcp_token")
+        with open(token, "w") as handle:
+            handle.write("sentetik-mcp-belirteci\n")
+        self.app = self.make(TEDARIK_SN_MCP_URL=self.mcp.url + "/mcp", TEDARIK_SN_MCP_TOKEN_FILE=token, TEDARIK_SN_ALLOW_HTTP="1")
+        self.company = self.ok("POST", "/companies", {"name": "Örnek Grup A.Ş.", "kind": "own", "servicenow_ref": "c0mp4ny"})["id"]
+        self.ok("PATCH", f"/policies/{self.policy('cmdb.mcp')['id']}", {"value_json": json.dumps({"page_size": 2})})
+
+    def policy(self, code):
+        return next(p for p in self.ok("GET", "/policies") if p["code"] == code)
+
+    def test_baglanti_sinamasi_ve_senkron(self):
+        status = self.ok("GET", "/cmdb/status")
+        self.assertEqual((status["channel"], status["mcp"]["configured"], status["mcp"]["auth"]), ("mcp", True, "token"))
+        check = self.ok("POST", "/cmdb/mcp/test", {})
+        self.assertTrue(check["ok"], check)
+        self.assertEqual([t["name"] for t in check["tools"]], ["get_incident", "query_table"])        # sayfalı liste
+        self.assertEqual(check["server"]["info"]["name"], "ServiceNow MCP (sentetik)")
+        self.assertIn(("tools/call", self.mcp.session, "2025-06-18"), self.mcp.calls)           # oturum ve sürüm başlığı
+        result = self.ok("POST", "/cmdb/sync", {})
+        self.assertEqual((result["channel"], result["status"], result["mode"], result["created"], result["relations"]),
+                         ("mcp", "success", "full", 5, 1))
+        cis = {c["name"]: c for c in self.ok("GET", "/cmdb_cis")}
+        self.assertEqual((cis["srv01"]["source"], cis["srv01"]["company_id"]), ("servicenow", self.company))
+        run = self.ok("GET", "/cmdb_sync_runs")[0]
+        self.assertEqual((run["source"], run["mode"]), ("mcp", "full"))
+        self.assertIn(f"cmdb:os_eos:{self.company}", {r["origin_ref"] for r in self.ok("GET", "/supplier_risks")})
+        again = self.ok("POST", "/cmdb/sync", {})                                                # artımlı
+        self.assertEqual((again["mode"], again["created"]), ("delta", 0))
+        viewer = self.make(role="VIEWER", user="izleyici", TEDARIK_SN_MCP_URL=self.mcp.url + "/mcp", TEDARIK_SN_ALLOW_HTTP="1")
+        self.assertEqual(self.call("POST", "/cmdb/mcp/test", {}, app=viewer)[0], 403)
+
+    def test_arac_hatasi_kimlik_ve_oauth(self):
+        self.ok("PATCH", f"/policies/{self.policy('cmdb.mcp')['id']}", {"value_json": json.dumps({"tool": "olmayan_arac"})})
+        check = self.ok("POST", "/cmdb/mcp/test", {})
+        self.assertFalse(check["ok"])
+        self.assertIn("yok", check["steps"][1]["detail"])
+        self.ok("PATCH", f"/policies/{self.policy('cmdb.mcp')['id']}", {"value_json": json.dumps({"page_size": 2})})
+        self.mcp.tables.pop("cmdb_ci_appl")
+        partial = self.ok("POST", "/cmdb/sync", {})
+        self.assertEqual(partial["status"], "partial")
+        self.assertIn("Tablo bulunamadı", json.dumps(partial["errors"], ensure_ascii=False))
+        wrong = os.path.join(self.tmp.name, "yanlis")
+        with open(wrong, "w") as handle:
+            handle.write("yanlis-belirtec")
+        bad = self.make(TEDARIK_SN_MCP_URL=self.mcp.url + "/mcp", TEDARIK_SN_MCP_TOKEN_FILE=wrong, TEDARIK_SN_ALLOW_HTTP="1")
+        failed = self.ok("POST", "/cmdb/mcp/test", {}, app=bad)
+        self.assertIn("kimlik doğrulamayı reddetti", failed["steps"][-1]["detail"])
+        secret = os.path.join(self.tmp.name, "mcp_client_secret")
+        with open(secret, "w") as handle:
+            handle.write("sentetik-sir-123")
+        oauth = self.make(TEDARIK_SN_MCP_URL=self.mcp.url + "/mcp", TEDARIK_SN_ALLOW_HTTP="1",
+                          TEDARIK_SN_MCP_TOKEN_URL=self.mcp.url + "/oauth_token.do", TEDARIK_SN_MCP_CLIENT_ID="grc-app",
+                          TEDARIK_SN_MCP_CLIENT_SECRET_FILE=secret)
+        self.assertTrue(self.ok("POST", "/cmdb/mcp/test", {}, app=oauth)["ok"])
+        self.assertEqual(len(self.mcp.tokens), 1)                                                 # belirteç saklanır
+        self.mcp.sse = False                                                                     # düz JSON yanıtı
+        self.assertTrue(self.ok("POST", "/cmdb/mcp/test", {}, app=oauth)["ok"])
+        from tedarik.config import Config
+        with self.assertRaises(ValueError):
+            Config(self.env(TEDARIK_SN_MCP_URL="http://dis.ornek.test/mcp"))                      # HTTPS zorunlu
 
 
 if __name__ == "__main__":

@@ -98,8 +98,11 @@ def clause_context(c):
         JOIN tdr_document_clauses m ON m.document_id=d.id WHERE m.clause_id=? ORDER BY d.code""", (item["id"],))
     item["findings"] = rows(c.db, "SELECT id, code, title, severity, status FROM tdr_findings WHERE clause_id=? "
                                   "ORDER BY id DESC", (item["id"],))
-    item["evidence"] = rows(c.db, """SELECT e.id, e.code, e.title, e.status FROM tdr_evidence e
-        JOIN tdr_evidence_clauses m ON m.evidence_id=e.id WHERE m.clause_id=? ORDER BY e.id DESC""", (item["id"],))
+    from .grc import evidence_filter
+    visible, args = evidence_filter(c.principal, "e")
+    item["evidence"] = rows(c.db, f"""SELECT e.id, e.code, e.title, e.status FROM tdr_evidence e
+        JOIN tdr_evidence_clauses m ON m.evidence_id=e.id WHERE m.clause_id=? AND {visible} ORDER BY e.id DESC""",
+                            (item["id"], *args))
     return item
 
 
@@ -234,8 +237,10 @@ def calendar(c):
             if due and lo <= due <= hi:
                 add("control_test", f"{k['code']} {k['name']}", due, None, "controls", k["id"], k["test"]["state"])
     if on("evidence_expiry") and _readable(c, "evidence"):
+        from .grc import evidence_filter
+        visible, args = evidence_filter(c.principal)
         for e in rows(db, "SELECT id, code, title, status, expires_at FROM tdr_evidence WHERE status='current' AND "
-                          "expires_at BETWEEN ? AND ?", (lo, hi)):
+                          f"expires_at BETWEEN ? AND ? AND {visible}", (lo, hi, *args)):
             add("evidence_expiry", f"{e['code']} {e['title']}", e["expires_at"], None, "evidence", e["id"], e["status"])
     if on("document_review") and _readable(c, "documents"):
         for d in rows(db, "SELECT id, code, title, status, review_date FROM tdr_documents WHERE status IN "

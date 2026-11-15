@@ -86,6 +86,8 @@ class Sureklilik(Base):
         self.assertEqual(self.call("PATCH", f"/bc_exercises/{exercise}", {**done, "outcome": "partially_successful",
                                                                           "lessons_learned": ""})[0], 400)
         self.ok("PATCH", f"/bc_exercises/{exercise}", {**done, "outcome": "partially_successful"})
+        manager = self.make(role="SUPPLIER_MANAGER", user="bcm.yoneticisi")     # tatbikatı yönetir ama bulgu açamaz
+        self.assertEqual(self.call("POST", f"/bc_exercises/{exercise}/findings", {"title": "x"}, app=manager)[0], 403)
         finding = self.ok("POST", f"/bc_exercises/{exercise}/findings", {"title": "Kurtarma hedef süreyi aştı",
                                                                         "severity": "high", "owner": "mehmet"})["finding_id"]
         context = self.ok("GET", f"/bc_exercises/{exercise}/context")

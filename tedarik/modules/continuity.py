@@ -406,6 +406,7 @@ def exercise_finding(c):
     exercise = crud.get(c.db, EXERCISES, c.params["id"])
     findings = RESOURCES["findings"]
     authz.check(c.principal, EXERCISES, "write")
+    authz.check(c.principal, findings, "write")          # bulgu açma yetkisi ayrıca gerekir (Yönetici, Denetçi)
     body = {k: v for k, v in c.body.items() if k in ("title", "description", "severity", "owner", "due_date")}
     body["description"] = (body.get("description") or "") + f"\n\nKaynak: {exercise['code']} — {exercise['title']}"
     guard_readonly(findings, body)

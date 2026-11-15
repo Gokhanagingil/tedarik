@@ -620,7 +620,7 @@ DETAILS.bc_exercises = async function exerciseDetail(id) {
       ['Yöneten', x.facilitator], ['Katılımcılar', x.participants]])),
     x.status === 'completed' ? section('Sonuç (ISO 22301 8.5)', kv([['Sonuç', display('bc_exercises', 'outcome', x.outcome)], ['Alınan dersler', x.lessons_learned], ['Rapor', x.report]])) : null,
     section(`Bulgular (${x.findings.length})`, recordList('findings', x.findings, {chips: f => [display('findings', 'severity', f.severity), display('findings', 'status', f.status)], none: 'Bulgu yok'}),
-      can ? btn('+ Bulgu', () => {
+      can && canWrite('findings') ? btn('+ Bulgu', () => {
         const form = h('form', {class: 'formgrid'}, ...['title', 'severity', 'owner', 'due_date', 'description'].map(n => inputFor('findings', META.field('findings', n), n === 'severity' ? 'medium' : n === 'due_date' ? today(30) : null)));
         Modal.open('Tatbikat bulgusu: ' + x.code, h('div', {}, h('p', {class: 'intro', text: 'Bulgu uyum modülünde açılır ve DÖF akışına girer; tatbikata bağlı kalır.'}), form), [btn('Vazgeç', () => Modal.close(), 'secondary'),
           btn('Bulgu aç', async () => {
@@ -672,7 +672,7 @@ DETAILS.documents = async function documentDetail(id, tab) {
     section('Doküman', kv([['Kategori', display('documents', 'category', d.category)], ['Süreç', d.process_id ? h('a', {href: '#/r/processes/' + d.process_id, text: titleOf(refRecord('processes', d.process_id))}) : null],
       ['Birim', display('documents', 'org_unit_id', d.org_unit_id)], ['Sahip', d.owner], ['Onaylayan (atanmış)', d.approver], ['Hazırlayan', d.prepared_by],
       ['Gözden geçirme sıklığı', d.review_period_months ? d.review_period_months + ' ay' : null], ['Saklama süresi', d.retention_years ? d.retention_years + ' yıl' : null],
-      ['Referans bağlantı', d.reference_url ? h('a', {href: d.reference_url, target: '_blank', rel: 'noopener noreferrer', text: d.reference_url}) : null], ['Açıklama', d.description]])));
+      ['Referans bağlantı', extLink(d.reference_url)], ['Açıklama', d.description]])));
   const revisions = () => d.revisions.length ? h('ul', {class: 'timeline'}, d.revisions.map(r => h('li', {},
     h('strong', {text: `Rev. ${r.revision} · ${fmt.date(r.effective_date)}`}), h('div', {text: r.change_summary}),
     h('div', {class: 'muted small', text: `Hazırlayan ${r.prepared_by} · onaylayan ${r.approved_by} · ${fmt.datetime(r.approved_at)}`}),
@@ -725,13 +725,16 @@ PAGES.cmdb = async function cmdbBoard() {
   setPage('CMDB Panosu', 'ServiceNow CMDB\'den gelen uygulama ve altyapı öğeleri. Kurallar destek dışı işletim sistemi ve uygulamaları, eksik kritik yamaları ve uzun süredir yeniden başlatılmayan sunucuları bulur, şirket bazında kurumsal risk açar.');
   const d = await api('cmdb/status');
   setPage('CMDB Panosu', 'ServiceNow CMDB\'den gelen uygulama ve altyapı öğeleri. Kurallar destek dışı işletim sistemi ve uygulamaları, eksik kritik yamaları ve uzun süredir yeniden başlatılmayan sunucuları bulur, şirket bazında kurumsal risk açar.', [
-    admin ? btn('ServiceNow\'dan senkronize et', async () => { const r = await api('cmdb/sync', {method: 'POST', body: {}}); toast(`Senkron: ${r.created || 0} yeni, ${r.updated || 0} güncellendi`); PAGES.cmdb(); }, '', {disabled: !d.servicenow.configured, title: d.servicenow.configured ? '' : 'ServiceNow bağlantısı yapılandırılmadı'}) : null,
+    admin ? btn('ServiceNow\'dan senkronize et', async () => { const r = await api('cmdb/sync', {method: 'POST', body: {}}); toast(`Senkron (${r.channel === 'mcp' ? 'MCP' : 'Table API'}): ${r.created || 0} yeni, ${r.updated || 0} güncellendi${r.errors && r.errors.length ? ', ' + r.errors.length + ' hata' : ''}`, r.status !== 'failed'); PAGES.cmdb(); }, '', {disabled: !d.channel, title: d.channel ? '' : 'ServiceNow bağlantısı yapılandırılmadı'}) : null,
+    admin && d.mcp && d.mcp.configured ? btn('MCP bağlantısını sına', () => mcpTest(), 'secondary') : null,
     admin ? btn('Kuralları değerlendir', async () => { const r = await api('cmdb/evaluate', {method: 'POST', body: {}}); toast(`${r.opened} yeni maruziyet, ${r.resolved} giderildi, ${r.risks_created} risk açıldı`); PAGES.cmdb(); }, 'secondary') : null]);
   const exp = Object.fromEntries(d.exposures.map(x => [x.key, x.count]));
   const conn = d.servicenow.configured
-    ? h('div', {class: 'notice success', text: `ServiceNow bağlı: ${d.servicenow.instance} (${d.servicenow.auth === 'token' ? 'belirteç' : 'kullanıcı'} ile). Senkron günlük olarak zamanlanmış görevle de çalışır.`})
-    : h('div', {class: 'notice warn'}, h('strong', {text: 'ServiceNow bağlantısı yapılandırılmadı. '}),
-      'Gösterilen öğeler MCP ile itilen veya elle girilen kayıtlardır. Bağlantı için sunucuda TEDARIK_SN_INSTANCE ile kullanıcı/parola veya belirteç dosyası tanımlanır; eşleme ve kurallar Politika Parametreleri\'nde (cmdb.servicenow, cmdb.rules) durur.');
+    ? h('div', {class: 'notice success', text: `ServiceNow bağlı (Table API): ${d.servicenow.instance} (${d.servicenow.auth === 'token' ? 'belirteç' : 'kullanıcı'} ile). Senkron her gece zamanlanmış görevle de çalışır.`})
+    : d.mcp && d.mcp.configured
+      ? h('div', {class: 'notice success', text: `ServiceNow MCP sunucusu yapılandırıldı: ${d.mcp.host} (${d.mcp.auth === 'oauth' ? 'OAuth istemci kimlik bilgisi' : 'bearer belirteç'}), CMDB aracı "${d.mcp.tool}". Senkron her gece zamanlanmış görevle de çalışır; "MCP bağlantısını sına" sunucudaki araçları gösterir.`})
+      : h('div', {class: 'notice warn'}, h('strong', {text: 'ServiceNow bağlantısı yapılandırılmadı. '}),
+        'Gösterilen öğeler MCP ile itilen veya elle girilen kayıtlardır. İki bağlantı yolu vardır: ServiceNow Table API (TEDARIK_SN_INSTANCE) veya ServiceNow MCP sunucusu (TEDARIK_SN_MCP_URL). Eşleme ve kurallar Politika Parametreleri\'nde (cmdb.servicenow, cmdb.mcp, cmdb.rules) durur; ayrıntı docs/DAGITIM.md.');
   const runs = d.last_runs.length ? h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Başlangıç', 'Kaynak', 'Mod', 'Durum', 'Yeni', 'Güncellenen', 'Değişmeyen', 'Bayat'].map((t, i) => h('th', {class: i > 3 ? 'num' : '', text: t})))),
     h('tbody', {}, d.last_runs.map(r => h('tr', {class: 'clickable', onclick: () => openRecord('cmdb_sync_runs', r.id)}, h('td', {text: fmt.datetime(r.started_at)}), h('td', {}, display('cmdb_sync_runs', 'source', r.source)),
       h('td', {}, display('cmdb_sync_runs', 'mode', r.mode)), h('td', {}, display('cmdb_sync_runs', 'status', r.status)),
@@ -752,6 +755,16 @@ PAGES.cmdb = async function cmdbBoard() {
         onclick: item => Router.go('r/cmdb_cis?ci_class=' + item.key)}))),
     panel('Son senkron çalıştırmaları', runs));
 };
+async function mcpTest() {
+  Modal.open('ServiceNow MCP bağlantı sınaması', h('div', {class: 'empty', text: 'Sunucuya bağlanılıyor…'}));
+  let r; try { r = await api('cmdb/mcp/test', {method: 'POST', body: {}}); } catch (e) { Modal.close(); toast(e.message, false); return; }
+  Modal.open('ServiceNow MCP bağlantı sınaması', h('div', {},
+    h('div', {class: 'notice ' + (r.ok ? 'success' : 'bad'), text: r.ok ? `Bağlantı kuruldu: ${r.url_host}${r.server && r.server.info.name ? ' · ' + r.server.info.name : ''}` : `Bağlantı sınaması başarısız: ${r.url_host}`}),
+    h('ul', {class: 'mini'}, r.steps.map(x => h('li', {}, pill(x.ok ? 'Uygun' : 'Hata', x.ok ? 'good' : 'bad'), ' ', h('strong', {text: x.step}), h('span', {class: 'cell-sub', text: x.detail})))),
+    r.tools.length ? section(`Sunucudaki araçlar (${r.tools.length})`, h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Araç', 'Parametreler', 'Açıklama'].map(t => h('th', {text: t})))),
+      h('tbody', {}, r.tools.map(t => h('tr', {class: t.name === r.tool ? 'selected' : ''}, h('td', {class: 'cell-primary', text: t.name}), h('td', {text: t.parameters.join(', ')}), h('td', {text: t.description}))))))) : null,
+    h('p', {class: 'muted small', text: 'Kullanılacak araç, argüman şablonu ve kayıt yolu Politika Parametreleri\'nde cmdb.mcp kaydındadır. Sınama veri yazmaz.'})), [], true);
+}
 DETAILS.cmdb_cis = async function ciDetail(id) {
   await Promise.all(['companies', 'suppliers'].map(r => list(r).catch(() => [])));
   let c; try { c = await api(`cmdb_cis/${id}/context`); } catch (e) { toast(e.message, false); return; }
@@ -864,7 +877,8 @@ DETAILS.clauses = async function clauseDetail(id) {
     section(`Dokümanlar (${c.documents.length})`, recordList('documents', c.documents, {chips: d => [display('documents', 'status', d.status)], none: 'Doküman yok'})),
     section(`Bulgular (${c.findings.length})`, recordList('findings', c.findings, {chips: f => [display('findings', 'severity', f.severity), display('findings', 'status', f.status)], none: 'Bulgu yok'})),
     section(`Kanıtlar (${c.evidence.length})`, recordList('evidence', c.evidence, {none: 'Kanıt yok'})));
-  Drawer.open(`${c.code} · ${c.title}`, body, [canWrite('clauses') ? btn('Düzenle', () => recordForm('clauses', c, {onsaved: reload}), 'secondary') : null], c.standard ? c.standard.code : 'Standart maddesi');
+  Drawer.open(`${c.code} · ${c.title}`, body, [btn('Denetim geçmişi ve kanıtlar', () => { Drawer.close(); Router.go('archive?clause_id=' + c.id); }, 'secondary'),
+    canWrite('clauses') ? btn('Düzenle', () => recordForm('clauses', c, {onsaved: reload}), 'secondary') : null], c.standard ? c.standard.code : 'Standart maddesi');
 };
 
 // ------------------------------------------------------------------ ilişki haritası
@@ -937,6 +951,102 @@ PAGES.map = async function relationMap() {
     h('div', {class: 'legend'}, h('span', {}, h('i', {class: 'line solid'}), 'Bire çok (yabancı anahtar)'), h('span', {}, h('i', {class: 'line dashed'}), 'Çoka çok (eşleme tablosu)'),
       h('span', {}, h('i', {class: 'line dotted'}), 'Hiyerarşi (üst kayıt)')))));
 };
+
+
+// ------------------------------------------------------------------ denetim arşivi (geçmiş denetim, sonuç ve kanıt)
+function evidenceChip(e) {
+  const label = `${e.code}${e.version ? ' · s' + e.version : ''} · ${e.title}`;
+  const b = h('button', {type: 'button', class: 'chip ev-chip' + (e.restricted ? ' restricted' : ''), title: e.sha256 ? 'SHA-256 ' + e.sha256 : label,
+    text: (e.restricted ? '🔒 ' : '') + label});
+  b.addEventListener('click', () => (e.restricted ? toast('Kısıtlı kanıt: yalnızca Yönetici, Denetçi ve yükleyen görebilir', false) : openRecord('evidence', e.id)));
+  return b;
+}
+function resultTable(results, {showAudit = false} = {}) {
+  if (!results.length) return h('div', {class: 'muted small', text: 'Bu kapsamda kayıtlı test sonucu yok'});
+  return h('div', {class: 'tablewrap'}, h('table', {class: 'archive-table'}, h('thead', {}, h('tr', {}, [showAudit ? 'Denetim' : null, 'Kontrol', 'Madde', 'Sonuç', 'Tarih', 'Sunulan kanıt']
+    .filter(Boolean).map(t => h('th', {text: t})))),
+  h('tbody', {}, results.map(r => h('tr', {},
+    showAudit ? h('td', {}, r.audit_code ? h('a', {href: '#/audit/' + r.audit_id, text: r.audit_code}) : h('span', {class: 'muted', text: 'Denetim dışı'})) : null,
+    h('td', {class: 'cell-primary'}, h('a', {href: '#/r/controls/' + r.control_id, text: r.control_code}), h('span', {class: 'cell-sub', text: r.control_name}),
+      r.details ? h('span', {class: 'cell-sub detail-text', text: r.details}) : null),
+    h('td', {}, r.clause_codes.length ? h('div', {class: 'chips'}, r.clause_codes.map(c => h('span', {class: 'chip', text: c}))) : h('span', {class: 'muted', text: '—'})),
+    h('td', {}, resultPill(r.status), h('span', {class: 'cell-sub', text: META.option('executions', 'source', r.source)})),
+    h('td', {}, fmt.date(r.executed_at), h('span', {class: 'cell-sub', text: r.recorded_by}), h('button', {type: 'button', class: 'btn ghost small', text: 'Ayrıntı', onclick: () => showExecution(r.execution_id)})),
+    h('td', {}, r.evidence.length ? h('div', {class: 'chips'}, r.evidence.map(evidenceChip)) : h('span', {class: 'muted small', text: 'Kanıt bağlanmadı'})))))));
+}
+function auditCard(a) {
+  const counts = Object.entries(a.counts || {}).map(([k, v]) => `${RESULT_LABEL[k] || k}: ${v}`).join(' · ');
+  return h('div', {class: 'panel archive-audit'},
+    h('div', {class: 'panel-title'}, h('div', {},
+      h('h3', {}, h('a', {href: '#/audit/' + a.id, text: `${a.code} · ${a.name}`})),
+      h('div', {class: 'chips'}, display('audits', 'status', a.status), display('audits', 'kind', a.kind), a.opinion ? display('audits', 'opinion', a.opinion) : null,
+        h('span', {class: 'chip', text: `${fmt.date(a.actual_start || a.planned_start)} – ${fmt.date(a.actual_end || a.planned_end)}`}),
+        a.lead_auditor ? h('span', {class: 'chip', text: 'Baş denetçi: ' + a.lead_auditor}) : null)),
+      h('span', {class: 'muted small', text: counts})),
+    a.conclusion ? h('p', {class: 'intro', text: 'Sonuç: ' + a.conclusion}) : null,
+    resultTable(a.results),
+    a.evidence.length ? h('div', {class: 'archive-extra'}, h('span', {class: 'muted small', text: 'Denetime bağlı diğer kanıtlar: '}), h('div', {class: 'chips'}, a.evidence.map(evidenceChip))) : null,
+    a.findings.length ? h('div', {class: 'archive-extra'}, h('span', {class: 'muted small', text: 'Bulgular: '}), h('div', {class: 'chips'}, a.findings.map(f =>
+      h('a', {class: 'chip', href: '#/r/findings/' + f.id, text: `${f.code} · ${f.title}`})))) : null);
+}
+PAGES.archive = async function archivePage(parts, params) {
+  await list('standards');
+  const q0 = params.get('q') || ''; const std0 = params.get('standard_id') || ''; const clause0 = params.get('clause_id') || '';
+  setPage('Denetim Arşivi', 'Bir standart maddesi (ör. A.5.19, 8.3.4, ISO 27001 5.22) veya konu (ör. yedekleme, erişim, sözleşme) yazın: hangi denetimde hangi kontrol test edildi, sonuç ne oldu ve hangi kanıt (hangi sürüm) sunuldu. Kayıtlar değiştirilemez sonuçlardan gelir.');
+  const input = h('input', {type: 'search', class: 'searchbar archive-q', placeholder: 'Madde kodu veya konu…', value: q0, 'aria-label': 'Arşivde ara'});
+  const std = h('select', {class: 'compact', 'aria-label': 'Standart'}, h('option', {value: '', text: 'Tüm standartlar'}),
+    (S.cache.standards || []).map(x => h('option', {value: x.id, text: `${x.code} ${x.version || ''}`, selected: String(x.id) === std0})));
+  const go = () => { const p = new URLSearchParams(); if (input.value.trim()) p.set('q', input.value.trim()); if (std.value) p.set('standard_id', std.value); Router.go('archive' + (p.toString() ? '?' + p : '')); };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  std.addEventListener('change', go);
+  const examples = h('div', {class: 'chips'}, h('span', {class: 'muted small', text: 'Örnek: '}), ['A.5.19', 'ISO 27001 5.22', '8.3.4', 'yedekleme', 'erişim', 'sözleşme'].map(x =>
+    h('button', {type: 'button', class: 'chip', text: x, onclick: () => { input.value = x; go(); }})));
+  const head = h('div', {class: 'panel'}, h('div', {class: 'toolbar'}, h('div', {class: 'filters'}, input, std, btn('Ara', go)), examples));
+  if (!q0 && !std0 && !clause0) { content(head, empty('Aramaya başlayın', 'Madde kodu veya konu yazın; geçmiş denetimler, test sonuçları ve sunulan kanıtlar burada listelenir.')); setTimeout(() => input.focus(), 30); return; }
+  const query = new URLSearchParams(); if (q0) query.set('q', q0); if (std0) query.set('standard_id', std0); if (clause0) query.set('clause_id', clause0);
+  content(head, h('div', {class: 'empty', text: 'Aranıyor…'}));
+  const d = await api('assurance/search?' + query);
+  const sm = d.summary;
+  const blocks = [head, statStrip([['Denetim', sm.audits], ['Test sonucu', sm.results], ['Kanıt', sm.evidence], ['Bulgu', sm.findings]])];
+  if (sm.truncated) blocks.push(h('div', {class: 'notice warn', text: 'Çok sayıda sonuç var; en yeni sonuçlar gösteriliyor. Aramayı standart veya madde ile daraltın.'}));
+  if (d.clauses.length) blocks.push(h('div', {class: 'panel'}, h('h3', {text: `Eşleşen maddeler (${d.clauses.length})`}), h('div', {class: 'chips'}, d.clauses.map(c =>
+    h('a', {class: 'chip' + (c.applicable ? '' : ' muted'), href: '#/r/clauses/' + c.id, title: c.title, text: `${c.standard_code} ${c.code} · ${c.title}`}))),
+    d.controls.length ? h('p', {class: 'muted small', text: `Eşli kontroller: ${d.controls.map(k => k.code).join(', ')}`}) : null));
+  if (!sm.audits && !d.monitoring.length && !d.evidence.length) blocks.push(empty('Kayıt bulunamadı', 'Başka bir madde kodu veya konu deneyin. Madde kontrollerle eşlenmemişse sonuç görünmez.'));
+  if (d.audits.length) blocks.push(h('div', {class: 'domain', text: 'Denetimler (en yeniden eskiye)'}), ...d.audits.map(auditCard));
+  if (d.monitoring.length) blocks.push(h('div', {class: 'domain', text: 'Denetim dışı sürekli izleme sonuçları'}), h('div', {class: 'panel'}, resultTable(d.monitoring)));
+  if (d.evidence.length) blocks.push(h('div', {class: 'domain', text: 'Kanıt kütüphanesi'}), h('div', {class: 'panel'}, h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Kanıt', 'Gizlilik', 'Sürüm', 'Dönem', 'Geçerlilik', 'Kullanıldığı denetimler'].map(t => h('th', {text: t})))),
+    h('tbody', {}, d.evidence.map(e => h('tr', {class: 'clickable', onclick: () => openRecord('evidence', e.id)}, h('td', {class: 'cell-primary', text: `${e.code} · ${e.title}`}),
+      h('td', {}, display('evidence', 'confidentiality', e.confidentiality)), h('td', {text: e.current_version ? 's' + e.current_version : '—'}),
+      h('td', {text: e.period_start ? `${fmt.date(e.period_start)} – ${fmt.date(e.period_end)}` : '—'}),
+      h('td', {}, e.expires_at ? h('span', {class: late(e.expires_at) ? 'over' : '', text: fmt.date(e.expires_at)}) : '—'),
+      h('td', {}, e.audits.length ? h('div', {class: 'chips'}, e.audits.map(c => h('span', {class: 'chip', text: c}))) : h('span', {class: 'muted small', text: 'Denetimde kullanılmadı'})))))))));
+  if (d.findings.length) blocks.push(h('div', {class: 'domain', text: 'Denetim dışı bulgular'}), h('div', {class: 'panel'}, recordList('findings', d.findings, {chips: f => [display('findings', 'severity', f.severity), display('findings', 'status', f.status)]})));
+  content(...blocks);
+};
+async function auditHistoryPanel(audit) {
+  const box = h('div', {class: 'panel'}, h('h3', {text: 'Bu kapsamın geçmişi'}), h('div', {class: 'muted small', text: 'Yükleniyor…'}));
+  api(`audits/${audit.id}/history`).then(hist => {
+    const prev = hist.previous;
+    const controls = audit.controls.filter(c => (hist.controls[c.id] || []).length);
+    box.replaceChildren(h('div', {class: 'panel-title'}, h('h3', {text: 'Bu kapsamın geçmişi'}),
+      h('a', {class: 'btn ghost small', href: '#/archive?' + new URLSearchParams(audit.clauses.length === 1 ? {clause_id: audit.clauses[0].id} : {q: audit.name}), text: 'Arşivde ara →'})),
+      prev.length ? h('ul', {class: 'mini'}, prev.map(p => h('li', {class: 'link', onclick: () => Router.go('audit/' + p.id)},
+        h('strong', {text: `${p.code} · ${p.name}`}),
+        h('span', {class: 'cell-sub', text: `${fmt.date(p.actual_start || p.planned_start)} · ortak: ${[p.overlap.clauses ? p.overlap.clauses + ' madde' : null, p.overlap.processes ? p.overlap.processes + ' süreç' : null, p.overlap.controls ? p.overlap.controls + ' kontrol' : null].filter(Boolean).join(', ')} · ${p.findings} bulgu`}),
+        h('div', {class: 'chips'}, display('audits', 'status', p.status), p.opinion ? display('audits', 'opinion', p.opinion) : null,
+          ...Object.entries(p.counts).map(([k, v]) => pill(`${RESULT_LABEL[k] || k} ${v}`, {pass: 'good', fail: 'bad'}[k] || 'neutral'))))))
+        : h('div', {class: 'muted small', text: 'Bu kapsamı içeren önceki denetim yok.'}),
+      controls.length ? h('p', {class: 'muted small', text: `${controls.length} kontrolün önceki sonuçları var; kontrol satırındaki "Geçmiş" düğmesi önceki sonuçları ve sunulan kanıtları gösterir.`}) : null);
+    document.querySelectorAll('[data-history]').forEach(b => {
+      const items = hist.controls[b.dataset.history] || [];
+      b.classList.toggle('hidden', !items.length);
+      b.addEventListener('click', () => Modal.open('Önceki sonuçlar: ' + items[0].control_code, h('div', {}, h('p', {class: 'intro', text: items[0].control_name}),
+        resultTable(items.map(r => ({...r, clause_codes: r.clause_codes || []})), {showAudit: true})), [], true));
+    });
+  }).catch(e => box.replaceChildren(h('h3', {text: 'Bu kapsamın geçmişi'}), h('div', {class: 'notice bad', text: e.message})));
+  return box;
+}
 
 // ------------------------------------------------------------------ komut paleti (Ctrl+K)
 function openPalette() {

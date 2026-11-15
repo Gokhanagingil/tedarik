@@ -23,6 +23,15 @@ class ServiceNowError(Exception):
     """Bağlantı, kimlik veya yanıt hatası. İleti gizli bilgi içermez."""
 
 
+MAX_RESPONSE = 64 * 1024 * 1024     # tek sayfa en çok 64 MB
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Yönlendirme izlenmez: urllib yönlendirmede Authorization başlığını yeni adrese de gönderir."""
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
 class Client:
     def __init__(self, instance, user=None, password=None, token=None, ca_file=None, timeout=30, retries=3,
                  sleep=time.sleep):
@@ -33,7 +42,11 @@ class Client:
             self.auth = "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode()
         else:
             raise ServiceNowError("ServiceNow kimlik bilgisi eksik (kullanıcı ve parola veya belirteç)")
+        if not self.instance.startswith(("https://", "http://")):
+            raise ServiceNowError("ServiceNow adresi https:// ile başlamalı")
         self.context = ssl.create_default_context(cafile=ca_file) if self.instance.startswith("https://") else None
+        handlers = [_NoRedirect()] + ([urllib.request.HTTPSHandler(context=self.context)] if self.context else [])
+        self.opener = urllib.request.build_opener(*handlers)
         self.timeout, self.retries, self.sleep = timeout, retries, sleep
         self.requests = 0
 
@@ -46,9 +59,13 @@ class Client:
             attempt += 1
             self.requests += 1
             try:
-                with urllib.request.urlopen(request, timeout=self.timeout, context=self.context) as response:
-                    return json.loads(response.read().decode("utf-8"))
+                with self.opener.open(request, timeout=self.timeout) as response:
+                    raw = response.read(MAX_RESPONSE + 1)
+                    if len(raw) > MAX_RESPONSE:
+                        raise ServiceNowError("ServiceNow yanıtı çok büyük; sayfa boyutunu küçültün")
+                    return json.loads(raw.decode("utf-8"))
             except urllib.error.HTTPError as exc:
+                exc.close()
                 if exc.code in (401, 403):
                     raise ServiceNowError(f"ServiceNow erişimi reddedildi ({exc.code}); hesap ve tablo yetkisini "
                                           "denetleyin") from None

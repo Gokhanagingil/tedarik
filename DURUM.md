@@ -20,6 +20,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Kurumsal risk yönetimi ISO 31000'e göre; her risk bir şirkete (kendi şirketimiz / müşteri) bağlı (K-018).
 - CMDB: ServiceNow Table API'den salt okunur senkron veya MCP itmesi; CI kuralları kurumsal risk açar (K-019).
 - İş sürekliliği ISO 22301'e, doküman yönetimi ISO 9001 7.5'e göre (K-020).
+- Portal ServiceNow MCP sunucusuna standart MCP istemcisiyle bağlanabilir (K-021).
+- Kısıtlı kanıt yalnızca Yönetici, Denetçi ve yükleyene açık; denetim arşivi (K-022).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -104,6 +106,25 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Demo verisi genişledi: 6 şirket (3 grup şirketi, 3 müşteri), 30 süreçlik harita, 10 iştah beyanı, 4 risk dönemi, 10 yeni kurumsal risk (fırsat dahil), 7 KRİ, 39 CI (destek dışı, yama, açık kalma örnekleri), CMDB kural riskleri, 8 BİA, 4 plan, 5 tatbikat, revizyonlu ve dosyalı dokümanlar. Önceki sürümle yüklenmiş demoya bölüm bölüm eklenir (kullanıcılara dokunmaz).
   - Testler: 100 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı smoke testi (yeni ekranlar dahil) ve yerel kabul provası (23/23, 54 ekran).
   - Test sunucusuna dağıtıldı (commit `124cf98`): mevcut demoya yeni bölümler eklendi, göç 2 ve 3 uygulandı; canlı kabul testi 23/23 geçti, 54 ekran hatasız (GitHub Actions çalıştırması 43725941060, 2026-11-15).
+- **Güvenlik, arşiv ve ServiceNow MCP (2026-11-15).** Gökhan Bey'in 4 maddelik isteği:
+  1. *Güvenlik taraması:* bandit (orta ve üstü), pip-audit (sabitlenmiş bağımlılıklarda bilinen açık yok), detect-secrets
+     (yalnızca incelenmiş yanlış pozitifler, `.secrets.baseline`) ve elle inceleme. Düzeltilenler: kısıtlı kanıt herkese
+     açıktı (K-022); tatbikat uç noktası bulgu yazma yetkisini atlıyordu; ServiceNow istemcisi yönlendirmeyi izliyordu
+     (Authorization başka sunucuya gidebilirdi) ve yanıt boyutu sınırsızdı; dış bağlantılar istemcide de http(s) ile
+     sınırlandı. CI'a kalıcı `security` işi eklendi; CI PostgreSQL imajı özetle sabitlendi.
+     *Entra ID + MFA:* PKCE, RS256/JWKS, kiracı, nonce ve Koşullu Erişim kimlik doğrulama bağlamı (`acrs`) zorunluluğu
+     doğrulandı; olumsuz senaryo testleri eklendi (bağlamsız, başka kiracı/uygulama, süresi dolmuş, başka anahtarla
+     imzalı belirteç). Sunucu Entra moduna geçebilir (`/opt/tedarik/entra.env` + sır dosyası), `python -m tedarik.entra_check`
+     Microsoft uç noktalarını ve istemci sırrını gerçek ortamda denetler.
+  2. *GRC uzmanı değerlendirmesi:* `docs/YOL_HARITASI.md`.
+  3. *Denetim arşivi:* madde kodu (A.5.19, ISO 27001 5.22, 8.3.4) veya konu ile hangi denetimde hangi kontrolün test
+     edildiği, sonucu ve o sonuca dondurulmuş kanıt sürümü (SHA-256); denetim dışı izleme sonuçları ve kanıt
+     kütüphanesi. Denetim çalışma alanında "Bu kapsamın geçmişi" ve kontrol başına "Geçmiş"; madde ekranından arşive geçiş.
+     Demo: önceki yıla ait, kanıtlı ve kapalı bir denetim.
+  4. *ServiceNow MCP:* `tedarik/mcp_client.py` (Streamable HTTP, SSE, oturum, bearer veya OAuth istemci kimlik bilgisi);
+     CMDB senkronu Table API veya MCP kanalından; "MCP bağlantısını sına" (araç listesi ve örnek kayıt). Sahte MCP
+     sunucusuyla uçtan uca test edildi; gerçek sunucu adresi ve kimlik bilgisi bekleniyor.
+  - Testler: 107 uçtan uca test (SQLite ve PostgreSQL 16, Entra testleri dahil), tarayıcı smoke testi.
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
@@ -111,12 +132,11 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 ## Bilinen eksikler
 
-- **CI'daki PostgreSQL imajı özetle sabit değil** (adım 6'da sabitlenecek).
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
 - **Test adresi sslip.io üzerinde** (üçüncü taraf DNS); kurumsal kullanım için kurum alan adı gerekir (K-014).
 - **KS GRC verisinin taşınması yapılmadı:** iş modeli taşındı; KS GRC'deki gerçek kayıtları (standart eşlemeleri, kontroller, denetimler, kanıt dosyaları) aktaracak içe aktarım henüz yok.
-- **CI güvenlik kapıları eksik** (gitleaks, trivy, bandit, pip-audit).
+- **Konteyner imajı taraması (trivy) yok;** bandit, pip-audit ve sır taraması CI'da.
 - **ServiceNow bağlantısı gerçek kurumda denenmedi:** bağlayıcı sahte sunucuyla test edildi; özel alan adları (`u_os_end_of_support` vb.) kurumun CMDB'sine göre eşlenmeli. Test sunucusundaki CI'lar sentetik MCP itmesidir.
 - **Hatırlatma bildirimi yok:** takvim ve İşlerim uygulama içinde; e-posta/Teams bildirimi yok.
 - **Veri yönetişimi modülü** henüz yok (Gökhan Bey ayrıca konuşmak istiyor).
@@ -134,16 +154,18 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 8. ~~**MCP sözleşmesi.**~~ Tamamlandı (2026-11-13): `docs/MCP_SOZLESMESI.md`. Kalan: KS GRC tarafında örnek kontrollerin tanımlanması.
 9. ~~**TLS, demo verisi, KS GRC taşıması.**~~ Tamamlandı (2026-11-15).
 10. ~~**GRC platformu dönüşümü** (13 madde).~~ Tamamlandı (2026-11-15).
+10a0. ~~**Güvenlik taraması, Entra MFA, denetim arşivi, ServiceNow MCP istemcisi.**~~ Tamamlandı (2026-11-15).
 10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
 10b. **Veri yönetişimi modülü:** kapsam görüşmesi (veri sahipliği, sınıflandırma, KVKK envanteri, veri kalitesi kuralları).
 10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
-11. **CI güvenlik kapıları:** gitleaks, trivy, bandit, pip-audit.
+11. **Yol haritası Faz 1** (`docs/YOL_HARITASI.md`): kanıt talep listesi (PBC), bildirimler, politika istisnaları, yükümlülük envanteri, SoA raporu. Ayrıca konteyner imajı taraması (trivy).
 12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler
 
 - Uygulamanın adı (şimdilik "GRC Platformu"; `TEDARIK_APP_NAME` ile değişir).
-- ServiceNow örnek adresi ve salt okunur hizmet hesabı; CMDB'deki destek bitişi, yama ve açılış alanlarının adları.
+- ServiceNow örnek adresi ve salt okunur hizmet hesabı **veya** ServiceNow MCP sunucusunun adresi, kimlik doğrulama türü (bearer / OAuth istemci kimlik bilgisi) ve CMDB okuyan aracın adı; CMDB'deki destek bitişi, yama ve açılış alanlarının adları.
+- Entra ID için kiracı ve uygulama kaydı (istemci kimliği), MFA'lı Koşullu Erişim ilkesinin bağlamı (c1–c99) ve istemci sırrının sunucuya güvenli aktarımı (`docs/KIMLIK.md`, `docs/DAGITIM.md`).
 - Veri yönetişimi modülünün kapsamı için görüşme.
 
 - SAP, Dynamics ve dış kaynak yönetim sisteminden örnek dışa aktarım (sütun başlıkları yeterli).

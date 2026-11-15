@@ -263,6 +263,7 @@ class EntraOturumu(Base):
                       nonce=nonce, iat=now, nbf=now - 1, exp=now + 5000, roles=["KS.TDR.SupplierManager"],
                       acrs=["c7"], name="Kurumsal Kullanıcı")
         claims.update(overrides)
+        claims = {k: v for k, v in claims.items() if v is not None}          # None: talep belirteçte yok
         return self.jwt.encode(claims, self.private, algorithm="RS256", headers={"kid": "fixture-key"})
 
     def request(self, method, path, body=None, cookie="", host=HOST, origin=ORIGIN):
@@ -284,6 +285,73 @@ class EntraOturumu(Base):
             status, reply = self.request("GET", "/auth/entra/callback?" + query, cookie=flow)
         self.assertEqual(status, expected)
         return cookie_of(reply) if expected == 200 else None
+
+    def test_mfa_baglami_ve_belirtec_dogrulamasi(self):
+        """MFA, Koşullu Erişim kimlik doğrulama bağlamıyla (acrs) zorunludur; sahte veya bozuk belirteç kabul edilmez."""
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        now = int(time.time())
+        self.sign_in(403, acrs=None)                                   # bağlam talebi hiç yok (MFA yapılmadı)
+        self.sign_in(403, acrs=[])
+        self.sign_in(403, tid="11111111-1111-1111-1111-111111111111")  # başka kiracı
+        self.sign_in(403, aud="22222222-2222-2222-2222-222222222222")  # başka uygulama
+        self.sign_in(403, exp=now - 60)                                # süresi dolmuş
+        self.sign_in(403, iss="https://login.microsoftonline.com/common/v2.0")
+        self.sign_in(403, ver="1.0")
+        other = rsa.generate_private_key(public_exponent=65537, key_size=2048)       # başka anahtarla imzalı
+        status, reply = self.request("GET", "/auth/entra/start")
+        params = parse_qs(urlsplit(reply.headers["Location"]).query)
+        self.assertIn('"acrs"', params["claims"][0])                    # bağlam her girişte istenir
+        self.assertEqual(params["code_challenge_method"], ["S256"])
+        forged = self.jwt.encode({"iss": self.provider.config.issuer, "aud": CLIENT, "sub": "u", "ver": "2.0", "oid": OID,
+                                  "tid": TENANT, "nonce": params["nonce"][0], "iat": now, "nbf": now, "exp": now + 600,
+                                  "roles": ["KS.TDR.Admin"], "acrs": ["c7"]}, other, algorithm="RS256",
+                                 headers={"kid": "fixture-key"})
+        with patch.object(self.provider, "exchange", return_value=forged):
+            status, _ = self.request("GET", "/auth/entra/callback?" + urlencode({"state": params["state"][0], "code": "x"}),
+                                     cookie=cookie_of(reply))
+        self.assertEqual(status, 403)
+        self.assertIsNotNone(self.sign_in())                            # doğru belirteç hâlâ geçer
+
+    def test_on_denetim_araci(self):
+        from tedarik.config import Config
+        from tedarik.entra_check import check
+        import io
+        import urllib.error
+
+        class Opener:
+            def __init__(self, token_status=200):
+                self.token_status, self.calls = token_status, []
+
+            def open(self, request, timeout=None):
+                url = request.full_url
+                self.calls.append(url)
+                if url.endswith("openid-configuration"):
+                    body = {"issuer": f"https://login.microsoftonline.com/{TENANT}/v2.0",
+                            "authorization_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/authorize",
+                            "token_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/token",
+                            "jwks_uri": f"https://login.microsoftonline.com/{TENANT}/discovery/v2.0/keys"}
+                elif url.endswith("/keys"):
+                    body = {"keys": [{"kty": "RSA", "kid": "k1"}]}
+                elif self.token_status != 200:
+                    raise urllib.error.HTTPError(url, 401, "x", {}, io.BytesIO(json.dumps(
+                        {"error": "invalid_client", "error_codes": [7000215]}).encode()))
+                else:
+                    self.assertIn(b"grant_type=client_credentials", request.data)
+                    body = {"access_token": "sentetik"}
+                return io.BytesIO(json.dumps(body).encode())
+
+            def assertIn(self, a, b):
+                assert a in b
+
+        config = Config(self.env(TEDARIK_AUTH_MODE="entra", TEDARIK_COOKIE_SECURE="1", TEDARIK_ENTRA_TENANT_ID=TENANT,
+                                 TEDARIK_ENTRA_CLIENT_ID=CLIENT, TEDARIK_ENTRA_CLIENT_SECRET="synthetic-client-secret-only",
+                                 TEDARIK_ENTRA_REDIRECT_URI=ORIGIN + "/auth/entra/callback", TEDARIK_ENTRA_AUTH_CONTEXT="c7"))
+        good = check(config, Opener())
+        self.assertFalse([r for r in good if r[0] == "fail"], good)
+        self.assertTrue(any("acrs" in r[2] for r in good if r[0] == "info"))
+        bad = check(config, Opener(token_status=401))
+        self.assertIn(("fail", "İstemci kimlik bilgisi", "istemci sırrı geçersiz"), bad)
+        self.assertEqual(check(Config(self.env(TEDARIK_AUTH_MODE="local")), Opener())[0][0], "fail")
 
     def test_rol_eslemesi_ve_reddedilen_roller(self):
         manager = self.sign_in()

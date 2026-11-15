@@ -220,6 +220,80 @@ class Kanitlar(GrcBase):
         self.assertEqual(self.call("POST", "/evidence/upload", {**body, "org_unit_id": unit}, app=user)[0], 201)
 
 
+    def test_kisitli_kanit_bilmesi_gerekene_acik(self):
+        """Gizlilik 'restricted' olan kanıtı yalnızca Yönetici, Denetçi ve yükleyen görür ve indirir."""
+        unit = self.ok("POST", "/org_units", {"name": "BT"})["id"]
+        owner = self.make(role="UNIT_USER", user="yukleyen", units=str(unit))
+        viewer = self.make(role="VIEWER", user="izleyici")
+        other = self.make(role="SUPPLIER_MANAGER", user="baska")
+        eid = self.ok("POST", "/evidence/upload", {"title": "Sızma testi raporu", "file_name": "pentest.pdf",
+                                                   "content_base64": b64(PDF), "confidentiality": "restricted",
+                                                   "org_unit_id": unit, "controls": [self.ctl], "clauses": [self.cl1]},
+                      app=owner)["id"]
+        normal = self.ok("POST", "/evidence/upload", {"title": "Toplantı tutanağı", "file_name": "t.pdf",
+                                                      "content_base64": b64(PDF), "controls": [self.ctl]}, app=self.auditor)["id"]
+        for app in (viewer, other):
+            self.assertEqual({e["id"] for e in self.ok("GET", "/evidence", app=app)}, {normal})
+            self.assertEqual(self.call("GET", f"/evidence/{eid}", app=app)[0], 404)
+            self.assertEqual(self.call("GET", f"/evidence/{eid}/context", app=app)[0], 404)
+            self.assertEqual(self.call("GET", f"/evidence/{eid}/files/1", app=app)[0], 404)
+            self.assertNotIn(eid, {f["evidence_id"] for f in self.ok("GET", "/evidence_files", app=app)})
+            self.assertEqual([e["id"] for e in self.ok("GET", f"/controls/{self.ctl}/context", app=app)["evidence"]], [normal])
+            self.assertEqual(self.ok("GET", f"/clauses/{self.cl1}/context", app=app)["evidence"], [])
+        self.assertEqual(self.call("PATCH", f"/evidence/{eid}", {"title": "x"}, app=other)[0], 404)
+        for app in (owner, self.auditor, self.app):                 # yükleyen, Denetçi, Yönetici
+            self.assertEqual(self.call("GET", f"/evidence/{eid}/files/1", app=app)[0], 200)
+            self.assertIn(eid, {e["id"] for e in self.ok("GET", "/evidence", app=app)})
+        run = self.execute({"control_id": self.ctl, "status": "pass", "evidence_ids": [eid]})[1]
+        shown = self.ok("GET", f"/executions/{run['execution_id']}/context", app=viewer)["evidence"][0]
+        self.assertEqual((shown["title"], shown["restricted"], len(shown["sha256"])), ("Kısıtlı kanıt", True, 64))
+
+
+class Arsiv(GrcBase):
+    def test_madde_ve_konuyla_gecmis_denetim_ve_kanit(self):
+        def audit(name, start):
+            a = self.ok("POST", "/audits", {"name": name, "planned_start": start, "standard_ids": [self.std],
+                                            "clause_ids": [self.cl1, self.cl2]}, app=self.auditor)
+            return self.ok("PATCH", f"/audits/{a['id']}", {"status": "in_progress", "actual_start": start,
+                                                           "expected_revision": a["revision"]}, app=self.auditor)["id"]
+        old = audit("Geçen yılın tedarikçi denetimi", (datetime.now(timezone.utc) - timedelta(days=400)).date().isoformat())
+        new = audit("Bu yılın tedarikçi denetimi", (datetime.now(timezone.utc) - timedelta(days=3)).date().isoformat())
+        report = self.ok("POST", "/evidence/upload", {"title": "Yedekleme sözleşmesi incelemesi", "file_name": "inceleme.pdf",
+                                                      "content_base64": b64(PDF), "clauses": [self.cl1]}, app=self.auditor)
+        secret = self.ok("POST", "/evidence/upload", {"title": "Sızma testi", "file_name": "pt.pdf", "content_base64": b64(PDF),
+                                                      "confidentiality": "restricted"}, app=self.auditor)
+        when = (datetime.now(timezone.utc) - timedelta(days=390)).isoformat()
+        self.execute({"control_id": self.ctl, "audit_id": old, "status": "fail", "executed_at": when, "sample_size": 10,
+                      "exceptions": 1, "details": "Bir sözleşmede denetim hakkı yok", "evidence_ids": [report["id"], secret["id"]]})
+        self.execute({"control_id": self.ctl, "audit_id": new, "status": "pass", "details": "İstisna yok"})
+        self.execute({"control_id": self.ctl, "status": "pass", "details": "Sürekli izleme"})          # denetim dışı
+        for q in ("A.5.19", "5.19", "ISO 27001 A.5.19", "madde A.5.19"):
+            found = self.ok("GET", "/assurance/search?q=" + q.replace(" ", "%20"), app=self.auditor)
+            self.assertEqual(([c["code"] for c in found["clauses"]], found["mode"]), (["A.5.19"], "clause"), q)
+            self.assertEqual([a["id"] for a in found["audits"]], [new, old])                    # yeniden eskiye
+        past = found["audits"][1]
+        self.assertEqual((past["results"][0]["status"], past["results"][0]["clause_codes"]), ("fail", ["A.5.19"]))
+        shown = {e["id"]: e for e in past["results"][0]["evidence"]}
+        self.assertEqual((shown[report["id"]]["version"], shown[report["id"]]["sha256"]), (1, report["sha256"]))
+        self.assertEqual(len(found["monitoring"]), 1)
+        library = {e["id"]: e for e in found["evidence"]}
+        self.assertEqual(library[report["id"]]["audits"], [past["code"]])                         # kullanıldığı denetim
+        text = self.ok("GET", "/assurance/search?q=yedekleme", app=self.auditor)
+        self.assertEqual(text["mode"], "text")
+        self.assertIn(report["id"], {e["id"] for e in text["evidence"]})
+        viewer = self.make(role="VIEWER", user="izleyici")
+        masked = self.ok("GET", "/assurance/search?q=A.5.19", app=viewer)["audits"][1]["results"][0]["evidence"]
+        self.assertEqual({(e["title"], e["restricted"]) for e in masked if e["id"] == secret["id"]}, {("Kısıtlı kanıt", True)})
+        by_clause = self.ok("GET", f"/assurance/search?clause_id={self.cl2}")
+        self.assertEqual([c["id"] for c in by_clause["clauses"]], [self.cl2])
+        self.assertEqual(self.ok("GET", "/assurance/search?q=a")["audits"], [])
+        self.assertEqual(self.call("GET", "/assurance/search?q=A.5.19", headers={"X-API-Key": KEY})[0], 403)
+        history = self.ok("GET", f"/audits/{new}/history", app=self.auditor)
+        self.assertEqual([p["id"] for p in history["previous"]], [old])
+        self.assertEqual(history["previous"][0]["overlap"]["clauses"], 2)
+        self.assertEqual({r["audit_id"] for r in history["controls"][str(self.ctl)]}, {old, None})
+
+
 class BulguVeFaaliyet(GrcBase):
     def test_dof_dogrulama_ayriligi_ve_bulgu_kapanisi(self):
         finding = self.execute({"control_id": self.ctl, "status": "fail", "details": "Değerlendirme yok"})[1]["finding_id"]

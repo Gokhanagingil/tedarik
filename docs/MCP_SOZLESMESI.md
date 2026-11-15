@@ -95,6 +95,33 @@ kurulamıyorsa MCP aynı veriyi iter. `POST /api/tdr/cmdb/cis/bulk` (en çok 500
 
 Durum (yeşil, sarı, kırmızı) eşiklere göre sunucuda hesaplanır; (gösterge, dönem) tekildir; ölçüm değiştirilemez.
 
+## Akış 7: Portal, ServiceNow MCP sunucusuna bağlanır (K-021)
+
+Yukarıdaki akışlarda MCP uygulaması portala yazar. Portal ayrıca bir **MCP istemcisi** olarak ServiceNow'un MCP
+sunucusuna bağlanıp CMDB'yi okuyabilir (Streamable HTTP, JSON-RPC 2.0, protokol `2025-06-18`):
+
+1. `POST <TEDARIK_SN_MCP_URL>` `initialize` → sunucunun döndürdüğü `Mcp-Session-Id` sonraki isteklerde gönderilir;
+   ardından `notifications/initialized`.
+2. `tools/list` (sayfalı): "MCP bağlantısını sına" ekranı araçları ve parametrelerini listeler.
+3. `tools/call` ile `cmdb.mcp` politikasındaki araç çağrılır. Varsayılan şablon:
+
+```json
+{"tool": "query_table",
+ "arguments": {"table_name": "{table}", "query": "{query}", "fields": "{fields}", "limit": "{limit}",
+               "offset": "{offset}", "display_value": "all"},
+ "records_path": "", "page_size": 200}
+```
+
+   `{query}` ServiceNow kodlu sorgusudur (`install_status!=7^sys_updated_on>=…^ORDERBYsys_updated_on`), `{fields}`
+   virgüllü alan listesi, `{fields_list}` liste. Araç kayıt listesini `structuredContent` veya JSON metin içeriği olarak
+   döndürmelidir (`result`, `records`, `items` anahtarları ya da `records_path` ile). Kayıtlar Table API biçiminde
+   (`{"value", "display_value"}`) veya düz değerle olabilir.
+4. Kimlik: `Authorization: Bearer` — sabit belirteç (`/opt/tedarik/secrets/sn_mcp_token`) veya OAuth 2.0 istemci kimlik
+   bilgisi (`TEDARIK_SN_MCP_TOKEN_URL`, örn. `https://<kurum>.service-now.com/oauth_token.do`, istemci kimliği ve
+   `/opt/tedarik/secrets/sn_mcp_client_secret`). 401'de belirteç yenilenir; oturum düşerse (404) bir kez yeniden açılır.
+5. Senkron gece görevinde (`python -m tedarik.cmdb_sync`) veya CMDB Panosu'ndan çalışır; her çalıştırma
+   `cmdb_sync_runs` kaydında `source = mcp` olarak görünür. Portal MCP üzerinden ServiceNow'a yazmaz.
+
 ## KS GRC için kanıt (örnek otomatik kontroller)
 
 KS GRC'deki otomatik kontroller portal API'sini okuyarak `POST /api/executions` ile sonuç yazar (KS GRC sözleşmesi). Önerilen kontroller:
