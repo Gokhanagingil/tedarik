@@ -14,7 +14,7 @@ Hedef: Tedarik Portalı'nı başka uygulamaların da çalıştığı bir Linux s
 | Port çakışması | 18090 başka bir süreçteyse kurulum durur (`TEDARIK_PORT` ile başka port seçilir) |
 | Denetim | Kurulumdan önce ve sonra diğer tüm konteynerlerin kimliği ve başlama zamanı karşılaştırılır; fark varsa kurulum hata verir |
 | Yasak işlemler | Sunucu genelinde `docker system prune`, `docker compose down -v`, başka uygulamanın ters vekil ayarı değiştirilmez |
-| Cron | Yalnızca kendi dosyası: `/etc/cron.d/tedarik-backup` (günlük yedek, 02:17) |
+| Cron | Yalnızca kendi dosyaları: `/etc/cron.d/tedarik-backup` (günlük yedek, 02:17), `/etc/cron.d/tedarik-grc` (iç otomatik kontroller, 05:43) |
 
 ## İlk kurulum (GitHub Actions ile)
 
@@ -36,6 +36,13 @@ Elle kurulum: kaynağı `/opt/tedarik/releases/<ad>` altına çıkarın, `curren
 ## Erişim (HTTPS)
 
 Kurulum işinde `domain` verilirse (test sunucusu: `tedarik.204-168-247-101.sslip.io`, K-014) yalnızca bu projeye ait Caddy ters vekili 443'ü açar ve Let's Encrypt sertifikasını 443 üzerinden (TLS-ALPN-01) alır; 80. porttaki başka uygulamaya dokunulmaz. Alan adı sunucuda `/opt/tedarik/settings.env` dosyasında saklanır, sonraki kurulumlar aynı adla çalışır. Kurulum işi sonunda sertifikayı, güvenlik başlıklarını ve anonim erişimin 401 döndüğünü dışarıdan denetler.
+
+Vekil arkasında uygulama `TEDARIK_TRUST_PROXY=1` ile çalışır: giriş hız sınırı Caddy'nin yazdığı `X-Forwarded-For` (gerçek istemci adresi) ile uygulanır. Bu ayar yalnızca uygulamanın önünde kendi vekilimiz varken açılır.
+
+## Demo verisi ve kabul testi
+
+- `seed_demo` işaretlenirse sentetik demo verisi yüklenir (`python -m tedarik.demo`; yalnızca boş ya da yalnızca demo verisi içeren veritabanına). Demo kullanıcılarının geçici parolaları `/opt/tedarik/.demo-users` dosyasındadır (yalnızca root). Yönetici, Kullanıcılar ekranında "Geçici parola ver" ile yeni parola da üretebilir.
+- `acceptance` işaretlenirse kurulumdan sonra `scripts/acceptance.py` canlı adrese karşı çalışır: rol bazlı uçtan uca senaryolar, güvenlik, MCP, yanıt süreleri ve tarayıcı turu. `kabul.yonetici` hesabı geçici parolayla açılır/sıfırlanır; parola ve MCP anahtarı günlükte maskelenir, iş sonunda kabul yöneticisinin parolası yeniden rastgele yapılır. Test, "KABUL" işaretli kayıtlar yazar ve kendi açtığı test hesaplarını devre dışı bırakır. Sonuç, işin özetinde ve `kabul-<çalıştırma>` eserinde (ekran görüntüleri yalnızca sentetik veri).
 
 ## Erişim (SSH ile, TLS olmadan)
 
