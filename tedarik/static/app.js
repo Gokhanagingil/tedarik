@@ -48,7 +48,7 @@ const fmt = {
 const today = (days = 0) => { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0, 10); };
 
 // ------------------------------------------------------------------ durum ve API
-const S = {meta: null, me: null, cache: {}, filters: {}, mySurveys: 0};
+const S = {meta: null, me: null, cache: {}, filters: {}, mySurveys: 0, renderSeq: 0, renderDone: 0};
 async function api(path, {method = 'GET', body, raw} = {}) {
   const opts = {method, credentials: 'same-origin', headers: {}};
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -1831,6 +1831,15 @@ async function compliancePage(params) {
 }
 
 async function render() {
+  // Yavaş ağda önceki ekranın geç gelen yanıtı yeni ekranı ezebilir: her çizim bir sıra numarası alır;
+  // eski bir çizim, en yenisi bittikten sonra biterse güncel ekran yeniden çizilir.
+  const mine = ++S.renderSeq;
+  try { await renderPage(); } finally {
+    if (mine === S.renderSeq) S.renderDone = mine;
+    else if (S.renderDone === S.renderSeq) render();
+  }
+}
+async function renderPage() {
   const {parts, params} = Router.parse(); const key = parts[0] || 'home';
   if (Modal.isOpen()) Modal.close();
   navigation(); window.scrollTo(0, 0);
