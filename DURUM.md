@@ -185,6 +185,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Demo: SAP S/4HANA (ABAP sözlüğü, iki yükleme ve şema değişiklikleri), ServiceNow ITSM, Dynamics 365 CRM, Power BI modeli ve
     sahipsiz bir pazarlama dosya paylaşımı; 22 terim (onaylı, onayda, değişiklik önerisi, iade, taslak, kullanım dışı).
   - Testler: 145 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi veri yönetişimi akışıyla.
+  - Test sunucusuna dağıtıldı (commit `cd239dd`): demo verisine veri yönetişimi bölümü eklendi; canlı kabul testi 23/23 geçti,
+    75 menü ekranı hatasız (GitHub Actions çalıştırması 43758263978, 2026-11-15). Bulunan ve düzeltilen: kapanan çekmecenin eski
+    form alanları DOM'da kalıyordu (gizli alana yazılabiliyordu); paketsiz kurulumda Excel dışa aktarımı 500 veriyordu.
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
