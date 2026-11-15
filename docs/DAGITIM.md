@@ -28,7 +28,7 @@ Hedef: Tedarik Portalı'nı başka uygulamaların da çalıştığı bir Linux s
    | `TEDARIK_SSH_KEY` | Özel anahtarın tamamı |
    | `TEDARIK_SSH_KNOWN_HOSTS` | `ssh-keyscan -t ed25519 <adres>` çıktısı (sunucu anahtarını önceden doğrulayın) |
 
-3. Actions → **Deploy Tedarik (isolated)** → Run workflow. İş önce testleri çalıştırır, sonra kaynağı sunucuya kopyalar ve `deploy/deploy.sh` betiğini çalıştırır.
+3. Actions → **Deploy Tedarik (isolated)** → Run workflow. Sunucuda Docker yoksa "install_docker" kutusunu işaretleyin; Ubuntu paketlerinden (`docker.io`, `docker-compose-v2`, `docker-buildx`) kurulur. Docker kendi ağ kurallarını ekler; mevcut uygulamaların dinlediği portları değiştirmez. İş önce testleri çalıştırır, sonra kaynağı sunucuya kopyalar ve `deploy/deploy.sh` betiğini çalıştırır.
 4. İlk yöneticinin geçici parolası sunucuda yalnızca root'un okuyabildiği `/opt/tedarik/.first-login` dosyasındadır. Okuyun, ilk girişte değiştirin, dosyayı silin. Parolayı CI günlüğüne veya sohbete yapıştırmayın.
 
 Elle kurulum: kaynağı `/opt/tedarik/releases/<ad>` altına çıkarın, `current` bağlantısını oraya yöneltin, `cd /opt/tedarik/current && sh deploy/deploy.sh`.

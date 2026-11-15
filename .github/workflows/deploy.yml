@@ -4,6 +4,11 @@ name: Deploy Tedarik (isolated)
 #   TEDARIK_SSH_HOST, TEDARIK_SSH_USER, TEDARIK_SSH_KEY (özel anahtar), TEDARIK_SSH_KNOWN_HOSTS (ssh-keyscan çıktısı)
 on:
   workflow_dispatch:
+    inputs:
+      install_docker:
+        description: "Sunucuda Docker yoksa Ubuntu paketlerinden kur (docker.io, docker-compose-v2)"
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
@@ -39,6 +44,7 @@ jobs:
           USER: ${{ secrets.TEDARIK_SSH_USER }}
           KEY: ${{ secrets.TEDARIK_SSH_KEY }}
           KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
+          INSTALL_DOCKER: ${{ inputs.install_docker && '1' || '0' }}
         run: |
           set -eu
           install -m 700 -d ~/.ssh
@@ -53,7 +59,7 @@ jobs:
             \$S mkdir -p \$R && \$S chmod 0700 /opt/tedarik
             \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
             \$S ln -sfn \$R /opt/tedarik/current
-            cd /opt/tedarik/current && \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} sh deploy/deploy.sh"
+            cd /opt/tedarik/current && \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER sh deploy/deploy.sh"
       - name: Clean up key
         if: always()
         run: rm -f ~/.ssh/id_deploy

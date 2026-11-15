@@ -11,6 +11,20 @@ PORT=${TEDARIK_PORT:-18090}
 SRC=$(cd "$(dirname "$0")/.." && pwd)
 COMPOSE="docker compose -p $PROJECT -f $SRC/deploy/compose.yaml"
 export TEDARIK_SECRETS="$BASE/secrets" TEDARIK_PORT="$PORT" TEDARIK_RELEASE="${TEDARIK_RELEASE:-$(date -u +%Y%m%d%H%M%S)}"
+# Docker yoksa: yalnızca açıkça istendiğinde (TEDARIK_INSTALL_DOCKER=1) Ubuntu paketlerinden kurulur.
+if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+  if [ "${TEDARIK_INSTALL_DOCKER:-0}" = 1 ] && command -v apt-get >/dev/null 2>&1; then
+    echo "Docker kuruluyor (Ubuntu paketleri: docker.io, docker-compose-v2, docker-buildx)"
+    apt-get update -q
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -q docker.io docker-compose-v2 docker-buildx
+    systemctl enable --now docker
+  else
+    echo "Docker Engine ve Compose v2 kurulu değil. Kurmak için TEDARIK_INSTALL_DOCKER=1 verin." >&2
+    exit 1
+  fi
+fi
+docker compose version
+
 umask 077
 mkdir -p "$BASE/secrets" "$BASE/backups"
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
