@@ -107,7 +107,8 @@ DETAILS.privacy_breaches = async function breachDetail(id) {
       ['Özel nitelikli veri', b.special_categories ? pill('Var', 'bad') : 'Yok'], ['Etkilenen kişi', b.subjects_count], ['Kişi grupları', b.subject_groups], ['Olası sonuçlar', b.consequences],
       ['Alınan önlemler', b.measures], ['Sorumlu', b.owner], ['Şirket', display('privacy_breaches', 'company_id', b.company_id)]])),
     section('Karar ve bildirim', kv([['Karar', display('privacy_breaches', 'notify_decision', b.notify_decision)], ['Gerekçe', b.decision_rationale], ['Karar veren', b.decided_by],
-      ['Kurula bildirim', fmt.datetime(b.authority_notified_at)], ['Referans', b.authority_reference], ['Gecikme gerekçesi', b.delay_reason], ['İlgili kişilere bildirim', fmt.datetime(b.subjects_notified_at)]])));
+      ['Kurula bildirim', fmt.datetime(b.authority_notified_at)], ['Referans', b.authority_reference], ['Gecikme gerekçesi', b.delay_reason], ['İlgili kişilere bildirim', fmt.datetime(b.subjects_notified_at)]])),
+    typeof breachAssetsSection === 'function' && hasModule('datagov') ? breachAssetsSection(b, reload) : null);
   const buttons = !can || !open ? [] : [
     btn('Düzenle', () => recordForm('privacy_breaches', b, {skip: ['code', 'notify_decision', 'decision_rationale', 'authority_notified_at', 'authority_reference', 'delay_reason', 'status'], onsaved: reload}), 'secondary'),
     b.notify_decision === 'pending' ? btn('Bildirim kararı', decide) : null,

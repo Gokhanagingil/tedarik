@@ -27,6 +27,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Güvence ve uyum iş akışları (K-026); olay, kayıp, KVKK ihlali, RCSA, nicel risk, erişim gözden geçirme, kriz, ServiceNow görev (K-027).
 - Veri yönetişimi Faz 1: veri sözlüğü ve katalog; ham veri platforma gelmez; dosyayla içe aktarım ve şema değişikliği geçmişi;
   dört gözlü iş sözlüğü; uygulama içi yol haritası (K-028).
+- Veri yönetişimi Faz 2: kişisel veri keşfi (yerel doğrulama, yalnızca sayılar), VERBİS envanteri, saklama/imha, risk puanı,
+  veri talepleri, ilgili kişi başvuruları (30 gün), VKED, ihlal ↔ veri varlığı (K-029).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -160,6 +162,22 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Test sunucusuna dağıtıldı (commit `8cd2880`): standart kütüphanesi kuruldu, demo verisine yeni bölümler eklendi;
     canlı kabul testi 23/23 geçti, 68 menü ekranı hatasız (GitHub Actions çalıştırması 43750698880, 2026-11-15).
     İlk denemede kabul betiği eski denetim ekranı metnini arıyordu; sekmeli test planına göre güncellendi.
+- **Veri yönetişimi Faz 2 — KVKK ve sınıflandırma (2026-11-15, K-029).** Entegrasyon ve gerçek kaynak denemeleri sonraya bırakıldı.
+  - *Kişisel veri keşfi:* düzenlenebilir kategori sözlüğüyle kolon adı, açıklama ve terimden öneri; tablo ekranında "Örnek veriyle
+    doğrula" (TCKN, IBAN, kart, e-posta, telefon, IP tarayıcıda doğrulanır, yalnızca sayılar gönderilir; aynı tarama
+    `python -m tedarik.pii` ile kaynağın yanında); öneri kabul/ret (toplu), kabul sınıfı en az Gizli/Çok gizli yapar.
+  - *İşleme envanteri (VERBİS):* amaç, md. 5/md. 6 hukuki sebepler, kategoriler, ilgili kişi grupları, alıcılar, veri işleyenler ve
+    DPA, yurt dışı aktarım (standart sözleşmede 5 iş günü bildirim kontrolü), saklama kuralı, tedbirler, aydınlatma metni; tablo ve
+    kolon bağları; gözlenen ve beyan edilen kategori karşılaştırması; önem sırasıyla eksikler; VERBİS Excel/CSV.
+  - *VKED:* gereklilik kuralı, dört göz. *Saklama ve imha:* kurallar, 6 aylık periyodik imha (kapsam oluşturma, kalem sonuçları,
+    değiştirilemez tamamlanmış kayıt). *Risk puanı:* hassasiyet, hacim ve yönetişim açıklarından; risk kaydına aktarım.
+  - *Veri talepleri:* erişim/çıkarma/maskeleme/anonimleştirme/takma ad; amaç sınırlaması, dört göz, sahip onayı, teknik sorumlu
+    uygulaması. *İlgili kişi başvuruları:* 30 gün sayacı, kimlik doğrulama, incelenen tablolar (önerili), hatırlatma.
+  - *Bağlantılar:* KVKK panosu (kişisel veri haritası, envanter dışı veri, riskli varlıklar, süreli işler); KVKK ihlal kaydında
+    etkilenen tablolar ve önerilen kategoriler; Tedarikçi 360'ta "Kişisel veri" sekmesi; İşlerim, takvim, sağlık kontrolü.
+  - Demo: keşif sonuçları (kabul, ret ve bekleyen), 5 işleme faaliyeti (eksikli ve eksiksiz), örnek saklama kuralları, tamamlanmış
+    ve planlı periyodik imha, veri talepleri, başvurular (süresinde, süren, son günler), VKED'ler, ihlal bağlantısı, risk kaydı.
+  - Testler: 153 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi KVKK akışıyla.
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
@@ -207,7 +225,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi Faz 2–6 yok:** kişisel veri keşfi ve VERBİS envanteri, otomatik bağlayıcılar, soy kütüğü, veri kalitesi
+- **Veri yönetişimi Faz 3–6 yok:** otomatik bağlayıcılar, soy kütüğü, veri kalitesi, yapay zekâ yönetişimi
   (yol haritası uygulamada: Yönetim → Yol Haritası). Faz 1 içe aktarımı dosyayla; hazır sorgular gerçek SAP, ServiceNow,
   Dynamics ve Power BI ortamında henüz denenmedi (sentetik dosyalarla test edildi).
 
@@ -227,7 +245,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10a0. ~~**Güvenlik taraması, Entra MFA, denetim arşivi, ServiceNow MCP istemcisi.**~~ Tamamlandı (2026-11-15).
 10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
 10b. ~~**Veri yönetişimi Faz 0–1:** yol haritası, veri sözlüğü ve katalog.~~ Tamamlandı (2026-11-15, K-028).
-10d. **Veri yönetişimi Faz 2 — KVKK ve sınıflandırma:** kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
+10d. ~~**Veri yönetişimi Faz 2 — KVKK ve sınıflandırma**~~ Tamamlandı (2026-11-15, K-029). Sıradaki: Faz 4 (soy kütüğü ve etki
+     analizi; entegrasyon gerektirmeyen elle/Excel kısmı) veya Faz 5 (veri kalitesi kuralları); Faz 3 (bağlayıcılar) entegrasyonla birlikte.
+     Eski not: kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
      öneri → veri yöneticisi onayı), VERBİS uyumlu işleme envanteri (amaç, hukuki sebep, kategori, ilgili kişi grubu, alıcılar,
      yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim
      talebi akışları, KVKK ihlal kaydında etkilenen veri varlıkları. Ardından Faz 3: SAP HANA, ServiceNow, Dynamics 365, Power BI

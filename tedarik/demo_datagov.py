@@ -310,7 +310,7 @@ def pbi_columns():
     return "\n".join(lines) + "\n"
 
 
-DATAGOV_SECTIONS = (("datagov", "datagov"),)
+DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"))
 
 
 class DatagovSections:
@@ -442,3 +442,202 @@ class DatagovSections:
         kvkk = column("SAP S/4HANA Üretim", "KNA1", "ZZKVKKONAY")
         if kvkk:
             crud.update(db, D.COLUMNS, kvkk["id"], {"business_name": "KVKK açık rıza işareti", "personal_data": "personal"}, None)
+
+    # -------------------------------------------------------------- KVKK ve sınıflandırma (K-029)
+    def privacy(self):
+        from . import crud
+        from .demo_platform import day, stamp
+        from .modules import privacy as P
+        db = self.db
+        if one(db, "SELECT id FROM tdr_processing_activities LIMIT 1"):
+            return
+        P.seed(db)
+        cats = {r["name"]: r for r in P.categories(db)}
+        groups = {r["name"]: r["id"] for r in db.execute("SELECT id, name FROM tdr_data_subject_groups").fetchall()}
+
+        def src(name):
+            row = one(db, "SELECT id FROM tdr_data_sources WHERE name=?", (name,))
+            return row["id"] if row else None
+
+        def tbl(source, name):
+            row = one(db, "SELECT * FROM tdr_data_tables WHERE source_id=? AND name=?", (src(source), name))
+            return row
+        if not tbl("SAP S/4HANA Üretim", "KNA1"):
+            return
+        for term, cat in (("T.C. kimlik numarası", "Kimlik"), ("E-posta adresi", "İletişim"), ("Telefon numarası", "İletişim"),
+                          ("Doğum tarihi", "Kimlik"), ("Personel numarası", "Özlük")):
+            db.execute("UPDATE tdr_glossary_terms SET category_id=? WHERE name=?", (cats[cat]["id"], term))
+        P.discover(db)
+        company = tbl("ServiceNow ITSM", "core_company")
+        if company:                       # yanlış pozitif örneği: kurumsal şirket telefonu kişisel veri değil
+            db.execute("""UPDATE tdr_pii_suggestions SET status='rejected', decided_by='deniz.koc', decided_at=?, decision_note=?
+                WHERE status='pending' AND column_id IN (SELECT id FROM tdr_data_columns WHERE table_id=?)""",
+                       (stamp(19), "Kurumsal şirket iletişim bilgisi; kişisel veri değil", company["id"]))
+        pazarlama = src("Pazarlama Dosya Paylaşımı")
+        admin = Principal("zeynep.demir", "UNIT_USER", "system", "Zeynep Demir")
+        for sgg in db.execute("""SELECT s.id, s.column_id, s.category_id, s.confidence, t.source_id FROM tdr_pii_suggestions s
+                JOIN tdr_data_columns c ON c.id=s.column_id JOIN tdr_data_tables t ON t.id=c.table_id WHERE s.status='pending'""").fetchall():
+            if sgg["source_id"] == pazarlama or float(sgg["confidence"]) < 0.7:
+                continue
+            column = crud.get(db, RESOURCES_COLUMNS(), sgg["column_id"])
+            P.apply_category(db, column, crud.get(db, P.CATEGORIES, sgg["category_id"]), admin, source="suggestion")
+            db.execute("UPDATE tdr_pii_suggestions SET status='accepted', decided_by='deniz.koc', decided_at=?, updated_at=? WHERE id=?",
+                       (stamp(20), stamp(20), sgg["id"]))
+        first = one(db, """SELECT s.id FROM tdr_pii_suggestions s JOIN tdr_personal_data_categories k ON k.id=s.category_id
+            WHERE s.status='pending' AND k.name='Müşteri İşlem' ORDER BY s.id LIMIT 1""")
+        if first:
+            db.execute("UPDATE tdr_pii_suggestions SET status='rejected', decided_by='deniz.koc', decided_at=?, decision_note=? WHERE id=?",
+                       (stamp(19), "Kurumsal müşteri kodu; tek başına kişiyi tanımlamıyor", first["id"]))
+        note = "Örnek süre (sentetik demo): kurumunuzun saklama ve imha politikasıyla ve hukuk birimiyle doğrulayın."
+        rules = {}
+        for key, name, value, unit, trigger, method, ref in (
+                ("musteri", "Müşteri ana verisi ve sözleşme kayıtları", 10, "year", "Sözleşme ilişkisinin sona ermesi", "deletion", "Örnek: TTK md. 82"),
+                ("muhasebe", "Muhasebe belgeleri", 10, "year", "Mali yılın sonu", "destruction", "Örnek: TTK md. 82, VUK md. 253"),
+                ("ozluk", "Çalışan özlük kayıtları", 10, "year", "İş ilişkisinin sona ermesi", "destruction", "Örnek: iş mevzuatı ve zamanaşımı süreleri"),
+                ("pazarlama", "Pazarlama izinli iletişim listeleri", 2, "year", "Kampanya bitişi veya rızanın geri alınması", "destruction",
+                 "Örnek: kurum saklama ve imha politikası"),
+                ("bt", "BT kullanıcı ve işlem kayıtları", 2, "year", "Kaydın oluşması", "deletion", "Örnek: 5651 sayılı Kanun ve kurum politikası")):
+            rules[key] = self.add("retention_rules", {"name": name, "period_value": value, "period_unit": unit, "trigger_event": trigger,
+                                                      "disposal_method": method, "legal_reference": ref, "description": note,
+                                                      "owner": "selin.aydin"})
+        for source, name, rule in (("SAP S/4HANA Üretim", "KNA1", "musteri"), ("SAP S/4HANA Üretim", "KNVV", "musteri"),
+                                   ("SAP S/4HANA Üretim", "BKPF", "muhasebe"), ("SAP S/4HANA Üretim", "BSEG", "muhasebe"),
+                                   ("SAP S/4HANA Üretim", "PA0002", "ozluk"), ("Dynamics 365 CRM", "account", "musteri"),
+                                   ("Dynamics 365 CRM", "contact", "musteri"), ("Dynamics 365 CRM", "lead", "pazarlama"),
+                                   ("Pazarlama Dosya Paylaşımı", "bulten_aboneleri.csv", "pazarlama"),
+                                   ("ServiceNow ITSM", "sys_user", "bt"), ("ServiceNow ITSM", "incident", "bt")):
+            t = tbl(source, name)
+            if t:
+                db.execute("UPDATE tdr_data_tables SET retention_rule_id=? WHERE id=?", (rules[rule], t["id"]))
+        crm_supplier = one(db, "SELECT id FROM tdr_suppliers WHERE name LIKE ? ORDER BY id LIMIT 1", ("%Bulut%",))
+        mail_supplier = one(db, "SELECT id FROM tdr_suppliers WHERE id<>? ORDER BY id DESC LIMIT 1", ((crm_supplier or {}).get("id", 0),))
+        unit = lambda n: self._by("org_units", "name", n)       # noqa: E731
+        acts = {}
+        specs = [
+            ("crm", {"name": "Müşteri ilişkileri yönetimi (CRM)", "purpose": "Müşteriyle sözleşme ilişkisinin kurulması ve yürütülmesi, "
+                     "taleplerin karşılanması", "org_unit_id": unit("Müşteri Hizmetleri"), "owner": "zeynep.demir",
+                     "legal_basis": "contract", "recipients": "Grup şirketleri; yetkili kamu kurum ve kuruluşları",
+                     "foreign_transfer": 1, "transfer_countries": "İrlanda (bulut veri merkezi)", "transfer_mechanism": "standard_contract",
+                     "transfer_signed_on": "2026-02-02", "transfer_notified_on": "2026-02-05", "retention_rule_id": rules["musteri"],
+                     "security_measures": "Rol tabanlı erişim, şifreleme (aktarımda ve depoda), erişim kayıtları, yıllık sızma testi",
+                     "large_scale": 1, "status": "active", "review_date": day(120)},
+             ["Kimlik", "İletişim", "Müşteri İşlem"], ["Müşteri", "Potansiyel Müşteri"],
+             [("Dynamics 365 CRM", "account"), ("Dynamics 365 CRM", "contact"), ("SAP S/4HANA Üretim", "KNA1"), ("SAP S/4HANA Üretim", "KNVV"),
+              ("Power BI — Satış Performans Modeli", "DimMusteri")], [(crm_supplier, "processor", 1)]),
+            ("satis", {"name": "Satış ve faturalama", "purpose": "Siparişlerin alınması, faturalandırılması ve muhasebeleştirilmesi",
+                       "org_unit_id": unit("Finans"), "owner": "Ayla Çetin", "legal_basis": "legal_obligation",
+                       "recipients": "Gelir İdaresi Başkanlığı; bağımsız denetçi", "retention_rule_id": rules["muhasebe"],
+                       "security_measures": "Görevler ayrılığı, onay akışı, değişiklik kaydı", "status": "active"},
+             ["Müşteri İşlem", "Finans"], ["Müşteri"], [("SAP S/4HANA Üretim", "VBAK"), ("SAP S/4HANA Üretim", "VBAP"),
+                                                        ("SAP S/4HANA Üretim", "BKPF"), ("SAP S/4HANA Üretim", "BSEG")], []),
+            ("ik", {"name": "Bordro ve özlük yönetimi", "purpose": "İş sözleşmesinin ifası, bordro ve yasal bildirimler",
+                    "org_unit_id": unit("İnsan Kaynakları"), "owner": "Nazlı Er", "legal_basis": "legal_obligation",
+                    "special_legal_basis": "employment_social_security", "recipients": "SGK; bankalar (maaş ödemesi)",
+                    "retention_rule_id": rules["ozluk"], "security_measures": "İK dışı erişim kapalı, yedekler şifreli", "status": "active"},
+             ["Kimlik", "Özlük"], ["Çalışan"], [("SAP S/4HANA Üretim", "PA0002")], []),
+            ("pazarlama", {"name": "Pazarlama kampanyaları ve e-bülten", "purpose": "Ürün ve hizmet tanıtımı, kampanya duyuruları",
+                           "org_unit_id": unit("Operasyon"), "owner": "kerem.aksoy", "legal_basis": "explicit_consent",
+                           "recipients": "E-posta gönderim hizmeti sağlayıcısı", "foreign_transfer": 1,
+                           "transfer_countries": "ABD (e-posta gönderim hizmeti)", "transfer_mechanism": "none", "profiling": 1,
+                           "retention_rule_id": rules["pazarlama"], "status": "active"},
+             ["İletişim", "Pazarlama"], ["Müşteri", "Potansiyel Müşteri"],
+             [("Pazarlama Dosya Paylaşımı", "bulten_aboneleri.csv"), ("Dynamics 365 CRM", "lead")], [(mail_supplier, "processor", 0)]),
+            ("bt", {"name": "BT hizmet masası ve kullanıcı yönetimi", "purpose": "Kullanıcı hesaplarının yönetimi, olay ve taleplerin çözümü",
+                    "org_unit_id": unit("BT Altyapı ve Operasyon"), "owner": "mehmet.kaya", "legal_basis": "legitimate_interest",
+                    "legal_basis_note": "Denge testi: hizmet sürekliliği ve güvenlik menfaati; yalnızca iş iletişim bilgileri, sınırlı erişim.",
+                    "retention_rule_id": rules["bt"], "security_measures": "Merkezi kimlik yönetimi, MFA, kayıt izleme", "status": "draft"},
+             ["Kimlik", "İletişim", "İşlem Güvenliği"], ["Çalışan", "Tedarikçi Çalışanı"],
+             [("ServiceNow ITSM", "sys_user"), ("ServiceNow ITSM", "incident")], []),
+        ]
+        for key, values, cat_names, group_names, tables, processors in specs:
+            aid = self.add("processing_activities", values, created_days_ago=40)
+            acts[key] = aid
+            for n in cat_names:
+                db.execute("INSERT INTO tdr_processing_categories (activity_id, category_id) VALUES (?,?)", (aid, cats[n]["id"]))
+            for n in group_names:
+                db.execute("INSERT INTO tdr_processing_subjects (activity_id, subject_group_id) VALUES (?,?)", (aid, groups[n]))
+            for source, name in tables:
+                t = tbl(source, name)
+                if t:
+                    db.execute("INSERT INTO tdr_processing_tables (activity_id, table_id) VALUES (?,?)", (aid, t["id"]))
+            for supplier, role, dpa in processors:
+                if supplier:
+                    db.execute("INSERT INTO tdr_processing_processors (activity_id, supplier_id, role, dpa_signed) VALUES (?,?,?,?)",
+                               (aid, supplier["id"], role, dpa))
+        dpia = self.add("dpias", {"activity_id": acts["crm"], "title": "VKED: CRM ve yurt dışı bulut barındırma",
+                                  "necessity": "Müşteri ilişkisinin yürütülmesi için gerekli; veri en aza indirildi.",
+                                  "risks": "Yurt dışı aktarımda yetkisiz erişim; büyük ölçekli müşteri verisi",
+                                  "measures": "Standart sözleşme, şifreleme, erişim kayıtları, AB bölgesinde barındırma",
+                                  "residual_risk": "medium", "decision": "proceed_with_measures"})
+        db.execute("UPDATE tdr_dpias SET status='approved', prepared_by='ayse.yilmaz', submitted_at=?, approver='selin.aydin', approved_at=? "
+                   "WHERE id=?", (stamp(30), stamp(28), dpia))
+        dpia2 = self.add("dpias", {"activity_id": acts["pazarlama"], "title": "VKED: kampanya hedefleme ve profilleme",
+                                   "necessity": "Açık rızalı abonelere ilgi alanına göre içerik", "risks": "Profilleme; yurt dışı aktarım güvencesiz",
+                                   "measures": "Aktarım mekanizması belirlenecek; segmentler anonimleştirilecek",
+                                   "residual_risk": "high", "decision": "proceed_with_measures"})
+        db.execute("UPDATE tdr_dpias SET status='in_review', prepared_by='ayse.yilmaz', submitted_at=? WHERE id=?", (stamp(3), dpia2))
+        # periyodik imha: tamamlanan (5 ay önce) ve planlanan
+        run = self.add("disposal_runs", {"title": "2026 1. dönem periyodik imha", "planned_date": day(-152), "owner": "mehmet.kaya"})
+        for t in db.execute("SELECT id, retention_rule_id FROM tdr_data_tables WHERE retention_rule_id IS NOT NULL ORDER BY id").fetchall():
+            method = one(db, "SELECT disposal_method FROM tdr_retention_rules WHERE id=?", (t["retention_rule_id"],))["disposal_method"]
+            done = t["id"] % 3 != 0
+            db.execute("""INSERT INTO tdr_disposal_items (run_id, table_id, rule_id, method, outcome, record_count, note, updated_by,
+                updated_at) VALUES (?,?,?,?,?,?,?,?,?)""", (run, t["id"], t["retention_rule_id"], method, "done" if done else "not_needed",
+                                                         (t["id"] * 37) % 900 + 20 if done else 0,
+                                                         None if done else "Süresi dolan kayıt yok", "mehmet.kaya", stamp(150)))
+        db.execute("""UPDATE tdr_disposal_runs SET status='completed', summary=?, performed_by='mehmet.kaya', completed_at=? WHERE id=?""",
+                   ("Saklama süresi dolan müşteri, pazarlama ve BT kayıtları silindi veya yok edildi; tutanak imzalandı (sentetik).",
+                    stamp(150), run))
+        self.add("disposal_runs", {"title": "2026 2. dönem periyodik imha", "planned_date": day(25), "owner": "mehmet.kaya"})
+        # veri talepleri
+        contact, kna1, pa = tbl("Dynamics 365 CRM", "contact"), tbl("SAP S/4HANA Üretim", "KNA1"), tbl("SAP S/4HANA Üretim", "PA0002")
+        r1 = self.add("data_requests", {"kind": "masking", "table_id": contact["id"], "purpose": "UAT ortamına maskeli kopya (sürüm testi)",
+                                        "environment": "UAT", "org_unit_id": unit("Uygulama Geliştirme")}, created_days_ago=12)
+        db.execute("""UPDATE tdr_data_requests SET requested_by='deniz.koc', status='fulfilled', approver='zeynep.demir', decided_at=?,
+            decision_note='Maskeli kopya uygun', fulfilled_by='deniz.koc', fulfilled_at=?, fulfillment_note=? WHERE id=?""",
+                   (stamp(11), stamp(9), "Ad, soyad, e-posta ve telefon tutarlı takma değerlerle değiştirildi", r1))
+        r2 = self.add("data_requests", {"kind": "access", "table_id": kna1["id"], "purpose": "Dolandırıcılık analizi için müşteri ana "
+                                        "verisine süreli salt okunur erişim", "activity_id": acts["crm"], "access_until": day(30),
+                                        "org_unit_id": unit("Bilgi Güvenliği")}, created_days_ago=2)
+        db.execute("UPDATE tdr_data_requests SET requested_by='okan.yildiz' WHERE id=?", (r2,))
+        r3 = self.add("data_requests", {"kind": "extract", "table_id": pa["id"], "purpose": "Eğitim planlaması için çalışan listesi",
+                                        "activity_id": acts["ik"], "org_unit_id": unit("Operasyon")}, created_days_ago=6)
+        db.execute("""UPDATE tdr_data_requests SET requested_by='kerem.aksoy', status='rejected', approver='selin.aydin', decided_at=?,
+            decision_note=? WHERE id=?""", (stamp(5), "Ad soyad yerine personel numarası ve birim yeterli (veri en aza indirme).", r3))
+        # ilgili kişi başvuruları
+        lead = tbl("Dynamics 365 CRM", "lead")
+        for days_ago, kind, channel, group, ref, status, verified, extra in (
+                (40, "access", "email", "Müşteri", "CRM-48213", "answered", 1,
+                 {"response_date": day(-26), "response_summary": "İşlenen veriler ve amaçlar KEP ile bildirildi."}),
+                (12, "erasure", "kep", "Potansiyel Müşteri", "WEB-2026-1187", "in_progress", 1, {}),
+                (27, "info", "web", "Çalışan Adayı", "IK-ADAY-0412", "received", 0, {})):
+            sid = self.add("subject_requests", {"received_on": day(-days_ago), "request_type": kind, "channel": channel,
+                                                "subject_group_id": groups[group], "subject_reference": ref, "identity_verified": verified,
+                                                "description": "Sentetik demo başvurusu", "owner": "ayse.yilmaz"})
+            db.execute("UPDATE tdr_subject_requests SET status=?, response_date=?, response_summary=? WHERE id=?",
+                       (status, extra.get("response_date"), extra.get("response_summary"), sid))
+            if kind == "erasure" and lead:
+                db.execute("INSERT INTO tdr_subject_request_tables (request_id, table_id) VALUES (?,?)", (sid, lead["id"]))
+        breach = one(db, "SELECT id FROM tdr_privacy_breaches WHERE title LIKE ?", ("Müşteri bildirim listesinin%",))
+        if breach:
+            for t in (contact, tbl("Dynamics 365 CRM", "account")):
+                if t:
+                    db.execute("INSERT INTO tdr_breach_data_tables (breach_id, table_id, created_by, created_at) VALUES (?,?,?,?) "
+                               "ON CONFLICT DO NOTHING", (breach["id"], t["id"], "selin.aydin", utcnow()))
+        # en riskli veri varlığını risk kaydına aktar
+        kampanya = tbl("Pazarlama Dosya Paylaşımı", "kampanya_katilimcilari_2026.xlsx")
+        if kampanya and self.enabled("risks"):
+            from .schema import RESOURCES
+            score = P.table_risks(db, [kampanya["id"]])[kampanya["id"]]
+            risk = crud.insert(db, RESOURCES["supplier_risks"], {
+                "title": "Veri varlığı riski: Pazarlama Dosya Paylaşımı / kampanya_katilimcilari_2026.xlsx", "category": "privacy",
+                "owner": "kerem.aksoy", "likelihood": score["likelihood"], "impact": score["impact"],
+                "cause": "Yönetişim açıkları: " + ", ".join(score["gaps"]),
+                "risk_event": "Sahipsiz paylaşımdaki kişisel verinin yetkisiz erişim veya ifşası",
+                "consequence": "; ".join(score["factors"]), "entity_name": "Pazarlama Dosya Paylaşımı"}, None)
+            db.execute("INSERT INTO tdr_risk_data_tables (risk_id, table_id, created_at) VALUES (?,?,?)", (risk, kampanya["id"], utcnow()))
+
+
+def RESOURCES_COLUMNS():
+    from .modules.datagov import COLUMNS
+    return COLUMNS

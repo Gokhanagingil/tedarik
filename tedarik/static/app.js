@@ -98,7 +98,8 @@ const META = {
   option: (res, name, value) => (META.field(res, name)?.options || []).find(o => o.value === value)?.label ?? value,
   can: need => !!S.meta.permissions[need],
 };
-const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled', 'certified', 'is_critical', 'is_primary_key', 'nullable']);
+const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled', 'certified', 'is_critical', 'is_primary_key', 'nullable',
+  'special', 'foreign_transfer', 'profiling', 'large_scale', 'new_technology', 'identity_verified', 'dpa_signed']);
 // Kişi alanları: formda kullanıcı dizininden öneri (serbest metin de girilebilir; sahip alanları kullanıcı adı veya görünen adla eşleşir)
 const PERSON = new Set(['owner', 'steward', 'custodian', 'approver', 'assignee', 'reviewer', 'facilitator', 'preparer', 'respondent', 'business_owner', 'responsible']);
 async function ensurePeople() {
@@ -110,7 +111,8 @@ async function ensurePeople() {
 const LONG = new Set(['value_json', 'description', 'cause', 'risk_event', 'consequence', 'treatment', 'note', 'comment', 'intro', 'outro',
   'help', 'rationale', 'resolution', 'decision_rationale', 'exception_rationale', 'text', 'details', 'method', 'expected_result',
   'audit_objective', 'scope', 'conclusion', 'root_cause', 'closure_note', 'verification_note', 'justification', 'definition', 'calculation',
-  'technical_description', 'needs']);
+  'technical_description', 'needs', 'purpose', 'security_measures', 'necessity', 'risks', 'measures', 'response_summary', 'keywords', 'weak_keywords',
+  'legal_basis_note', 'summary', 'fulfillment_note']);
 const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective', 'approved', 'production',
   'successful', 'green', 'resolved', 'operational', 'success']);
 const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled', 'fail', 'ineffective',
@@ -122,7 +124,7 @@ const PILLS = new Set(['status', 'tier', 'severity', 'criticality', 'priority', 
   'purpose', 'subject', 'audience', 'category', 'response_strategy', 'source', 'raci', 'role', 'execution_mode', 'frequency',
   'opinion', 'confidentiality', 'nature', 'method_type', 'exercise_type', 'plan_type', 'outcome', 'process_type', 'ci_class', 'environment',
   'rule', 'impact_area', 'link_source', 'risk_type', 'last_status', 'operational_status', 'mode', 'dimension', 'platform', 'object_type', 'classification',
-  'personal_data', 'change', 'module']);
+  'personal_data', 'change', 'module', 'legal_basis', 'request_type', 'residual_risk', 'decision', 'outcome', 'method']);
 function tone(value) { return GOOD.has(value) ? 'good' : BAD.has(value) ? 'bad' : WARN.has(value) ? 'warn' : 'neutral'; }
 function roleLabel(code) { return (S.meta.roles.find(r => r.value === code) || {}).label || code; }
 function pill(text, cls = 'neutral') { return h('span', {class: 'pill ' + cls, text}); }
@@ -149,7 +151,7 @@ function display(res, name, value) {
 }
 // Binlerce kaydı olabilen kaynaklar (ör. standart maddeleri) bütünüyle yüklenmez: formda aranarak seçilir,
 // listede yalnızca görünen kimlikler istenir (ensureRefs).
-const LARGE_REFS = new Set(['clauses', 'data_tables', 'data_columns', 'glossary_terms']);
+const LARGE_REFS = new Set(['clauses', 'data_tables', 'data_columns', 'glossary_terms', 'evidence']);
 async function loadRefs(res, fields) {
   const refs = new Set((META.def(res)?.fields || []).filter(f => f.ref && !LARGE_REFS.has(f.ref) && (!fields || fields.includes(f.name))).map(f => f.ref));
   await Promise.all([...refs].map(r => list(r).catch(() => [])));
@@ -451,17 +453,20 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 const MENU = [
   ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
   ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/rcsa_campaigns', 'check'], ['r/loss_events', 'coin'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
-  ['Uyum', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['obligations', 'scale', 'Yükümlülükler'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/policy_exceptions', 'flag'], ['r/attestation_campaigns', 'edit'], ['r/certifications', 'star'], ['r/access_reviews', 'users'], ['r/privacy_breaches', 'alert']]],
+  ['Uyum', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['obligations', 'scale', 'Yükümlülükler'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/policy_exceptions', 'flag'], ['r/attestation_campaigns', 'edit'], ['r/certifications', 'star'], ['r/access_reviews', 'users']]],
   ['Denetim', [['audit-plan', 'calendar', 'Denetim Planı'], ['r/audits', 'search'], ['r/evidence_requests', 'inbox'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip'], ['archive', 'archive', 'Denetim Arşivi']]],
   ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['crisis', 'zap', 'Kriz Yönetimi'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
   ['Veri yönetişimi', [['datagov', 'database', 'Veri Yönetişimi Paneli'], ['glossary', 'book', 'İş Sözlüğü'], ['catalog', 'layers', 'Veri Kataloğu'],
     ['r/data_sources', 'server'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
+  ['Kişisel veri (KVKK)', [['privacy', 'shield', 'KVKK Panosu'], ['discovery', 'search', 'Kişisel Veri Keşfi'], ['r/processing_activities', 'clipboard'],
+    ['r/subject_requests', 'mail'], ['r/data_requests', 'inbox'], ['r/privacy_breaches', 'alert'], ['r/dpias', 'scale'], ['r/retention_rules', 'clock'],
+    ['r/disposal_runs', 'archive']]],
   ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi'], ['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
   ['Mimari', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/audit_universe', 'grid']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
-  ['Yönetim', [['roadmap', 'route', 'Yol Haritası'], ['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
+  ['Yönetim', [['roadmap', 'route', 'Yol Haritası'], ['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/personal_data_categories', 'list'], ['r/data_subject_groups', 'users'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
 const ICONS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
@@ -552,6 +557,13 @@ const COLUMNS = {
   glossary_terms: ['code', 'name', 'domain_id', 'owner', 'status', 'version'], catalog_imports: ['created_at', 'source_id', 'kind', 'format', 'filename', 'created_by'],
   catalog_changes: ['created_at', 'source_id', 'change', 'object_name', 'detail'], glossary_term_versions: ['term_id', 'version', 'approved_by', 'created_at'],
   roadmap_items: ['module', 'phase', 'title', 'status', 'target'],
+  personal_data_categories: ['name', 'special', 'keywords', 'active'], data_subject_groups: ['name', 'description', 'active'],
+  processing_activities: ['code', 'name', 'legal_basis', 'org_unit_id', 'owner', 'foreign_transfer', 'status'],
+  retention_rules: ['code', 'name', 'period_value', 'period_unit', 'trigger_event', 'disposal_method', 'active'],
+  disposal_runs: ['code', 'title', 'planned_date', 'owner', 'status', 'completed_at'],
+  data_requests: ['code', 'kind', 'table_id', 'requested_by', 'status', 'access_until', 'created_at'],
+  subject_requests: ['code', 'received_on', 'request_type', 'channel', 'owner', 'due_date', 'status'],
+  dpias: ['code', 'title', 'activity_id', 'residual_risk', 'decision', 'status'], pii_suggestions: ['column_id', 'category_id', 'confidence', 'method', 'status'],
 };
 const FILTERS = {
   suppliers: ['tier', 'status', 'segment', 'type_id'], engagements: ['supplier_id', 'org_unit_id', 'beneficiary', 'criticality', 'status'],
@@ -570,6 +582,8 @@ const FILTERS = {
   documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
   data_sources: ['platform', 'environment', 'domain_id', 'status'], data_domains: ['org_unit_id', 'active'], catalog_changes: ['source_id', 'change'],
   catalog_imports: ['source_id', 'kind'], roadmap_items: ['module', 'status'],
+  processing_activities: ['status', 'legal_basis', 'org_unit_id'], data_requests: ['status', 'kind'], subject_requests: ['status', 'request_type', 'channel'],
+  dpias: ['status'], disposal_runs: ['status'], personal_data_categories: ['special', 'active'],
 };
 const DESCRIPTIONS = {
   suppliers: 'Tekil tüzel kişiler. Kritiklik seviyesi değerlendirme, anket ve risk gözden geçirme sıklığını belirler.',
@@ -625,6 +639,14 @@ const DESCRIPTIONS = {
   data_sources: 'Verinin durduğu sistemler: SAP HANA, ServiceNow, Dynamics 365, Power BI, veritabanları ve dosyalar. Tablo ve kolonlar kaynağın ekranından dosyayla içe aktarılır.',
   catalog_imports: 'Katalog içe aktarımlarının değiştirilemez geçmişi.', catalog_changes: 'İçe aktarımlarda görülen şema değişiklikleri: eklenen, kaldırılan, geri gelen ve tipi değişen tablo ve kolonlar.',
   roadmap_items: 'Yol haritası maddeleri. Sürümle gelenler her güncellemede yenilenir; kurum maddeleri buradan eklenir.',
+  processing_activities: 'Kişisel veri işleme envanteri (VERBİS): amaç, hukuki sebep, kategoriler, ilgili kişiler, alıcılar, yurt dışı aktarım ve saklama süresi; kolon ve tablolara bağlıdır. Eksikler faaliyet ekranında listelenir.',
+  retention_rules: 'Saklama süreleri ve imha yöntemleri. Tablolara ve işleme faaliyetlerine bağlanır; periyodik imhanın kapsamını belirler.',
+  disposal_runs: 'Periyodik imha kayıtları (en çok 6 ayda bir). Tamamlanan kayıt değiştirilemez ve en az 3 yıl saklanır.',
+  data_requests: 'Erişim, veri çıkarma, maskeleme, anonimleştirme ve takma adlandırma talepleri. Talep eden onaylayamaz; kişisel veri için amaç ve hukuki sebep (işleme faaliyeti) zorunludur.',
+  subject_requests: 'İlgili kişi başvuruları (KVKK md. 11). Başvuru en geç 30 gün içinde sonuçlandırılır; ad yerine iç referans yazın (veri en aza indirme).',
+  dpias: 'Veri koruma etki değerlendirmeleri (VKED). Özel nitelikli veri, profilleme, büyük ölçek, yeni teknoloji veya güvencesiz yurt dışı aktarımda gerekir. Hazırlayan onaylayamaz.',
+  personal_data_categories: 'Kişisel veri kategorileri (VERBİS) ve keşif sözlüğü: kolon adında veya açıklamasında geçen anahtar kelimeler öneri üretir. Zayıf kelimeler yalnızca aynı tabloda güçlü bir eşleşme varsa sayılır.',
+  data_subject_groups: 'İlgili kişi grupları (VERBİS): çalışan, müşteri, ziyaretçi...',
 };
 const RELATED = {
   engagements: [['sla_definitions', 'engagement_id'], ['responsibilities', 'engagement_id'], ['supplier_risks', 'engagement_id'],
@@ -638,6 +660,7 @@ const RELATED = {
 };
 const EXTRA_ACTIONS = {}; // genel detay paneline kaynağa özgü düğmeler
 const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
+const SUPPLIER_TABS = []; // diğer dosyaların Tedarikçi 360'a eklediği sekmeler: {key, label, render(id), visible()}
 
 DETAILS.bc_incidents = id => Router.go('crisis/' + id);
 const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications']);   // dış denetçi
@@ -647,7 +670,7 @@ function navVisible([key, , , need]) {
   if (S.me && S.me.external && !EXTERNAL_NAV.has(key)) return false;
   const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', obligations: 'grc', 'audit-plan': 'grc', crisis: 'continuity', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights',
-    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov'}[key];
+    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov', privacy: 'datagov', discovery: 'datagov'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
 /** Menü bir kez kurulur; sonraki gezinmelerde yalnızca etkin öğe değişir (kaydırma konumu korunur). */
@@ -676,7 +699,8 @@ function navigation() {
   }
   let activeButton = null;
   nav.querySelectorAll('.nav-button').forEach(b => {
-    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/')) || (key === 'archive' && current.startsWith('archive')) || (key === 'r/data_sources' && current.startsWith('datasource/'));
+    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/')) || (key === 'archive' && current.startsWith('archive')) || (key === 'r/data_sources' && current.startsWith('datasource/'))
+      || (key === 'r/processing_activities' && current.startsWith('activity/')) || (key === 'r/disposal_runs' && current.startsWith('disposal/'));
     b.classList.toggle('active', on); if (on) { b.setAttribute('aria-current', 'page'); activeButton = b; } else b.removeAttribute('aria-current');
   });
   if (activeButton) {
@@ -890,6 +914,7 @@ DETAILS.suppliers = async function supplierDetail(id) {
   if (has('risks')) items.push({key: 'risks', label: 'Riskler', count: risks.length, render: riskTab});
   if (has('surveys')) items.push({key: 'surveys', label: 'Anketler', count: surveys.length, render: surveyTab});
   items.push({key: 'contracts', label: 'Sözleşmeler', count: ctx.contracts.length, render: contractTab}, {key: 'people', label: 'Kişiler', count: ctx.contacts.length + ctx.responsibilities.length, render: peopleTab});
+  for (const t of SUPPLIER_TABS) if (!t.visible || t.visible()) items.push({key: t.key, label: t.label, render: () => t.render(id)});
   Drawer.open(ctx.name, tabs(items), [
     can ? btn('Tipler', () => editTypes(ctx), 'secondary') : null,
     can ? btn('Düzenle', () => recordForm('suppliers', ctx, {onsaved: () => { refreshList('suppliers'); DETAILS.suppliers(id); }})) : null], 'Tedarikçi 360 · ' + ctx.code);

@@ -175,6 +175,23 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `catalog_changes` | Şema değişiklikleri (eklenen, kaldırılan, geri gelen, tipi değişen) | Değiştirilemez; ilk yüklemede yazılmaz |
 | `roadmap_items` | Uygulama içi yol haritası | Sürüm maddesi dosyadan eşitlenir, yalnızca hedef ve kurum notu değişir |
 
+## KVKK ve sınıflandırma (K-029)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `personal_data_categories` | VERBİS kategorileri ve keşif sözlüğü (güçlü/zayıf anahtar kelimeler) | Özel nitelikli işareti; veri yönetişimi ofisi düzenler |
+| `data_subject_groups` | İlgili kişi grupları | Başlangıç listesi önerilir |
+| `column_categories` | Kolonun kişisel veri kategorileri | Kategori kolonu kişisel/özel nitelikli yapar, sınıfı yükseltir |
+| `pii_suggestions` | Keşif önerileri (yöntem, güven, gerekçe) | Kolon + kategori tekil; reddedilen yeniden açılmaz |
+| `processing_activities` (+ `processing_categories`, `processing_subjects`, `processing_columns`, `processing_tables`, `processing_processors`) | İşleme envanteri (VERBİS) | Hukuki sebepsiz etkinleşmez; eksikler kural olarak hesaplanır |
+| `dpias` | Veri koruma etki değerlendirmesi | Hazırlayan onaylayamaz; onaylı değişmez |
+| `retention_rules` | Saklama ve imha kuralları | Tablolara (`data_tables.retention_rule_id`) ve faaliyetlere bağlanır |
+| `disposal_runs`, `disposal_items` | Periyodik imha | En çok 6 ay; tamamlanan değişmez |
+| `data_requests`, `data_request_columns` | Veri talepleri | Talep eden onaylayamaz; kişisel veride işleme faaliyeti zorunlu |
+| `subject_requests`, `subject_request_tables` | İlgili kişi başvuruları | 30 gün; kimlik doğrulaması; kısıtlı okuma |
+| `breach_data_tables` | İhlalden etkilenen veri varlıkları | Kategoriler ve kişi grupları önerilir |
+| `risk_data_tables` | Risk kaydına aktarılan veri varlıkları | Tablo başına bir açık risk |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

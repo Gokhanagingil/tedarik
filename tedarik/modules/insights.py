@@ -181,7 +181,8 @@ EVENT_TYPES = {
     "exception_end": ("İstisna bitişi", "grc"), "attestation": ("Okundu beyanı", "grc"),
     "access_review": ("Erişim gözden geçirme", "grc"), "obligation_review": ("Yükümlülük gözden geçirme", "grc"),
     "rcsa": ("Öz değerlendirme", "risks"), "breach_deadline": ("KVKK bildirim süresi", "risks"),
-    "glossary_review": ("Sözlük terimi gözden geçirme", "datagov"),
+    "glossary_review": ("Sözlük terimi gözden geçirme", "datagov"), "disposal": ("Periyodik imha", "datagov"),
+    "subject_request": ("İlgili kişi başvurusu (30 gün)", "datagov"), "activity_review": ("İşleme faaliyeti gözden geçirme", "datagov"),
 }
 
 
@@ -310,6 +311,9 @@ def calendar(c):
         from .datagov import calendar_events
         for t in calendar_events(db):
             add("glossary_review", f"{t['code']} {t['name']}", t["review_date"], None, "glossary_terms", t["id"], "approved")
+    if c.app.enabled("datagov"):
+        from .privacy import calendar_events as privacy_events
+        privacy_events(db, lambda kind, *a: add(kind, *a) if on(kind) else None, lambda name: _readable(c, name))
     events.sort(key=lambda e: (e["start"], e["type"]))
     return {"from": lo, "to": hi, "types": [{"key": k, "label": v[0]} for k, v in EVENT_TYPES.items()
                                             if c.app.enabled(v[1])], "events": events}
@@ -544,7 +548,7 @@ def health(c):
                          owner='') ORDER BY code"""), "processes", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1")))
     if c.app.enabled("datagov"):
         from .datagov import health_checks
-        checks += health_checks(db, _check, _n)
+        checks += health_checks(db, _check, _n, lambda name: _readable(c, name))
     checks = [x for x in checks if _readable(c, x["resource"])]
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     checks.sort(key=lambda x: (x["count"] == 0, order[x["severity"]], -x["count"]))

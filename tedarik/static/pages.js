@@ -197,6 +197,12 @@ const WORK_GROUPS = [
   ['glossary_to_approve', 'Onayımı bekleyen sözlük terimleri', 'glossary_terms', r => [pill(r.kind === 'change' ? 'Değişiklik önerisi' : 'Yeni terim', 'purple'), h('span', {class: 'chip', text: 'Öneren: ' + (r.proposer || '—')})], null],
   ['glossary_returned', 'İade edilen sözlük terimlerim', 'glossary_terms', r => [h('span', {class: 'chip', text: (r.review_note || '').slice(0, 80)})], null],
   ['glossary_review', 'Gözden geçirme zamanı gelen terimlerim', 'glossary_terms', () => [], 'review_date'],
+  ['subject_requests', 'İlgili kişi başvurularım (30 gün)', 'subject_requests', r => [display('subject_requests', 'request_type', r.title)], 'due_date'],
+  ['data_requests_to_approve', 'Onayımı bekleyen veri talepleri', 'data_requests', r => [h('span', {class: 'chip', text: 'Talep eden: ' + (r.requested_by || '—')})], null],
+  ['data_requests_to_fulfill', 'Uygulamamı bekleyen veri talepleri', 'data_requests', () => [pill('Onaylandı', 'good')], null],
+  ['dpias_to_approve', 'Onayımı bekleyen VKED', 'dpias', () => [], null],
+  ['disposals', 'Periyodik imha işlerim', 'disposal_runs', () => [], 'due_date'],
+  ['pii_suggestions', 'Kişisel veri keşfi', 'pii_suggestions', () => [pill('Karar bekliyor', 'warn')], null],
   ['exercises', 'Yöneteceğim tatbikatlar', 'bc_exercises', () => [], 'planned_date'],
   ['surveys', 'Yanıt bekleyen anketler', 'survey_campaigns', () => [], 'closes_on'],
   ['controls', 'Sahibi olduğum kontroller', 'controls', () => [], null],
@@ -206,7 +212,7 @@ PAGES['my-work'] = async function myWork() {
   const w = await api('my-work'); S.myWork = w.total; navigation();
   const groups = WORK_GROUPS.filter(([key]) => (w[key] || []).length);
   const strip = statStrip([['Açık iş', fmt.num(w.total, 0)], ['Tarihi geçen', fmt.num(w.overdue, 0), w.overdue ? 'bad' : 'good'],
-    ['Onay bekleyen', fmt.num(['documents_to_approve', 'bias_to_approve', 'capa_validation', 'evidence_to_review', 'workpapers_to_review', 'exceptions_to_approve', 'glossary_to_approve'].reduce((n, k) => n + (w[k] || []).length, 0), 0)],
+    ['Onay bekleyen', fmt.num(['documents_to_approve', 'bias_to_approve', 'capa_validation', 'evidence_to_review', 'workpapers_to_review', 'exceptions_to_approve', 'glossary_to_approve', 'data_requests_to_approve', 'dpias_to_approve'].reduce((n, k) => n + (w[k] || []).length, 0), 0)],
     ['Gözden geçirme', fmt.num((w.risks || []).length + (w.documents_to_review || []).length + (w.bias_to_review || []).length, 0)]]);
   if (!groups.length) { content(strip, empty('Bekleyen işiniz yok', 'Size atanmış açık bir kayıt bulunmuyor.')); return; }
   content(strip, h('div', {class: 'work'}, groups.map(([key, title, res, chips, dateKey]) => panel(title, h('ul', {class: 'mini'}, w[key].map(r => {
@@ -214,7 +220,8 @@ PAGES['my-work'] = async function myWork() {
     const li = h('li', {class: 'link', tabindex: '0'}, d ? h('span', {class: 'due' + (late(d) ? ' late' : ''), text: fmt.date(d) + ' · ' + dueText(d)}) : null,
       h('strong', {text: [r.code, r.title || r.name].filter(Boolean).join(' · ')}), h('div', {class: 'chips'}, chips(r)));
     const go = () => (res === 'survey_campaigns' ? Router.go('my-surveys') : res === 'attestations' && typeof acknowledgeDialog === 'function' ? acknowledgeDialog(r)
-      : res === 'rcsa_items' && typeof rcsaRespond === 'function' ? rcsaRespond(r, render) : res === 'bc_incident_tasks' ? Router.go('crisis/' + r.incident_id) : openRecord(res, r.id));
+      : res === 'rcsa_items' && typeof rcsaRespond === 'function' ? rcsaRespond(r, render) : res === 'bc_incident_tasks' ? Router.go('crisis/' + r.incident_id)
+      : res === 'pii_suggestions' ? Router.go('discovery') : openRecord(res, r.id));
     li.addEventListener('click', go); li.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     return li;
   })), null, String(w[key].length)))));

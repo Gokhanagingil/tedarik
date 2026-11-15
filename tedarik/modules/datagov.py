@@ -37,7 +37,7 @@ from ..labels import CHOICES
 from ..schema import Resource, fk
 
 M = "datagov"
-REQUIRES = ("cmdb",)
+REQUIRES = ("cmdb", "grc", "risks", "documents")
 PLATFORMS = ("sap_hana", "servicenow", "dynamics365", "power_bi", "postgresql", "sql_server", "oracle", "mysql",
              "snowflake", "bigquery", "redshift", "mongodb", "file", "other")
 CLASSES = ("public", "internal", "confidential", "restricted")
@@ -70,8 +70,8 @@ TABLES = Resource("data_tables", "Veri Tabloları", {
     "object_type": "TEXT NOT NULL DEFAULT 'table'", "technical_description": "TEXT", "business_name": "TEXT",
     "description": "TEXT", "domain_id": fk("data_domains", False), "owner": "TEXT", "steward": "TEXT", "custodian": "TEXT",
     "classification": "TEXT", "certified": "INTEGER NOT NULL DEFAULT 0", "status": "TEXT NOT NULL DEFAULT 'active'",
-    "row_count": "INTEGER", "first_seen_at": "TIMESTAMP", "last_seen_at": "TIMESTAMP", "removed_at": "TIMESTAMP",
-    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    "row_count": "INTEGER", "retention_rule_id": fk("retention_rules", False), "first_seen_at": "TIMESTAMP",
+    "last_seen_at": "TIMESTAMP", "removed_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", unique=(("source_id", "schema_name", "name"),), search=("name", "business_name"),
     readonly=("technical_description", "first_seen_at", "last_seen_at", "removed_at"),
     enums={"object_type": OBJECT_TYPES, "classification": CLASSES, "status": ("active", "deprecated", "removed")})
@@ -92,7 +92,7 @@ TERMS = Resource("glossary_terms", "İş Sözlüğü", {
     "definition": "TEXT NOT NULL", "domain_id": fk("data_domains", False), "parent_id": fk("glossary_terms", False),
     "owner": "TEXT", "steward": "TEXT", "example": "TEXT", "format_rule": "TEXT", "calculation": "TEXT",
     "source_reference": "TEXT", "classification": "TEXT", "personal_data": "TEXT", "is_critical": "INTEGER NOT NULL DEFAULT 0",
-    "review_date": "DATE", "status": "TEXT NOT NULL DEFAULT 'draft'", "version": "INTEGER NOT NULL DEFAULT 0",
+    "category_id": fk("personal_data_categories", False), "review_date": "DATE", "status": "TEXT NOT NULL DEFAULT 'draft'", "version": "INTEGER NOT NULL DEFAULT 0",
     "submitted_by": "TEXT", "submitted_at": "TIMESTAMP", "approved_by": "TEXT", "approved_at": "TIMESTAMP",
     "pending_json": "TEXT", "pending_by": "TEXT", "pending_note": "TEXT", "pending_at": "TIMESTAMP", "review_note": "TEXT",
     "replaced_by_id": fk("glossary_terms", False), "created_by": "TEXT", "created_at": "TIMESTAMP NOT NULL",
@@ -129,7 +129,7 @@ CHANGES = Resource("catalog_changes", "Şema Değişiklikleri", {
     module=M, api=("list",), immutable=True, search=("object_name",), enums={"change": CHANGE_KINDS})
 
 MATERIAL = ("name", "abbreviation", "synonyms", "definition", "domain_id", "parent_id", "example", "format_rule",
-            "calculation", "source_reference", "classification", "personal_data", "is_critical")
+            "calculation", "source_reference", "classification", "personal_data", "is_critical", "category_id")
 SNAPSHOT = MATERIAL + ("owner", "steward", "review_date")
 DOC = "(COALESCE(c.business_name,'')<>'' OR COALESCE(c.description,'')<>'' OR m.column_id IS NOT NULL)"
 DOC_X = ("(COALESCE(c.business_name,'')<>'' OR COALESCE(c.description,'')<>'' OR EXISTS (SELECT 1 FROM tdr_term_columns mm "
@@ -1975,6 +1975,7 @@ def my_work_items(db, principal):
     soon = (date.today() + timedelta(days=30)).isoformat()
     out["glossary_review"] = rows(db, f"""SELECT id, code, name AS title, review_date FROM tdr_glossary_terms WHERE
         status='approved' AND owner IN ({marks}) AND review_date <= ? ORDER BY review_date""", (*names, soon))
+    out.update(privacy.my_work_items(db, principal))
     return out
 
 
@@ -1982,7 +1983,7 @@ def calendar_events(db):
     return rows(db, "SELECT id, code, name, review_date FROM tdr_glossary_terms WHERE status='approved' AND review_date IS NOT NULL")
 
 
-def health_checks(db, check, count):
+def health_checks(db, check, count, readable=lambda name: True):
     population = count(db, "SELECT COUNT(*) AS n FROM tdr_data_tables WHERE status<>'removed'")
     personal = count(db, "SELECT COUNT(*) AS n FROM tdr_data_columns WHERE status='active' AND personal_data IN ('personal','special')")
     stale = (date.today() - timedelta(days=14)).isoformat()
@@ -2004,7 +2005,7 @@ def health_checks(db, check, count):
               rows(db, """SELECT id, code, name AS title FROM tdr_glossary_terms WHERE (status='in_review' AND submitted_at < ?)
               OR (pending_json IS NOT NULL AND pending_at < ?) ORDER BY code""", (stale, stale)), "glossary_terms",
               population=count(db, "SELECT COUNT(*) AS n FROM tdr_glossary_terms WHERE status<>'retired'")),
-    ]
+    ] + privacy.health_checks(db, check, count, readable)
 
 
 # ------------------------------------------------------------------ kayıt
@@ -2034,3 +2035,11 @@ def register(app):
     app.route("POST", API + "/glossary_terms/{id}/retire", term_retire)
     app.route("POST", API + "/glossary_terms/{id}/links", term_links)
     app.route("POST", API + "/glossary_terms/{id}/related", term_related)
+    privacy.register(app)
+
+
+def seed(db):
+    privacy.seed(db)
+
+
+from . import privacy  # noqa: E402  (Faz 2: KVKK ve sınıflandırma — aynı modülün parçası; tanımlar yukarıdakilere dayanır)

@@ -148,8 +148,10 @@ PAGES.glossary = async function glossaryPage(parts, params) {
   content(h('div', {class: 'panel'}, h('div', {class: 'toolbar wrap'}, search, domainSel), tabsBar, az), cards);
 };
 const TERM_FIELDS = ['name', 'abbreviation', 'synonyms', 'definition', 'domain_id', 'parent_id', 'owner', 'steward', 'calculation', 'format_rule', 'example',
-  'source_reference', 'classification', 'personal_data', 'is_critical', 'review_date'];
-const TERM_MATERIAL = ['name', 'abbreviation', 'synonyms', 'definition', 'domain_id', 'parent_id', 'calculation', 'format_rule', 'example', 'source_reference', 'classification', 'personal_data', 'is_critical'];
+  'source_reference', 'classification', 'personal_data', 'category_id', 'is_critical', 'review_date'];
+const TERM_MATERIAL = ['name', 'abbreviation', 'synonyms', 'definition', 'domain_id', 'parent_id', 'calculation', 'format_rule', 'example', 'source_reference', 'classification', 'personal_data', 'category_id', 'is_critical'];
+// Diğer dosyaların (privacy.js) tablo sayfasına ve kolon paneline eklediği bölümler: fn(kayıt, yenile) → düğüm
+const TABLE_EXTRAS = []; const COLUMN_EXTRAS = []; const TABLE_ACTIONS = [];
 DETAILS.glossary_terms = id => Router.go('glossary/' + id);
 
 async function termPage(id) {
@@ -304,6 +306,7 @@ async function columnPanel(id) {
     section(`Sözlük terimleri (${c.terms.length})`, c.terms.length ? h('ul', {class: 'mini'}, c.terms.map(g => h('li', {class: 'link', onclick: () => { Drawer.close(); Router.go('glossary/' + g.id); }},
       h('div', {class: 'chips'}, h('strong', {text: g.name}), termPill(g)), h('span', {class: 'cell-sub', text: g.definition}), g.format_rule ? h('span', {class: 'cell-sub', text: 'Biçim: ' + g.format_rule}) : null))) :
       h('div', {class: 'muted small', text: 'Bağlı terim yok'}), c.can_edit ? btn('Terim seç', () => columnTerms(c), 'ghost small') : null),
+    ...COLUMN_EXTRAS.map(fn => fn(c, () => columnPanel(id))),
     c.referenced_by.length ? section(`Bu kolona referans verenler (${c.referenced_by.length})`, h('ul', {class: 'mini'}, c.referenced_by.map(r => h('li', {class: 'link', onclick: () => columnPanel(r.id)},
       h('strong', {text: `${dgPath(r.schema_name, r.table_name)}.${r.name}`}))))) : null,
     c.changes.length ? section('Değişiklik geçmişi', h('ul', {class: 'mini'}, c.changes.map(x => h('li', {}, pill(META.option('catalog_changes', 'change', x.change), tone(x.change)), ' ',
@@ -384,7 +387,7 @@ async function bulkTables(ids, field, label) {
     })]);
 }
 
-const TABLE_FIELDS = ['business_name', 'description', 'domain_id', 'owner', 'steward', 'custodian', 'classification', 'certified', 'status'];
+const TABLE_FIELDS = ['business_name', 'description', 'domain_id', 'owner', 'steward', 'custodian', 'classification', 'retention_rule_id', 'certified', 'status'];
 async function tablePage(id) {
   const t = await api(`data_tables/${id}/context`); await list('data_domains');
   const e = t.effective; const reload = () => render();
@@ -393,7 +396,7 @@ async function tablePage(id) {
     t.can_edit && t.stats.technical_only ? btn(`Kaynak açıklamalarını benimse (${t.stats.technical_only})`, async () => {
       if (!await confirmDialog('Kaynak açıklamalarını benimse', `İş açıklaması boş olan ${t.stats.technical_only} kolonda kaynaktaki açıklama (ör. SAP metni, veritabanı yorumu) iş açıklaması olarak yazılacak. Sonradan düzenleyebilirsiniz.`, 'Benimse')) return;
       const r = await api(`data_tables/${id}/adopt-descriptions`, {method: 'POST', body: {}}); toast(`${r.adopted} açıklama benimsendi`); reload();
-    }, 'ghost') : null], [['Veri Kataloğu', 'catalog'], [t.source.name, 'datasource/' + t.source.id]]);
+    }, 'ghost') : null, ...TABLE_ACTIONS.map(fn => fn(t, reload))], [['Veri Kataloğu', 'catalog'], [t.source.name, 'datasource/' + t.source.id]]);
   const head = h('div', {class: 'grid wide-left'},
     h('div', {class: 'panel'},
       h('div', {class: 'chips'}, pill(META.option('data_tables', 'object_type', t.object_type), 'neutral'), t.classification ? pill(META.option('data_tables', 'classification', t.classification), tone(t.classification)) : null,
@@ -432,7 +435,7 @@ async function tablePage(id) {
       h('strong', {text: c.name}), h('span', {class: 'cell-sub', text: '→ ' + c.references_to}))))) : null);
   const changesTab = () => t.changes.length ? h('ul', {class: 'mini'}, t.changes.map(x => h('li', {}, h('div', {class: 'chips'}, pill(META.option('catalog_changes', 'change', x.change), tone(x.change)), h('strong', {text: x.object_name})),
     h('span', {class: 'cell-sub', text: [x.detail, fmt.datetime(x.created_at)].filter(Boolean).join(' · ')})))) : h('div', {class: 'muted small', text: 'İlk yüklemeden sonra değişiklik görülmedi.'});
-  content(head, tabs([{key: 'cols', label: 'Kolonlar', count: t.stats.columns, render: colsTab}, {key: 'refs', label: 'İlişkiler', count: t.referenced_by.length, render: refsTab},
+  content(head, ...TABLE_EXTRAS.map(fn => fn(t, reload)), tabs([{key: 'cols', label: 'Kolonlar', count: t.stats.columns, render: colsTab}, {key: 'refs', label: 'İlişkiler', count: t.referenced_by.length, render: refsTab},
     {key: 'changes', label: 'Değişiklik geçmişi', count: t.changes.length, render: changesTab}]));
 }
 function colSub(c) {
