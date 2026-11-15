@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-15 · Aşama: test sunucusunda HTTPS ile açık (https://tedarik.204-168-247-101.sslip.io), sentetik demo verisi yüklü; KS GRC iş modeli `grc` modülü olarak taşındı (K-015).
+Son güncelleme: 2026-11-15 · Aşama: uygulama tedarikçi portalından **GRC platformuna** dönüştü (K-016 – K-020; adı sonra belirlenecek, `TEDARIK_APP_NAME`). Test sunucusu: https://tedarik.204-168-247-101.sslip.io (sentetik demo verisi). KS GRC artık kullanılmıyor (K-016).
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -16,12 +16,16 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Entegrasyon: MCP uygulaması REST API'ye yazar.
 - Test sunucusunda TLS: sslip.io adı, projeye ait Caddy, 443/TLS-ALPN-01; 80. porttaki uygulamaya dokunulmaz (K-014).
 - KS GRC iş modeli bu altyapıda (`grc` modülü); kurumsal ve tedarikçi riskleri tek risk kaydında (K-015).
+- KS GRC kullanılmıyor; bu uygulama GRC platformudur (K-016). Kayıt kodları sunucuda üretilir (K-017).
+- Kurumsal risk yönetimi ISO 31000'e göre; her risk bir şirkete (kendi şirketimiz / müşteri) bağlı (K-018).
+- CMDB: ServiceNow Table API'den salt okunur senkron veya MCP itmesi; CI kuralları kurumsal risk açar (K-019).
+- İş sürekliliği ISO 22301'e, doküman yönetimi ISO 9001 7.5'e göre (K-020).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
 - Hedef ortam KS GRC'nin kurumsal profiliyle aynı: Docker, TLS sonlandıran ters vekil, tek kiracılı Entra.
 - Portalı yalnızca iç kullanıcılar kullanır; anketleri iç kullanıcılar yanıtlar.
-- Tek şirket (tek kiracı).
+- Tek kiracı; içinde birden çok şirket (grup şirketleri ve müşteriler) kayıtlıdır.
 - SAP ve Dynamics sütun başlıkları tahminidir (`transfer.py` içindeki `ALIASES`).
 - Başlangıç tedarikçi tipleri ve değerlendirme kriterleri öneridir.
 
@@ -83,6 +87,22 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **Demo verisi (2026-11-15):** `python -m tedarik.demo` (kurulumda `seed_demo`). Sentetik şirket: 10 birim, 28 ürün/hizmet, 45 tedarikçi (`DMO-` kodlu), 61 angajman, 57 sözleşme, 12 aylık SLA ölçümü, performans olayları ve değerlendirmeler, risk değerlendirme/karar/faaliyetleri, 3 anket kampanyası ve yanıtları; GRC: 3 standart (ISO/IEC 20000-1, CIS v8.1, ISO/IEC 27001 tedarikçi kontrolleri), 37 kontrol, 133 test sonucu, 4 denetim, 12 kanıt (dosyalı), 45 bulgu, 36 DÖF, 8 doküman, risk kataloğu ve 6 kurumsal risk. 9 demo kullanıcısı (her rol); geçici parolaları sunucuda yalnızca root'un okuyabildiği `/opt/tedarik/.demo-users` dosyasında. Yönetici, Kullanıcılar ekranından "Geçici parola ver" ile de yeni parola üretebilir. Demo yalnızca boş (veya yalnızca demo verisi olan) veritabanına yüklenir; iş kuralları uygulamanın kendi işlevleriyle uygulanır.
 - **KS GRC taşıması (2026-11-15, K-015):** `tedarik/modules/grc.py`. Çerçeve (standart, madde + uygulanabilirlik bildirimi, süreç, hedef, doküman), kontrol ve eşlemeleri, değiştirilemez kontrol çalışmaları (dondurulmuş tanım, kaynak bilgisi, kanıt sürümü/SHA-256), denetim yaşam döngüsü (kapsam sürüm koruması, plan dondurma), kanıt dosya sürümleri (veritabanında, indirmede bütünlük doğrulaması), bulgu ve DÖF (doğrulama aşaması, görevler ayrılığı), uyum göstergesi (KS GRC anlamı), GRC genel bakış. İç otomatik kontroller portal verisini denetler (6 kural) ve her sabah çalışır (`/etc/cron.d/tedarik-grc`). MCP otomatik kontrol sonucu yazar (`POST /api/tdr/executions`). Tek risk kaydı (göç 1) ve risk kataloğu. Arayüz: Uyum Panosu, kontrol ayrıntısı (sonuç kaydet, şimdi çalıştır, eşlemeler), denetim çalışma alanı, kanıt sürümleri, bulgu ve DÖF akışları; genel bakışta uyum kartları.
 - **Canlı kabul testi (2026-11-15):** `scripts/acceptance.py`, kurulum işinde `acceptance` girdisiyle HTTPS adrese karşı çalışır (23 senaryo: TLS ve güvenlik başlıkları, anonim erişim, tarayıcıda giriş ve zorunlu parola değişimi, 35 ekranın hatasız açılması, ana akışlar, hesap açma/sıfırlama, görüntüleyici sınırları, birim kapsamı, kanıt bütünlüğü, denetim → bulgu → DÖF → doğrulama → kapanış, iç otomatik kontrol, uyum göstergesi, risk, XSS, CSRF ve gövde sınırı, giriş hız sınırı, MCP en az yetki ve tekrar koruması, yanıt süreleri, telefon düzeni). Bulup düzelttikleri: telefonda filtre satırı yatay taşıyordu; vekil arkasında giriş hız sınırı tüm kullanıcıları tek adres sayıyordu (TEDARIK_TRUST_PROXY); yavaş ağda önceki ekranın geç yanıtı yeni ekranı eziyordu (yönlendiricide sıra numarası ve bekleyen yeniden çizim; tarayıcı testinde iki gerileme senaryosu). Son çalıştırma: 23/23 geçti (GitHub Actions çalıştırması 43710121994, 2026-11-15). Test sunucusunda "KABUL" işaretli birkaç kayıt (kanıt, bulgu, DÖF, risk, SLA ölçümü) ve devre dışı `kabul.*` hesapları bulunur; `kabul.yonetici` parolası kimsenin bilmediği rastgele bir değerdir.
+- **GRC platformu dönüşümü (2026-11-15, K-016 – K-020).** Gökhan Bey'in 13 maddelik isteği:
+  1. *Kontroller:* "Uyum ve denetim" menüsünde Kontroller, Kontrol Hedefleri, Denetimler, Bulgular, DÖF, Kanıtlar; kontrol hedefi detayında kontroller, etkinlik oranı ve ele aldığı riskler (eşleme düzenlenir).
+  2. *Süreç haritası:* ISO 9001 süreç yaklaşımıyla yeniden çizildi (yönetim, ana değer zinciri, destek); her süreçte risk, kontrol (başarısız sayısı), doküman, BİA ve tedarikçi etiketi; süreç detayında girdi/çıktı, alt süreçler ve tüm bağlar. Süreçler artık çekirdekte (`process_type`, `parent_id`, `position`, `inputs`, `outputs`).
+  3. *İlişkiler:* kontrol ↔ hedef ↔ süreç ↔ madde ↔ risk ↔ doküman ↔ bulgu ↔ BİA ↔ CI ↔ tedarikçi bağları; eksikler eklendi: hedef ↔ risk, doküman ↔ madde (`POST /documents/{id}/clauses`), bulgu → madde/süreç/risk/şirket ve kaynak, BİA → uygulama (CI)/tedarikçi/risk, plan → BİA/uygulama/doküman, tatbikat → bulgu. "İlişki Haritası" şemadan otomatik üretilir; "GRC Sağlık Kontrolü" 19 ilişki kuralını denetler (puan ihlal oranıyla).
+  4/11. *Kurumsal risk (ISO 31000):* şirket (kendi/müşteri) zorunlu, süreç, birim, tehdit/fırsat, etki alanı, hedef risk, danışılan paydaşlar, kaynak (elle, tedarikçi, anket, CMDB kuralı); risk kriterleri (olasılık/etki ölçekleri), kategori iştahı ve toleransı, değerlendirme dönemleri (ilerleme), KRİ ve değişmez ölçümler, seviye (politika sınırlarıyla), Risk Panosu (ısı haritası, seviye, şirket, kategori, kaynak, dönem, KRİ, en yüksek riskler).
+  5. *Menü:* tek sayfa uygulama; menü bir kez kurulur, tıklamada sayfa yenilenmez, kaydırma ve katlanmış gruplar korunur; etkin öğe görünür alana getirilir.
+  6. *İş sürekliliği (ISO 22301):* BİA (etki matrisi → MTPD ve kritiklik, RTO ≤ MTPD, RPO, MBCO, uygulama/tedarikçi/risk bağımlılıkları, dört gözle onay), planlar (adımlar dört evrede, kurtarma sırası, kapsadığı BİA'lar, revizyon), tatbikatlar (hedef/gerçekleşen kurtarma süresi, sonuç, alınan dersler, bulgu → DÖF), Süreklilik Panosu.
+  7. *GRC Takvimi:* denetim, tatbikat, risk dönemi, risk gözden geçirme ve faaliyet, kontrol testi, DÖF/bulgu hedefleri, doküman/BİA/plan gözden geçirme, kanıt geçerlilik sonu, sözleşme bitişi, anket ve tedarikçi değerlendirmesi; ay ve liste görünümü, tür süzgeci. Ayrıca "İşlerim".
+  8. *Dokümanlar (ISO 9001 7.5):* taslak → onayda → yayımlandı → geçersiz; değişiklik özeti, atanmış onaylayan, dört göz, değişmez revizyon ve dosya (SHA-256), gözden geçirme sıklığı, gizlilik, saklama süresi, süreç ve madde bağı.
+  9. *Arayüz:* Hetzner esintili açık tema (beyaz kenar menü, kırmızı vurgu), SVG ikonlar, üst çubuk ve Ctrl+K komut paleti (ekran ve kayıt araması), yönetici özeti (karşılama, sağlık puanı, alan kartları, 30 günlük ajanda, öncelikli iyileştirme alanları, ısı haritası), tüm detay panellerinde aynı düzen (durum çipleri, ölçü şeridi, sekmeler). Telefon düzeni denendi.
+  10. *CMDB:* `tedarik/servicenow.py` (Table API, sayfalama, artımlı senkron, yeniden deneme), `python -m tedarik.cmdb_sync` (gece görevi), MCP itmesi, CI ilişkileri, CMDB Panosu ve CI detayı; BİA uygulamaları CMDB'den seçilir.
+  11. *CI riskleri:* İS destek bitişi, uygulama destek bitişi, kritik yama, 100 günden uzun açık kalma; kural ve şirket başına kurumsal risk, etkilenen CI listesi, müşteri CI'ları müşteri riski olur.
+  12. *Kodlar:* tüm kayıt kodları sunucuda üretilir ve değiştirilemez (K-017); içe aktarım ve ilişkiler ad veya kodla çözülür.
+  13. *GRC incelemesi:* yukarıdaki ilişki eksikleri tamamlandı; sağlık kontrolü bu ilişkileri sürekli denetler.
+  - Demo verisi genişledi: 6 şirket (3 grup şirketi, 3 müşteri), 30 süreçlik harita, 10 iştah beyanı, 4 risk dönemi, 10 yeni kurumsal risk (fırsat dahil), 7 KRİ, 39 CI (destek dışı, yama, açık kalma örnekleri), CMDB kural riskleri, 8 BİA, 4 plan, 5 tatbikat, revizyonlu ve dosyalı dokümanlar. Önceki sürümle yüklenmiş demoya bölüm bölüm eklenir (kullanıcılara dokunmaz).
+  - Testler: 99 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı smoke testi (yeni ekranlar dahil) ve yerel kabul provası (23/23, 54 ekran).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
@@ -96,6 +116,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **Test adresi sslip.io üzerinde** (üçüncü taraf DNS); kurumsal kullanım için kurum alan adı gerekir (K-014).
 - **KS GRC verisinin taşınması yapılmadı:** iş modeli taşındı; KS GRC'deki gerçek kayıtları (standart eşlemeleri, kontroller, denetimler, kanıt dosyaları) aktaracak içe aktarım henüz yok.
 - **CI güvenlik kapıları eksik** (gitleaks, trivy, bandit, pip-audit).
+- **ServiceNow bağlantısı gerçek kurumda denenmedi:** bağlayıcı sahte sunucuyla test edildi; özel alan adları (`u_os_end_of_support` vb.) kurumun CMDB'sine göre eşlenmeli. Test sunucusundaki CI'lar sentetik MCP itmesidir.
+- **Hatırlatma bildirimi yok:** takvim ve İşlerim uygulama içinde; e-posta/Teams bildirimi yok.
+- **Veri yönetişimi modülü** henüz yok (Gökhan Bey ayrıca konuşmak istiyor).
 
 ## Sıradaki adımlar (sırayla)
 
@@ -109,11 +132,18 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 7. ~~**Periyodik işler.**~~ Tamamlandı (2026-11-13).
 8. ~~**MCP sözleşmesi.**~~ Tamamlandı (2026-11-13): `docs/MCP_SOZLESMESI.md`. Kalan: KS GRC tarafında örnek kontrollerin tanımlanması.
 9. ~~**TLS, demo verisi, KS GRC taşıması.**~~ Tamamlandı (2026-11-15).
-10. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
+10. ~~**GRC platformu dönüşümü** (13 madde).~~ Tamamlandı (2026-11-15).
+10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
+10b. **Veri yönetişimi modülü:** kapsam görüşmesi (veri sahipliği, sınıflandırma, KVKK envanteri, veri kalitesi kuralları).
+10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
 11. **CI güvenlik kapıları:** gitleaks, trivy, bandit, pip-audit.
 12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler
+
+- Uygulamanın adı (şimdilik "GRC Platformu"; `TEDARIK_APP_NAME` ile değişir).
+- ServiceNow örnek adresi ve salt okunur hizmet hesabı; CMDB'deki destek bitişi, yama ve açılış alanlarının adları.
+- Veri yönetişimi modülünün kapsamı için görüşme.
 
 - SAP, Dynamics ve dış kaynak yönetim sisteminden örnek dışa aktarım (sütun başlıkları yeterli).
 - Tedarikçi tipleri ve iş birimleri listesi.

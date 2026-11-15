@@ -36,28 +36,28 @@ def call(base, method, path, body=None):
 
 
 def seed(base):
-    unit = call(base, "POST", "org_units", {"code": "BT", "name": "Bilgi Teknolojileri"})["id"]
-    ops = call(base, "POST", "org_units", {"code": "OPS", "name": "Operasyon"})["id"]
-    item = call(base, "POST", "catalog_items", {"code": "DC", "name": "Veri merkezi barındırma"})["id"]
-    s1 = call(base, "POST", "suppliers", {"code": "S1", "name": "Örnek Bilişim A.Ş.", "tier": "critical", "owner": "ayse"})["id"]
-    s2 = call(base, "POST", "suppliers", {"code": "S2", "name": "Deneme Lojistik Ltd.", "tier": "important"})["id"]
-    e1 = call(base, "POST", "engagements", {"code": "E1", "supplier_id": s1, "catalog_item_id": item, "org_unit_id": unit,
+    unit = call(base, "POST", "org_units", {"name": "Bilgi Teknolojileri"})["id"]
+    ops = call(base, "POST", "org_units", {"name": "Operasyon"})["id"]
+    item = call(base, "POST", "catalog_items", {"name": "Veri merkezi barındırma"})["id"]
+    s1 = call(base, "POST", "suppliers", {"name": "Örnek Bilişim A.Ş.", "tier": "critical", "owner": "ayse"})["id"]
+    s2 = call(base, "POST", "suppliers", {"name": "Deneme Lojistik Ltd.", "tier": "important"})["id"]
+    e1 = call(base, "POST", "engagements", {"supplier_id": s1, "catalog_item_id": item, "org_unit_id": unit,
                                             "business_owner": "ayse", "beneficiary": "customer", "customer_name": "Müşteri A"})["id"]
-    call(base, "POST", "engagements", {"code": "E2", "supplier_id": s2, "catalog_item_id": item, "org_unit_id": ops})
-    call(base, "POST", "contracts", {"code": "K1", "supplier_id": s1, "title": "Barındırma sözleşmesi",
+    call(base, "POST", "engagements", {"supplier_id": s2, "catalog_item_id": item, "org_unit_id": ops})
+    call(base, "POST", "contracts", {"supplier_id": s1, "title": "Barındırma sözleşmesi",
                                      "end_date": (date.today() + timedelta(days=40)).isoformat()})
-    sla = call(base, "POST", "sla_definitions", {"engagement_id": e1, "code": "UP", "name": "Erişilebilirlik", "target_value": 99.5})["id"]
+    sla = call(base, "POST", "sla_definitions", {"engagement_id": e1, "name": "Erişilebilirlik", "target_value": 99.5})["id"]
     call(base, "POST", "sla_measurements", {"sla_id": sla, "period_start": date.today().replace(day=1).isoformat(), "actual_value": 99.1})
     call(base, "POST", "performance_events", {"supplier_id": s1, "event_type": "incident", "description": "Kesinti",
                                               "occurred_at": date.today().isoformat()})
-    call(base, "POST", "supplier_risks", {"code": "R1", "title": "Tek tedarikçiye bağımlılık", "supplier_id": s1, "category": "concentration",
+    call(base, "POST", "supplier_risks", {"title": "Tek tedarikçiye bağımlılık", "supplier_id": s1, "category": "concentration",
                                           "owner": "ayse", "appetite": 6, "likelihood": 4, "impact": 5, "review_date": "2099-01-01",
                                           "cause": "Alternatif tedarikçi olmadığı için", "risk_event": "kesinti hizmeti durdurabilir",
                                           "consequence": "müşteri taahhüdü aşılabilir"})
     std = call(base, "POST", "standards", {"code": "ISO/IEC 27001", "name": "Bilgi güvenliği", "version": "2022"})["id"]
     for code, title in (("A.5.19", "Tedarikçi ilişkilerinde bilgi güvenliği"), ("A.5.22", "Tedarikçi hizmetlerinin izlenmesi")):
         call(base, "POST", "clauses", {"standard_id": std, "code": code, "title": title})
-    call(base, "POST", "controls", {"code": "TDR-01", "name": "Tedarikçi sahibi atanmış", "execution_mode": "automatic",
+    call(base, "POST", "controls", {"name": "Tedarikçi sahibi atanmış", "execution_mode": "automatic",
                                     "automation": "supplier.owner", "frequency": "weekly"})
 
 
@@ -112,7 +112,6 @@ def exercise(page, out, base, errors):
     page.locator("#topActions button", has_text="Yeni").click()
     page.locator("#detailFooter button", has_text="Oluştur").click()
     expect(page.locator("#detail .field.invalid").first).to_be_visible()
-    page.locator('#detail [name="code"]').fill("S9")
     page.locator('#detail [name="name"]').fill("Arayüz Tedarikçisi")
     page.locator('#detail [name="tier"]').select_option("critical")
     page.locator("#detailFooter button", has_text="Oluştur").click()
@@ -137,7 +136,6 @@ def exercise(page, out, base, errors):
     # uyum (GRC): manuel kontrol, eşleme, test sonucu -> bulgu -> DÖF -> doğrulama; otomatik kontrol; denetim; pano
     go(page, "r/controls", "Kontroller")
     page.locator("#topActions button", has_text="Yeni").click()
-    page.locator('#detail [name="code"]').fill("TDR-02")
     page.locator('#detail [name="name"]').fill("Kritik sözleşmelerde denetim hakkı")
     page.locator('#detail [name="criticality"]').select_option("high")
     page.locator('#detail [name="owner"]').fill("dev")
@@ -171,7 +169,7 @@ def exercise(page, out, base, errors):
     page.keyboard.press("Escape")
     checks.append("grc_test_bulgu_dof")
     go(page, "r/controls", "Kontroller")
-    page.locator("[data-row]", has_text="TDR-01").click()
+    page.locator("[data-row]", has_text="Tedarikçi sahibi atanmış").click()
     page.locator("#detailFooter button", has_text="Şimdi çalıştır").click()
     expect(page.locator("#toast")).to_contain_text("Kontrol")
     page.keyboard.press("Escape")
@@ -185,12 +183,53 @@ def exercise(page, out, base, errors):
     expect(page.locator("#pageTitle")).to_contain_text("Tedarikçi yönetimi iç denetimi")
     page.locator("#topActions button", has_text="Denetimi başlat").click()
     expect(page.locator("#content")).to_contain_text("Devam ediyor")
-    page.locator("#content tr", has_text="TDR-02").locator("button", has_text="Test et").click()
+    page.locator("#content tr", has_text="Kritik sözleşmelerde denetim hakkı").locator("button", has_text="Test et").click()
     page.locator("#resStatus").select_option("pass")
     page.locator("#modalFooter button", has_text="Sonucu kaydet").click()
     expect(page.locator("#content")).to_contain_text("%100")
     page.screenshot(path=str(out / "05-denetim.png"), full_page=True)
     checks.append("grc_denetim")
+    # GRC platformu ekranları: risk panosu, süreklilik (BİA → etki matrisi → onaya gönder), takvim, sağlık, haritalar, palet
+    go(page, "risk", "Risk Panosu")
+    expect(page.locator("#content .heat")).to_be_visible()
+    page.screenshot(path=str(out / "06-risk-panosu.png"), full_page=True)
+    go(page, "r/processes", "Süreçler")
+    page.locator("#topActions button", has_text="Yeni").click()
+    page.locator('#detail [name="name"]').fill("Ödeme işlemleri")
+    page.locator('#detail [name="process_type"]').select_option("core")
+    page.locator("#detailFooter button", has_text="Oluştur").click()
+    expect(page.locator("#detailKicker")).to_have_text("Süreç")
+    page.locator("#detail button", has_text="+ BİA").click()
+    page.locator('#detail [name="rto_hours"]').fill("2")
+    page.locator('#detail [name="rpo_hours"]').fill("1")
+    page.locator("#detailFooter button", has_text="Oluştur").click()
+    expect(page.locator("#detailKicker")).to_have_text("İş etki analizi")
+    page.locator("#detail .tab", has_text="Etki matrisi").click()
+    page.locator("#detail button", has_text="Etki matrisini düzenle").click()
+    page.locator('#modal select[data-cat="financial"][data-win="h4"]').select_option("4")
+    expect(page.locator('#modal select[data-cat="financial"][data-win="m1"]')).to_have_value("4")   # sonraki hücreler yükselir
+    page.locator("#modalFooter button", has_text="Kaydet").click()
+    expect(page.locator("#toast")).to_contain_text("Etki matrisi kaydedildi")
+    page.locator("#detail .tab", has_text="Özet").click()
+    expect(page.locator("#detail .stat-strip")).to_contain_text("4 saat")
+    page.locator("#detailFooter button", has_text="Onaya gönder").click()
+    expect(page.locator("#detail .chips")).to_contain_text("Onayda")
+    page.screenshot(path=str(out / "07-bia.png"), full_page=True)
+    page.keyboard.press("Escape")
+    checks.append("bia_etki_matrisi_ve_onaya_gonderim")
+    go(page, "process-map", "Süreç Haritası")
+    expect(page.locator(".band.core .proc", has_text="Ödeme işlemleri")).to_be_visible()
+    go(page, "map", "İlişki Haritası")
+    expect(page.locator(".map-box.sel")).to_have_count(1)
+    go(page, "calendar", "GRC Takvimi")
+    expect(page.locator(".cal .day").first).to_be_visible()
+    go(page, "health", "GRC Sağlık Kontrolü")
+    expect(page.locator(".check").first).to_be_visible()
+    page.keyboard.press("Control+k")
+    page.locator("#palette .pal-input").fill("örnek")
+    expect(page.locator(".pal-list li[role=option]", has_text="Örnek Bilişim")).to_be_visible()
+    page.keyboard.press("Escape")
+    checks.append("grc_platform_ekranlari")
     go(page, "compliance", "Uyum Panosu")
     expect(page.locator("#content")).to_contain_text("Standartlara göre")
     page.screenshot(path=str(out / "05b-uyum-panosu.png"), full_page=True)
@@ -217,7 +256,6 @@ def exercise(page, out, base, errors):
     checks.append("anket_kurucu")
     # kampanya
     page.locator("#topActions button", has_text="Kampanya başlat").click()
-    page.locator('#detail [name="code"]').fill("Q4")
     page.locator('#detail [name="name"]').fill("4. çeyrek memnuniyet")
     page.locator("#detailFooter button", has_text="Oluştur").click()
     expect(page.locator("#pageTitle")).to_have_text("4. çeyrek memnuniyet")
@@ -251,7 +289,7 @@ def exercise(page, out, base, errors):
     expect(page.locator(".thanks")).to_contain_text("Teşekkürler")
     checks.append("anket_yanit")
     page.goto(base + "/#/r/survey_campaigns")
-    page.locator("[data-row]", has_text="Q4").click()
+    page.locator("[data-row]", has_text="4. çeyrek memnuniyet").click()
     expect(page.locator("#content")).to_contain_text("Genel puan")
     expect(page.locator("#content")).to_contain_text("Tedarikçi bazında")
     page.screenshot(path=str(out / "06-anket-sonuc.png"), full_page=True)
@@ -260,7 +298,7 @@ def exercise(page, out, base, errors):
     go(page, "transfer", "Aktarım")
     page.locator(".type-card", has_text="Birimler").click()
     csv = Path(tempfile.mkdtemp()) / "birimler.csv"
-    csv.write_text("Kod;Ad;Yönetici\r\nBT;Başka ad;mehmet\r\nFIN;Finans;\r\n", encoding="utf-8-sig")
+    csv.write_text("Ad;Yönetici\r\nBilgi Teknolojileri;mehmet\r\nFinans;\r\n", encoding="utf-8-sig")   # kod sunucuda üretilir
     page.locator("#importFile").set_input_files(str(csv))
     page.locator("button", has_text="Dene (kayıt yazmaz)").click()
     expect(page.locator("#content")).to_contain_text("Deneme sonucu")

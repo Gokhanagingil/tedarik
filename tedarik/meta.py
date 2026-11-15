@@ -38,7 +38,7 @@ def metadata(c):
         resources[res.name] = describe(res, c.principal)
     return {"resources": resources, "modules": list(c.app.config.modules),
             "roles": [{"value": k, "label": v} for k, v in authz.ROLES.items()],
-            "auth_mode": c.app.config.auth_mode, "user": c.principal.public(),
+            "auth_mode": c.app.config.auth_mode, "user": c.principal.public(), "app_name": c.app.config.app_name,
             "permissions": {need: c.principal.role != "MACHINE" and c.principal.can(need)
                             for need in authz.NEEDED}}
 

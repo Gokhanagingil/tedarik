@@ -46,7 +46,8 @@ class Icgoruler(Base):
         work = self.ok("GET", "/my-work")
         self.assertEqual(([r["id"] for r in work["risks"]], [f["id"] for f in work["findings"]]), ([self.risk], [finding]))
         health = {c["key"]: c for c in self.ok("GET", "/health-check")["checks"]}
-        self.assertEqual(health["high_risks_no_control"]["count"], 1)        # yüksek risk, kontrol/faaliyet yok
+        self.assertEqual((health["high_risks_no_control"]["count"], health["high_risks_no_control"]["population"]), (1, 1))
+        self.assertTrue(0 < self.ok("GET", "/health-check")["score"] < 100)    # puan ihlal oranıyla hesaplanır
         self.assertEqual(health["controls_no_clause"]["count"], 1)
         self.assertEqual(health["objectives_no_control"]["count"], 0)
         self.assertEqual(health["core_process_no_bia"]["items"][0]["id"], self.process)

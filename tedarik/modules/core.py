@@ -237,11 +237,19 @@ DEFAULT_POLICIES = (
     ("survey.cadence_months", {"critical": 12, "important": 12, "standard": 24},
      "Kritiklik seviyesine göre memnuniyet anketi sıklığı (ay)"),
     ("schedule.warning_days", 30, "Yaklaşan iş olarak gösterilecek gün sayısı"),
+    ("core.default_company", "SRK-0001", "Şirket seçilmeden açılan kayıtların (ör. anket sinyalinden veya içe aktarımdan "
+     "doğan riskler) bağlanacağı kendi şirketimizin kodu"),
 )
 
 
 def default_company(db):
-    """Tek aktif "kendi şirketimiz" varsa onu döner (formda ön seçim ve eski kayıtlar için); yoksa None."""
+    """Şirketi seçilmeden açılan kaydın (ör. anket sinyalinden doğan risk) şirketi: `core.default_company`
+    politikasındaki kendi şirketimiz; politika yoksa ve tek aktif kendi şirketimiz varsa o; yoksa None."""
+    code = policy(db, "core.default_company")
+    if code:
+        row = one(db, "SELECT id FROM tdr_companies WHERE code=? AND kind='own' AND active=1", (code,))
+        if row:
+            return row["id"]
     own = rows(db, "SELECT id FROM tdr_companies WHERE kind='own' AND active=1 ORDER BY id LIMIT 2")
     return own[0]["id"] if len(own) == 1 else None
 

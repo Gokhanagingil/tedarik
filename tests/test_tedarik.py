@@ -253,8 +253,13 @@ class Arayuz(Base):
         self.assertNotIn("<script>", page.content)        # satır içi betik yok (CSP)
         status, js = self.app.dispatch("GET", "/static/app.js", {})
         self.assertEqual((status, js.content_type), (200, "application/javascript; charset=utf-8"))
-        self.assertNotIn("innerHTML", js.content)                  # sunucu verisi HTML olarak yorumlanmaz
-        self.assertNotIn("style=", js.content)                    # satır içi stil yok (style-src-attr 'none')
+        self.assertIn('<script src="/static/pages.js"', page.content)
+        for name in ("app.js", "pages.js"):
+            status, js = self.app.dispatch("GET", "/static/" + name, {})
+            self.assertEqual(status, 200)
+            self.assertNotIn("innerHTML", js.content)              # sunucu verisi HTML olarak yorumlanmaz
+            self.assertNotIn("style=", js.content)                # satır içi stil yok (style-src-attr 'none')
+            self.assertNotIn("http", js.content.replace("http://www.w3.org/2000/svg", ""))   # dış kaynak yok
         self.assertEqual(self.app.dispatch("GET", "/static/app.css", {})[0], 200)
         self.assertEqual(self.app.dispatch("GET", "/static/yok.js", {})[0], 404)
         local = self.make(TEDARIK_AUTH_MODE="local")

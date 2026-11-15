@@ -23,8 +23,12 @@ class KurumsalRisk(Base):
         self.assertTrue(risk["code"].startswith("RSK-"))
         customer = self.ok("POST", "/companies", {"name": "Müşteri Bankası A.Ş.", "kind": "customer"})["id"]
         self.ok("POST", "/companies", {"name": "İkinci Grup Şirketi", "kind": "own"})
-        self.assertEqual(self.call("POST", "/supplier_risks", {"title": "x", "category": "technology", "owner": "a",
-                                                               "entity_name": "y"})[0], 400)    # iki kendi şirket: seçim zorunlu
+        body = {"title": "x", "category": "technology", "owner": "a", "entity_name": "y"}
+        auto = self.ok("POST", "/supplier_risks", body)["id"]          # şirket seçilmezse politikadaki varsayılan şirket
+        self.assertEqual(self.ok("GET", f"/supplier_risks/{auto}")["company_id"], own["id"])
+        policy = next(p for p in self.ok("GET", "/policies") if p["code"] == "core.default_company")
+        self.ok("PATCH", f"/policies/{policy['id']}", {"value_json": "null"})
+        self.assertEqual(self.call("POST", "/supplier_risks", body)[0], 400)    # varsayılan yok, iki kendi şirket: seçim zorunlu
         rid2 = self.risk(company_id=customer)
         self.assertEqual(self.ok("GET", f"/supplier_risks?company_id={customer}")[0]["id"], rid2)
 

@@ -54,8 +54,8 @@ def _risk_company_and_scores(db):
         db.execute("UPDATE tdr_supplier_risks SET company_id=? WHERE company_id IS NULL", (own_id,))
     db.execute("UPDATE tdr_supplier_risks SET inherent_score=likelihood*impact WHERE inherent_score IS NULL")
     db.execute("""UPDATE tdr_supplier_risks SET residual_score=(SELECT a.residual FROM tdr_risk_assessments a
-        WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.id DESC LIMIT 1), last_assessed_at=(SELECT a.assessed_at FROM
-        tdr_risk_assessments a WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.id DESC LIMIT 1)
+        WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.assessed_at DESC, a.id DESC LIMIT 1), last_assessed_at=(SELECT a.assessed_at FROM
+        tdr_risk_assessments a WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.assessed_at DESC, a.id DESC LIMIT 1)
         WHERE residual_score IS NULL""")
     db.execute("""UPDATE tdr_supplier_risks SET source=CASE WHEN origin_ref LIKE 'survey:%' THEN 'survey'
         WHEN supplier_id IS NOT NULL THEN 'supplier' ELSE 'manual' END WHERE source='manual'""")

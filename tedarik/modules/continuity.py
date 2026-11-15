@@ -422,8 +422,10 @@ def overview(c):
     today = date.today().isoformat()
     months = int(policy(db, "bcm.exercise_months", 12))
     limit = (date.today() - timedelta(days=round(months * 30.44))).isoformat()
-    processes = one(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1")["n"]
-    covered = one(db, "SELECT COUNT(DISTINCT process_id) AS n FROM tdr_bias WHERE status='approved'")["n"]
+    # kapsam ana (değer) süreçlerine göre ölçülür: ISO 22301 8.2.2 kritik faaliyetleri BİA ile belirler
+    processes = one(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1 AND process_type='core'")["n"]
+    covered = one(db, """SELECT COUNT(DISTINCT b.process_id) AS n FROM tdr_bias b JOIN tdr_processes p ON p.id=b.process_id
+        WHERE b.status='approved' AND p.active=1 AND p.process_type='core'""")["n"]
     plans = rows(db, """SELECT p.id, p.code, p.title, p.status, (SELECT MAX(x.actual_date) FROM tdr_bc_exercises x
         WHERE x.plan_id=p.id AND x.status='completed') AS last_exercise FROM tdr_bc_plans p WHERE p.status='approved'""")
     gaps = rows(db, """SELECT x.id, x.code, x.title, x.target_recovery_minutes, x.achieved_recovery_minutes, p.code AS plan_code

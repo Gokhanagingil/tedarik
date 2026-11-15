@@ -67,6 +67,17 @@ class Dokuman(Base):
         self.assertEqual(self.call("POST", "/documents", {"title": "x"}, app=unit_user)[0], 403)
         self.assertTrue(self.ok("GET", f"/documents/{self.doc}")["code"].startswith("DOK-"))
 
+    def test_madde_eslemesi(self):
+        standard = self.ok("POST", "/standards", {"code": "ISO 9001", "name": "Kalite yönetim sistemi", "version": "2015"})["id"]
+        clause = self.ok("POST", "/clauses", {"standard_id": standard, "code": "7.5", "title": "Dokümante edilmiş bilgi"})["id"]
+        doc = self.ok("POST", f"/documents/{self.doc}/clauses", {"clause_ids": [clause]}, app=self.author)
+        self.assertEqual([c["id"] for c in doc["clauses"]], [clause])
+        self.assertEqual([d["id"] for d in self.ok("GET", f"/clauses/{clause}/context")["documents"]], [self.doc])
+        self.assertEqual(self.call("POST", f"/documents/{self.doc}/clauses", {"clause_ids": [999]})[0], 400)
+        viewer = self.make(role="VIEWER", user="izleyici")
+        self.assertEqual(self.call("POST", f"/documents/{self.doc}/clauses", {"clause_ids": []}, app=viewer)[0], 403)
+        self.assertEqual(self.ok("POST", f"/documents/{self.doc}/clauses", {"clause_ids": []})["clauses"], [])
+
     def test_eski_durumlarin_gocu(self):
         from tedarik.migrate import _document_lifecycle
         with self.db() as db:

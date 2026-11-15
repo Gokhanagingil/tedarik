@@ -12,6 +12,8 @@ HTTPS üzerinden `X-API-Key: <TEDARIK_API_KEY>` (en az 32 karakter; sunucuda `/o
 | `sla_measurements` | Evet | Evet, yalnızca `"source": "mcp"` |
 | `controls`, `executions`, `evidence` (GRC) | Evet | `executions`: yalnızca otomatik kontrole `"source": "mcp"`; `evidence/upload` |
 | `performance_events` | Evet | Evet, yalnızca `"source": "mcp"` |
+| `cmdb_cis`, `cmdb_relations`, `ci_exposures`, `risk_cis`, `companies` | Evet | `POST /api/tdr/cmdb/cis/bulk` (CMDB itmesi, Akış 5) |
+| `kris`, `kri_values` | Evet | `kri_values`: kaynak otomatik `"mcp"` olur (Akış 6) |
 | `/api/health` | 200 | — |
 | `/api/tdr/schedule` (takvim: geciken değerlendirme, anket ve risk gözden geçirmeleri) | Evet | — |
 
@@ -65,6 +67,33 @@ KS GRC `POST /api/executions` ile aynı alanlar: `POST /api/tdr/executions`
 - Okuma: `GET /api/tdr/controls?execution_mode=automatic&active=1`, `GET /api/tdr/executions?control_id=`.
 
 Portal kendi verisi üzerindeki kontrolleri ayrıca iç kuralla çalıştırır (`POST /api/tdr/controls/{id}/run`, `POST /api/tdr/grc/run-automatic`; yalnızca kullanıcı oturumu). Aşağıdaki tablo, KS GRC ayrı uygulama olarak kaldığı sürece geçerlidir.
+
+## Akış 5: CMDB itmesi (K-019)
+
+Portal ServiceNow'a doğrudan bağlanabilir (`TEDARIK_SN_INSTANCE`, salt okunur Table API, gece senkronu). Doğrudan bağlantı
+kurulamıyorsa MCP aynı veriyi iter. `POST /api/tdr/cmdb/cis/bulk` (en çok 5000 öğe, 20000 ilişki; 8 MB):
+
+```json
+{"items": [{"sys_id": "9f3c...", "name": "srv-itsm-db01", "ci_class": "server", "company": "Demo Teknoloji",
+            "environment": "production", "operational_status": "operational", "business_criticality": "critical",
+            "os": "Oracle Linux", "os_version": "7.9", "os_eos_date": "2024-12-31", "last_patch_date": "2026-10-20",
+            "missing_critical_patches": 2, "last_boot_at": "2026-07-01T03:00:00Z", "fqdn": "srv-itsm-db01.ornek"}],
+ "relations": [{"parent": "<uygulama sys_id>", "child": "<sunucu sys_id>", "type": "Depends on::Used by", "sys_id": "..."}]}
+```
+
+- `sys_id` tekil anahtardır; aynı öğe ikinci kez gelirse güncellenir, değişmeyen sayılır. Öğe başına hata diğerlerini durdurmaz (`errors`).
+- `ci_class`: `business_app`, `application`, `server`, `database`, `network`, `cloud`, `other`. `company`, şirketin adı veya `servicenow_ref` değeriyle eşlenir; eşlenmeyen CI'dan risk açılmaz (sağlık kontrolünde görünür).
+- Her itme değişmez bir `cmdb_sync_runs` kaydı bırakır ve CI risk kurallarını çalıştırır: destek süresi bitmiş işletim sistemi (`os_eos`) ve uygulama (`app_eos`), eksik veya gecikmiş kritik yama (`patch`, varsayılan 35 gün), uzun süre yeniden başlatılmama (`uptime`, varsayılan 100 gün). Kural ve şirket başına tek kurumsal risk açılır ve etkilenen CI'lar riske bağlanır; eşikler `cmdb.rules` politikasındadır.
+
+## Akış 6: Anahtar risk göstergesi ölçümü
+
+`GET /api/tdr/kris?active=1` → göstergeler, eşikler ve yön. `POST /api/tdr/kri_values`:
+
+```json
+{"kri_id": 3, "period": "2026-11-01", "value": 7, "note": "approved-query:patch-age:v1", "idempotency_key": "mcp-kri-3-2026-11"}
+```
+
+Durum (yeşil, sarı, kırmızı) eşiklere göre sunucuda hesaplanır; (gösterge, dönem) tekildir; ölçüm değiştirilemez.
 
 ## KS GRC için kanıt (örnek otomatik kontroller)
 

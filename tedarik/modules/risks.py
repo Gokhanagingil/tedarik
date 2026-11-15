@@ -215,7 +215,9 @@ RISKS.before_save = _risk_scores
 
 
 def latest(db, risk_id):
-    return one(db, "SELECT * FROM tdr_risk_assessments WHERE risk_id=? ORDER BY id DESC LIMIT 1", (risk_id,))
+    """En son tarihli değerlendirme (aynı anda yazılanlarda son kayıt)."""
+    return one(db, "SELECT * FROM tdr_risk_assessments WHERE risk_id=? ORDER BY assessed_at DESC, id DESC LIMIT 1",
+               (risk_id,))
 
 
 def decide(db, current, proposal, details, principal):
@@ -353,8 +355,9 @@ def record_assessment(db, risk, assessor, rationale, total, credits, assessed_at
         "residual, appetite, snapshot, cycle_id) VALUES (?,?,?,?,?,?,?,?,?,?)",
         (risk["id"], assessed_at, assessor, rationale, inherent, float(total * 100), residual,
          risk["appetite"], json.dumps(snapshot, ensure_ascii=False, default=str), cycle["id"] if cycle else None)).lastrowid
+    newest = latest(db, risk["id"])               # geçmiş tarihli kayıt (ör. dönem aktarımı) özeti değiştirmez
     db.execute("UPDATE tdr_supplier_risks SET residual_score=?, risk_level=?, last_assessed_at=? WHERE id=?",
-               (residual, level_of(db, residual), assessed_at, risk["id"]))
+               (float(newest["residual"]), level_of(db, float(newest["residual"])), newest["assessed_at"], risk["id"]))
     return record_id
 
 
@@ -434,7 +437,7 @@ ACTIONS.scope = via("supplier_risks", "risk_id")
 def risk_context(c):
     authz.check(c.principal, RISKS, "read")
     risk = crud.get(c.db, RISKS, c.params["id"])
-    risk["assessments"] = rows(c.db, "SELECT * FROM tdr_risk_assessments WHERE risk_id=? ORDER BY id DESC",
+    risk["assessments"] = rows(c.db, "SELECT * FROM tdr_risk_assessments WHERE risk_id=? ORDER BY assessed_at DESC, id DESC",
                                (risk["id"],))
     for item in risk["assessments"]:
         item["snapshot"] = json.loads(item["snapshot"])

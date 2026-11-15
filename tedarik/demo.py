@@ -20,6 +20,7 @@ from . import audit, crud
 from .auth import Principal
 from .config import Config
 from .db import one, rows
+from .demo_platform import SECTIONS, PlatformSections
 from .schema import RESOURCES
 
 TAG = "Sentetik demo verisi"
@@ -112,7 +113,7 @@ TYPE_NAMES = {"HW": "Donanım", "SW": "Yazılım ve Lisans", "CLOUD": "Bulut Hiz
               "FACILITY": "Tesis ve Veri Merkezi"}
 
 
-class Seeder:
+class Seeder(PlatformSections):
     def __init__(self, db, app):
         self.db, self.app, self.rnd = db, app, random.Random(20261115)
         self.ids = {}
@@ -121,6 +122,8 @@ class Seeder:
         return self.app.enabled(module)
 
     def add(self, res, data, created_days_ago=None):
+        if RESOURCES[res].code_prefix:                 # kodu sunucu üretir (K-017); demo da elle kod vermez
+            data = {k: v for k, v in data.items() if k != "code"}
         record_id = crud.insert(self.db, RESOURCES[res], data, None)
         if created_days_ago is not None and "created_at" in RESOURCES[res].fields:
             self.db.execute(f"UPDATE {RESOURCES[res].table} SET created_at=? WHERE id=?",
@@ -569,6 +572,8 @@ class Seeder:
                 "version": "1." + str(r.randint(0, 4)), "approved_by": "Selin Aydın" if approved_ago else None,
                 "approved_on": day(-approved_ago) if approved_ago else None, "review_date": day(review) if review else None,
                 "description": TAG})
+        from .migrate import _document_lifecycle
+        _document_lifecycle(db)                        # K-020: yürürlükteki dokümanlar ilk revizyonla yayımlanır
         # kontroller: KS GRC senaryoları + tedarikçi yönetimi
         ctl = {}
         units = {"automatic": "BTA", "manual": "BGV"}
@@ -832,20 +837,44 @@ class Seeder:
         for c, t in pairs:
             self.db.execute(f"INSERT INTO tdr_{table} (control_id, {col}) VALUES (?,?) ON CONFLICT DO NOTHING", (c, t))
 
-    def resume_grc(self):
-        """Tedarikçi demosu yüklü veritabanına yalnızca GRC bölümünü ekler (kimlikleri veritabanından okur)."""
-        self.ids["unit"] = {r["code"]: r["id"] for r in rows(self.db, "SELECT id, code FROM tdr_org_units")}
+    def _context(self):
+        """Önceki sürümle yüklenmiş demoda kimlikleri veritabanından okur (kodlar sürümler arasında farklıdır)."""
+        self.ids["unit"] = {code: one(self.db, "SELECT id FROM tdr_org_units WHERE name=?", (name,))["id"]
+                            for code, name, _, _ in UNITS}
         self.suppliers = [{"id": r["id"], "tier": r["tier"], "status": r["status"], "name": r["name"]}
-                          for r in rows(self.db, "SELECT * FROM tdr_suppliers WHERE code LIKE 'DMO-%' ORDER BY code")]
-        self.grc()
-        return "GRC_ADDED"
+                          for r in rows(self.db, "SELECT * FROM tdr_suppliers WHERE description LIKE ? ORDER BY id", (f"%{TAG}%",))]
+
+    def sections(self):
+        added = []
+        for name, module in SECTIONS:
+            if self.enabled(module) and not self._done(name):
+                getattr(self, name)()
+                self._mark(name)
+                added.append(name)
+        self.finalize_risks()
+        return added
+
+    def resume(self):
+        """Yüklü demoya yeni sürümün bölümlerini ekler; kullanıcılar ve parolaları değişmez."""
+        self._context()
+        added = []
+        if self.enabled("grc") and not one(self.db, "SELECT id FROM tdr_controls LIMIT 1"):
+            self.grc()
+            added.append("grc")
+        added += self.sections()
+        if added:
+            audit.log(self.db, SYSTEM, "SEED", "demo", None, {"sections": added}, description=TAG)
+        return added
 
     def run(self):
         self.core()
         self.performance()
         self.risks()
+        self.companies()
+        self._mark("companies")
         self.surveys()
         self.grc()
+        self.sections()
         passwords = self.users()
         audit.log(self.db, SYSTEM, "SEED", "demo", None,
                   {"suppliers": len(self.suppliers), "engagements": len(self.engagements)}, description=TAG)
@@ -853,12 +882,12 @@ class Seeder:
 
 
 def seed(app):
+    """Boş veritabanına demo yükler (parola listesi döner); yüklü demoya eksik bölümleri ekler (bölüm listesi döner)."""
     with app.database.connect() as db:
         db.lock("demo-seed")
-        if one(db, "SELECT id FROM tdr_suppliers WHERE code LIKE 'DMO-%' LIMIT 1"):
-            if app.enabled("grc") and not one(db, "SELECT id FROM tdr_controls LIMIT 1"):
-                return Seeder(db, app).resume_grc()      # önceki sürümle yüklenmiş demoya GRC bölümü eklenir
-            return None
+        if one(db, "SELECT id FROM tdr_suppliers WHERE description LIKE ? LIMIT 1", (f"%{TAG}%",)):
+            added = Seeder(db, app).resume()
+            return {"added": added} if added else None
         if one(db, "SELECT id FROM tdr_suppliers LIMIT 1"):
             raise SystemExit("Veritabanında demo dışı tedarikçi var; demo verisi yalnızca boş veritabanına yüklenir")
         return Seeder(db, app).run()
@@ -874,8 +903,8 @@ def main():
     if passwords is None:
         print("DEMO_ALREADY_LOADED")
         return
-    if passwords == "GRC_ADDED":
-        print("DEMO_GRC_ADDED")
+    if isinstance(passwords, dict):
+        print("DEMO_SECTIONS_ADDED " + ",".join(passwords["added"]))
         return
     print("Demo verisi yüklendi (sentetik). Demo kullanıcılar ilk girişte parolalarını değiştirir:")
     for username, name, role, password in passwords:

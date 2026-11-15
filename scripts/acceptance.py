@@ -243,7 +243,8 @@ def main():
 
     def ui_journeys():
         open_list("r/suppliers", "Tedarikçiler")
-        page.locator("#tableSearch").fill("DMO-001")
+        critical = admin.ok("GET", "suppliers?tier=critical&status=active&limit=1")[0]   # kodlar sürüme göre değişir; adla ara
+        page.locator("#tableSearch").fill(critical["name"])
         expect(page.locator("[data-row]")).to_have_count(1, timeout=15000)
         page.locator("[data-row]").first.click()
         expect(page.locator("#detailKicker")).to_contain_text("Tedarikçi 360")
@@ -259,7 +260,7 @@ def main():
         expect(page.locator("#content")).to_contain_text("Bu denetimdeki sonuç", timeout=20000)
         page.screenshot(path=str(out / "04-denetim.png"), full_page=True)
         open_list("r/controls", "Kontroller")
-        page.locator("[data-row]", has_text="TDR-CTL-02").click()
+        page.locator("[data-row]", has_text="Kritik tedarikçi performans değerlendirmeleri zamanında").click()
         expect(page.locator("#detailKicker")).to_have_text("Kontrol")
         page.locator("#detail .tab", has_text="Sonuçlar").click()
         page.locator("#detail tbody tr").first.click()
@@ -270,13 +271,38 @@ def main():
         page.locator("[data-row]", has_text="ilk yarı").click()
         expect(page.locator("#content")).to_contain_text("Genel puan", timeout=20000)
         page.screenshot(path=str(out / "06-anket-sonuc.png"), full_page=True)
+        # GRC platformu: risk panosu, süreklilik, CMDB, takvim, sağlık, süreç ve ilişki haritası, komut paleti
+        page.goto(BASE + "/#/risk")
+        expect(page.locator("#content .heat")).to_be_visible(timeout=20000)
+        page.screenshot(path=str(out / "06b-risk-panosu.png"), full_page=True)
+        open_list("r/bias", "İş Etki Analizleri")
+        page.locator("[data-row]").first.click()
+        page.locator("#detail .tab", has_text="Etki matrisi").click()
+        expect(page.locator("#detail .matrix")).to_be_visible()
+        page.screenshot(path=str(out / "06c-bia.png"), full_page=True)
+        page.keyboard.press("Escape")
+        page.goto(BASE + "/#/cmdb")
+        expect(page.locator("#content .rule-row").first).to_be_visible(timeout=20000)
+        page.goto(BASE + "/#/process-map")
+        expect(page.locator(".band.core .proc").first).to_be_visible(timeout=20000)
+        page.screenshot(path=str(out / "06d-surec-haritasi.png"), full_page=True)
+        page.goto(BASE + "/#/calendar")
+        expect(page.locator(".cal .ev").first).to_be_visible(timeout=20000)
+        page.goto(BASE + "/#/home")
+        expect(page.locator(".hero")).to_be_visible(timeout=20000)
+        page.keyboard.press("Control+k")
+        page.locator("#palette .pal-input").fill("risk")
+        expect(page.locator(".pal-list li[role=option]").first).to_be_visible()
+        page.keyboard.press("Escape")
         assert not console, "; ".join(console[:3])
-        return "tedarikçi 360, uyum panosu, denetim, kontrol sonucu (kaynak bilgisi), anket sonucu"
+        return "tedarikçi 360, uyum panosu, denetim, kontrol sonucu, anket sonucu, risk panosu, BİA, CMDB, süreç haritası, takvim, palet"
     check("Ana ekran akışları (tarayıcı)", ui_journeys)
 
     # ------------------------------------------------------------ hesaplar
     def accounts():
-        units = {u["code"]: u["id"] for u in admin.ok("GET", "org_units?limit=100")}
+        names = {"BTA": "BT Altyapı ve Operasyon", "OPS": "Operasyon"}          # birimler adla bulunur (kodlar sunucuda üretilir)
+        by_name = {u["name"]: u["id"] for u in admin.ok("GET", "org_units?limit=100")}
+        units = {key: by_name[name] for key, name in names.items()}
         ctx["units"] = units
         users = {u["username"]: u for u in admin.ok("GET", "users")}
         for name, role, unit in (("kabul.denetci", "AUDITOR", None), ("kabul.birim", "UNIT_USER", "BTA"),
@@ -309,7 +335,7 @@ def main():
 
     def viewer_limits():
         assert len(viewer.ok("GET", "suppliers?limit=1000")) >= 45
-        expect_status(viewer, "POST", "suppliers", 403, {"code": "KABUL-X", "name": "x"})
+        expect_status(viewer, "POST", "suppliers", 403, {"name": "KABUL-X"})
         expect_status(viewer, "POST", "executions", 403, {"control_id": 1, "status": "pass"})
         expect_status(viewer, "GET", "users", 403)
         expect_status(viewer, "GET", "audit_log", 403)
@@ -329,7 +355,7 @@ def main():
         expect_status(unit_user, "POST", "evidence/upload", 403, {**body, "org_unit_id": ops})
         created = unit_user.ok("POST", "evidence/upload", {**body, "org_unit_id": bta})
         ctx["evidence"] = created
-        expect_status(unit_user, "POST", "controls", 403, {"code": "KABUL-C", "name": "x"})
+        expect_status(unit_user, "POST", "controls", 403, {"name": "KABUL-C"})
         return f"kendi birimine yazar, başka birime 403; kanıt {created['code'] if 'code' in created else created['id']} yüklendi"
     check("Birim kullanıcısı kapsamı (angajman, kanıt)", unit_scope)
 
@@ -363,7 +389,7 @@ def main():
         ctx["finding"], ctx["control"] = result["finding_id"], control
         after = auditor.ok("GET", f"audits/{audit['id']}/context")
         assert any(f["id"] == result["finding_id"] for f in after["findings"])
-        expect_status(auditor, "POST", "controls", 403, {"code": "KABUL-C", "name": "x"})
+        expect_status(auditor, "POST", "controls", 403, {"name": "KABUL-C"})
         return f"{audit['code']} / {control['code']}: başarısız sonuç → bulgu {result['finding_id']}; tanım ve kanıt özeti donduruldu"
     check("Denetçi: denetimde test, bulgu, dondurulmuş tanım", audit_flow)
 
@@ -385,7 +411,7 @@ def main():
     check("DÖF: görevler ayrılığı ve bulgu kapanışı", capa_flow)
 
     def automation():
-        control = next(c for c in auditor.ok("GET", "controls?limit=200") if c["code"] == "TDR-CTL-01")
+        control = next(c for c in auditor.ok("GET", "controls?limit=200") if c["automation"] == "supplier.owner")
         result = auditor.ok("POST", f"controls/{control['id']}/run", {})
         run = auditor.ok("GET", f"executions/{result['execution_id']}/context")
         assert run["source"] == "system" and run["provenance"]["collection_status"] == "complete"
@@ -408,7 +434,7 @@ def main():
         units = admin.ok("GET", "risk_catalog?limit=50")
         template = units[0]
         risk_id = admin.ok("POST", "supplier_risks", {
-            "code": f"KABUL-R-{RUN}", "title": f"KABUL <img src=x onerror=alert(1)> {template['title']}", "category": template["category"],
+            "title": f"KABUL <img src=x onerror=alert(1)> {template['title']}", "category": template["category"],
             "entity_name": "Kabul testi hizmeti", "catalog_id": template["id"], "cause": template["cause"],
             "risk_event": template["risk_event"], "consequence": template["consequence"], "likelihood": 4, "impact": 4,
             "appetite": 8, "owner": "kabul.denetci", "review_date": date.today().replace(year=date.today().year + 1).isoformat()})["id"]
@@ -430,10 +456,10 @@ def main():
 
     # ------------------------------------------------------------ istek güvenliği
     def request_security():
-        expect_status(admin, "POST", "org_units", 403, {"code": "KABUL", "name": "x"}, origin="https://kotu.example")
-        expect_status(admin, "POST", "org_units", 403, {"code": "KABUL", "name": "x"}, origin=None)
+        expect_status(admin, "POST", "org_units", 403, {"name": "KABUL"}, origin="https://kotu.example")
+        expect_status(admin, "POST", "org_units", 403, {"name": "KABUL"}, origin=None)
         expect_status(admin, "POST", "supplier_risks", 400, {"idempotency_key": "kisa", "code": "x"})
-        status = admin.request("POST", "org_units", raw=b'{"code":"' + b"A" * (3 * 1024 * 1024) + b'"}')[0]
+        status = admin.request("POST", "org_units", raw=b'{"name":"' + b"A" * (3 * 1024 * 1024) + b'"}')[0]
         assert status == 413, status
         status, payload, _ = admin.request("GET", "suppliers?limit=abc")
         assert status in (200, 400), status
@@ -459,7 +485,7 @@ def main():
         m = Client(key=key)
         expect_status(m, "GET", "/api/health", 200)
         expect_status(m, "GET", "users", 403)
-        expect_status(m, "POST", "suppliers", 403, {"code": "KABUL-M", "name": "x"})
+        expect_status(m, "POST", "suppliers", 403, {"name": "KABUL-M"})
         expect_status(m, "GET", "export/suppliers?format=xlsx", 403)
         expect_status(Client(key="yanlis" * 8), "GET", "suppliers", 401)
         sla = m.ok("GET", "sla_definitions?active=1&limit=1")[0]
@@ -472,7 +498,7 @@ def main():
         assert status == 200 and again.get("replayed"), (status, again)
         assert m.request("POST", "sla_measurements", {**body, "actual_value": 50})[0] == 409
         controls = m.ok("GET", "controls?execution_mode=automatic&limit=200")
-        auto = next(c for c in controls if c["code"].startswith("KS-DEMO") and c["active"])
+        auto = next(c for c in controls if not c["automation"] and c["active"])     # dış (MCP) otomatik kontrol
         manual = next(c for c in m.ok("GET", "controls?execution_mode=manual&limit=200"))
         assert m.request("POST", "executions", {"control_id": manual["id"], "status": "pass", "source": "mcp"})[0] == 403
         assert m.request("POST", "executions", {"control_id": auto["id"], "status": "pass", "source": "mcp",

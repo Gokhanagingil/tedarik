@@ -99,6 +99,45 @@ Hesap: içsel = olasılık × etki; katkı düşük %20, orta %40, yüksek %60, 
 
 `tdr_supplier_risks` tek risk kaydıdır: `supplier_id` isteğe bağlı, tedarikçisiz riskte `entity_name` zorunlu (göç 1).
 
+## GRC platformu (K-016 – K-020)
+
+Kayıt kodları sunucuda üretilir (`Resource(code_prefix=...)`, `tdr_sequences`, K-017): SRK şirket, BRM birim, SRC süreç,
+TED tedarikçi, ANG angajman, SOZ sözleşme, RSK risk, RIF risk faaliyeti, KRI gösterge, RDD-yıl risk dönemi, RIS iştah,
+KHD kontrol hedefi, KTL kontrol, DNT-yıl denetim, KNT-yıl kanıt, BLG-yıl bulgu, DOF-yıl DÖF, DOK doküman, CI konfigürasyon
+öğesi, BIA iş etki analizi, BSP süreklilik planı, TAT-yıl tatbikat. Standart referansı, madde no ve politika kodu doğal
+tanımlayıcıdır, elle girilir.
+
+```
+companies (kendi şirketimiz / müşteri, hiyerarşik)
+   │
+   ├── supplier_risks ── risk_assessments (değişmez, cycle_id) ── risk_decisions (değişmez)
+   │      │   ├── risk_actions        ├── kris ── kri_values (değişmez)
+   │      │   ├── risk_cis ── cmdb_cis ── cmdb_relations, ci_exposures (kural maruziyeti)
+   │      │   ├── control_risks ── controls ── control_{clauses,processes,objectives,documents}
+   │      │   └── objective_risks ── objectives ── processes
+   │      └── process_id ── processes (yönetim / ana / destek, hiyerarşik)
+   ├── risk_cycles (dönemsel değerlendirme), risk_appetites (kategori iştahı/toleransı), risk_criteria (ölçekler)
+   ├── bias ── bia_impacts (kategori × süre), bia_applications ── cmdb_cis, bia_suppliers, bia_risks
+   │     └── bc_plan_bias ── bc_plans ── bc_plan_steps, bc_plan_applications, bc_exercises ── bc_exercise_findings ── findings
+   ├── cmdb_cis (ServiceNow'dan senkron veya MCP ile itilir)
+   └── findings (kaynak: denetim, kontrol testi, tatbikat, ...; clause_id, process_id, risk_id)
+documents ── document_revisions (değişmez), document_files + document_blobs (değişmez, SHA-256), document_clauses
+```
+
+| Kaynak | Amaç | Önemli alanlar |
+| --- | --- | --- |
+| `companies` | Riskin, BİA'nın, planın, CI'ın ait olduğu şirket | `kind`: own, customer; `parent_id`; `servicenow_ref` (CMDB eşlemesi) |
+| `processes` | ISO 9001 süreç haritası | `process_type`: management, core, support; `parent_id`, `position`, `inputs`, `outputs`, `owner` |
+| `supplier_risks` | Kurumsal risk kaydı (ISO 31000) | `company_id` (zorunlu; seçilmezse `core.default_company`), `process_id`, `org_unit_id`, `risk_type`: threat/opportunity, `source`, `impact_area`, `target_likelihood/impact`, `consulted`; özet: `inherent_score`, `residual_score`, `risk_level`, `last_assessed_at` |
+| `risk_criteria`, `risk_appetites`, `risk_cycles` | Risk kriterleri, kategori iştahı ve toleransı, değerlendirme dönemleri | Dönem ilerlemesi dönem içindeki değerlendirmelerden hesaplanır |
+| `kris`, `kri_values` | Anahtar risk göstergeleri ve ölçümleri | Durum eşiklerle sunucuda hesaplanır; MCP ölçüm yazar |
+| `cmdb_cis`, `cmdb_relations`, `cmdb_sync_runs` | Konfigürasyon öğeleri, bağımlılıklar, değişmez senkron kayıtları | Kaynaktan gelen alanlar senkronla güncellenir; `company_id`, `supplier_id`, `description` yereldir |
+| `ci_exposures`, `risk_cis` | Kural maruziyetleri (os_eos, app_eos, patch, uptime) ve riskten etkilenen CI'lar | Kural riskleri (rule × şirket) `origin_ref = cmdb:{kural}:{şirket}` ile tekildir |
+| `bias`, `bia_impacts`, `bia_applications`, `bia_suppliers`, `bia_risks` | İş etki analizi (ISO 22301 8.2.2) | MTPD ve kritiklik etki matrisinden; RTO ≤ MTPD; onay dört göz |
+| `bc_plans`, `bc_plan_steps`, `bc_plan_applications`, `bc_plan_bias` | Süreklilik ve felaket kurtarma planları (8.4) | Onaylı plan değişmez, revizyonla sürüm artar |
+| `bc_exercises`, `bc_exercise_findings` | Tatbikatlar (8.5) | Tamamlanınca sonuç ve alınan dersler zorunlu; hedef aşıldıysa "başarılı" olamaz |
+| `documents`, `document_revisions`, `document_files`, `document_clauses` | Dokümante edilmiş bilgi (ISO 9001 7.5) | taslak → onayda → yayımlandı → geçersiz; her yayın değişmez bir revizyon |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

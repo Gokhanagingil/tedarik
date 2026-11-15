@@ -46,6 +46,17 @@ if [ -n "${TEDARIK_DOMAIN:-}" ]; then
     exit 1
   fi
 fi
+# ServiceNow CMDB bağlantısı (isteğe bağlı, K-019): adres ve kullanıcı ayar dosyasında, parola sır dosyasında.
+# Parola Git'e ve CI günlüğüne girmez; yönetici sunucuda $BASE/secrets/sn_password dosyasına yazar.
+SN_SETTINGS="$BASE/servicenow.env"
+if [ -n "${TEDARIK_SN_INSTANCE:-}" ]; then
+  case "$TEDARIK_SN_INSTANCE" in https://*) ;; *) echo "TEDARIK_SN_INSTANCE https:// ile başlamalı" >&2; exit 1;; esac
+  printf 'TEDARIK_SN_INSTANCE=%s\nTEDARIK_SN_USER=%s\n' "$TEDARIK_SN_INSTANCE" "${TEDARIK_SN_USER:-}" > "$SN_SETTINGS"
+fi
+if [ -f "$SN_SETTINGS" ]; then
+  . "$SN_SETTINGS"
+  export TEDARIK_SN_INSTANCE TEDARIK_SN_USER
+fi
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
 
 others() {   # bu projeye ait olmayan konteynerler: kimlik, ad, başlama zamanı
@@ -69,7 +80,8 @@ secret db_password
 secret mcp_api_key
 printf 'postgresql://tedarik:%s@db:5432/tedarik' "$(cat "$BASE/secrets/db_password")" > "$BASE/secrets/database_url"
 chown 70:70 "$BASE/secrets/db_password"                     # postgres (alpine) kullanıcısı
-chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key"
+[ -e "$BASE/secrets/sn_password" ] || : > "$BASE/secrets/sn_password"   # boş: ServiceNow yapılandırılmadı
+chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key" "$BASE/secrets/sn_password"
 chmod 0400 "$BASE/secrets/"*
 
 # Güncellemeden önce veritabanı yedeği (veritabanı çalışıyorsa).
@@ -94,7 +106,7 @@ if [ "${TEDARIK_SEED_DEMO:-0}" = 1 ] || [ "${TEDARIK_SEED_DEMO:-}" = true ]; the
   demo=$($COMPOSE exec -T app python -m tedarik.demo)
   case "$demo" in
     DEMO_ALREADY_LOADED) echo "Demo verisi zaten yüklü" ;;
-    DEMO_GRC_ADDED) echo "Yüklü demoya uyum (GRC) verisi eklendi; kullanıcı parolaları değişmedi" ;;
+    DEMO_SECTIONS_ADDED*) echo "Yüklü demoya yeni bölümler eklendi (${demo#DEMO_SECTIONS_ADDED }); kullanıcı parolaları değişmedi" ;;
     *) (umask 077; printf '%s\n' "$demo" > "$BASE/.demo-users")
        echo "Demo verisi yüklendi; demo kullanıcıların geçici parolaları: $BASE/.demo-users (yalnızca root okur)" ;;
   esac
@@ -116,6 +128,11 @@ if [ "${TEDARIK_BACKUP_CRON:-1}" = 1 ] && [ -d /etc/cron.d ] && [ -e "$BASE/curr
     "43 5 * * * root docker exec tedarik-app-1 python -m tedarik.grc_run >/dev/null 2>&1" \
     > /etc/cron.d/tedarik-grc
   chmod 0644 /etc/cron.d/tedarik-grc
+  # CMDB (K-019): ServiceNow yapılandırıldıysa senkron, değilse yalnızca kural değerlendirmesi; her gece.
+  printf '%s\n' "# Tedarik Portalı CMDB senkronu ve CI risk kuralları (deploy.sh yazar)" \
+    "23 4 * * * root docker exec tedarik-app-1 python -m tedarik.cmdb_sync >/dev/null 2>&1" \
+    > /etc/cron.d/tedarik-cmdb
+  chmod 0644 /etc/cron.d/tedarik-cmdb
 fi
 
 # Eski sürüm klasörleri (yalnızca bu uygulamanınkiler): son 5 tutulur.

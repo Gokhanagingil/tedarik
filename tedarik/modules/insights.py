@@ -45,6 +45,29 @@ def objective_context(c):
     return item
 
 
+def document_clauses(c):
+    """Dokümanın karşıladığı standart maddeleri (küme olarak). Yayımlanmış dokümanda da değişebilir: üst veridir."""
+    documents = RESOURCES["documents"]
+    document = crud.get(c.db, documents, c.params["id"])
+    authz.check(c.principal, documents, "write")
+    crud.check_scope(c.db, documents, c.principal, document)
+    if document["status"] in ("obsolete", "retired"):
+        raise crud.Conflict("Geçersiz kılınmış doküman değiştirilmez")
+    ids = c.body.get("clause_ids")
+    if not isinstance(ids, list) or any(type(i) is not int for i in ids) or len(ids) > 500:
+        raise crud.Invalid("clause_ids tam sayı listesi olmalı")
+    if ids and len(rows(c.db, f"SELECT id FROM tdr_clauses WHERE id IN ({','.join('?' * len(set(ids)))})",
+                        sorted(set(ids)))) != len(set(ids)):
+        raise crud.Invalid("Bulunamayan madde seçildi")
+    c.db.execute("DELETE FROM tdr_document_clauses WHERE document_id=?", (document["id"],))
+    for clause_id in sorted(set(ids)):
+        c.db.execute("INSERT INTO tdr_document_clauses (document_id, clause_id) VALUES (?,?)", (document["id"], clause_id))
+    from .. import audit
+    audit.log(c.db, c.principal, "LINK", "documents", document["id"], {"clause_ids": sorted(set(ids))})
+    from .documents import context_data
+    return context_data(c.db, c.app, document["id"])
+
+
 def objective_risks(c):
     objective = crud.get(c.db, RESOURCES["objectives"], c.params["id"])
     authz.check(c.principal, RESOURCES["objectives"], "write")
@@ -298,9 +321,18 @@ def my_work(c):
 
 # ------------------------------------------------------------------ GRC sağlık kontrolü
 
-def _check(key, title, why, severity, items, resource, link=None):
+OPEN_RISKS = "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE status IN ('open','in_treatment')"
+PUBLISHED_DOCS = "SELECT COUNT(*) AS n FROM tdr_documents WHERE status IN ('published','active')"
+
+
+def _n(db, sql, params=()):
+    return one(db, sql, params)["n"] or 0
+
+
+def _check(key, title, why, severity, items, resource, link=None, population=None):
+    """population: kuralın uygulandığı kayıt sayısı; puan ihlal oranıyla hesaplanır (tek kayıt tüm puanı sıfırlamaz)."""
     return {"key": key, "title": title, "why": why, "severity": severity, "count": len(items),
-            "items": items[:25], "resource": resource, "link": link}
+            "population": max(population or 0, len(items)), "items": items[:25], "resource": resource, "link": link}
 
 
 def health(c):
@@ -313,65 +345,66 @@ def health(c):
                              "Her kontrol bir kontrol hedefine hizmet etmeli; aksi halde neyi güvence altına aldığı belirsiz.",
                              "medium", rows(db, """SELECT id, code, name AS title FROM tdr_controls k WHERE active=1 AND NOT
                              EXISTS (SELECT 1 FROM tdr_control_objectives m WHERE m.control_id=k.id) ORDER BY code"""),
-                             "controls"))
+                             "controls", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_controls WHERE active=1")))
         checks.append(_check("controls_no_clause", "Hiçbir standart maddesine eşlenmemiş kontroller",
                              "Eşlenmemiş kontrol uyum göstergesine katkı vermez; gereksiz veya eksik eşlenmiş olabilir.",
                              "low", rows(db, """SELECT id, code, name AS title FROM tdr_controls k WHERE active=1 AND NOT
                              EXISTS (SELECT 1 FROM tdr_control_clauses m WHERE m.control_id=k.id) ORDER BY code"""),
-                             "controls"))
+                             "controls", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_controls WHERE active=1")))
         checks.append(_check("objectives_no_control", "Kontrolü olmayan kontrol hedefleri",
                              "Hedef tanımlanmış ama onu karşılayan kontrol yok: tasarım boşluğu.", "high",
                              rows(db, """SELECT id, code, name AS title FROM tdr_objectives o WHERE NOT EXISTS (SELECT 1 FROM
-                             tdr_control_objectives m WHERE m.objective_id=o.id) ORDER BY code"""), "objectives"))
+                             tdr_control_objectives m WHERE m.objective_id=o.id) ORDER BY code"""), "objectives", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_objectives")))
         checks.append(_check("clauses_uncovered", "Kontrolle karşılanmayan uygulanabilir maddeler",
                              "Uygulanabilirlik bildiriminde kapsamda olan her madde en az bir kontrolle karşılanmalı.",
                              "medium", rows(db, """SELECT cl.id, s.code || ' ' || cl.code AS code, cl.title FROM tdr_clauses cl
                              JOIN tdr_standards s ON s.id=cl.standard_id WHERE cl.applicable=1 AND s.active=1 AND NOT EXISTS
                              (SELECT 1 FROM tdr_control_clauses m WHERE m.clause_id=cl.id) AND NOT EXISTS (SELECT 1 FROM
-                             tdr_clauses ch WHERE ch.parent_id=cl.id) ORDER BY s.code, cl.code"""), "clauses"))
+                             tdr_clauses ch WHERE ch.parent_id=cl.id) ORDER BY s.code, cl.code"""), "clauses", population=_n(db, """SELECT COUNT(*) AS n FROM tdr_clauses cl JOIN tdr_standards s ON s.id=cl.standard_id WHERE cl.applicable=1 AND
+                             s.active=1 AND NOT EXISTS (SELECT 1 FROM tdr_clauses ch WHERE ch.parent_id=cl.id)""")))
         checks.append(_check("findings_no_action", "14 günden eski ve düzeltici faaliyeti olmayan açık bulgular",
                              "Bulgu açıldıktan sonra makul sürede DÖF planlanmalı (ISO 9001 10.2).", "high",
                              rows(db, """SELECT id, code, title FROM tdr_findings f WHERE status IN ('open','in_progress') AND
                              created_at < ? AND NOT EXISTS (SELECT 1 FROM tdr_grc_actions a WHERE a.finding_id=f.id)
-                             ORDER BY created_at""", (stale,)), "findings"))
+                             ORDER BY created_at""", (stale,)), "findings", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_findings WHERE status IN ('open','in_progress')")))
         checks.append(_check("capa_overdue", "Hedef tarihi geçmiş düzeltici faaliyetler",
                              "Geciken DÖF bulgunun tekrarlama riskini artırır.", "high",
                              rows(db, """SELECT id, code, title FROM tdr_grc_actions WHERE status IN ('open','in_progress')
-                             AND due_date < ? ORDER BY due_date""", (today,)), "grc_actions"))
+                             AND due_date < ? ORDER BY due_date""", (today,)), "grc_actions", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_grc_actions WHERE status IN ('open','in_progress')")))
         checks.append(_check("high_risks_no_control", "Kontrolü veya işleme faaliyeti olmayan yüksek/kritik riskler",
                              "ISO 31000 6.5: yüksek risk işlenmeli; kontrol veya faaliyet yoksa işleme planı eksiktir.",
                              "critical", rows(db, """SELECT id, code, title FROM tdr_supplier_risks r WHERE status IN
                              ('open','in_treatment') AND risk_level IN ('high','critical') AND NOT EXISTS (SELECT 1 FROM
                              tdr_control_risks m WHERE m.risk_id=r.id) AND NOT EXISTS (SELECT 1 FROM tdr_risk_actions a
-                             WHERE a.risk_id=r.id AND a.status NOT IN ('cancelled')) ORDER BY code"""), "supplier_risks"))
+                             WHERE a.risk_id=r.id AND a.status NOT IN ('cancelled')) ORDER BY code"""), "supplier_risks", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE status IN ('open','in_treatment') AND risk_level IN ('high','critical')")))
     if c.app.enabled("risks"):
         checks.append(_check("risks_unassessed", "Hiç değerlendirilmemiş açık riskler",
                              "Tanımlanan risk analiz ve değerlendirme olmadan önceliklendirilemez (ISO 31000 6.4).",
                              "medium", rows(db, """SELECT id, code, title FROM tdr_supplier_risks WHERE status IN
-                             ('open','in_treatment') AND last_assessed_at IS NULL ORDER BY code"""), "supplier_risks"))
+                             ('open','in_treatment') AND last_assessed_at IS NULL ORDER BY code"""), "supplier_risks", population=_n(db, OPEN_RISKS)))
         checks.append(_check("risks_review_overdue", "Gözden geçirme tarihi geçmiş riskler",
                              "İzleme ve gözden geçirme ISO 31000 6.6'nın parçasıdır.", "medium",
                              rows(db, """SELECT id, code, title FROM tdr_supplier_risks WHERE status IN ('open','in_treatment',
-                             'accepted') AND review_date < ? ORDER BY review_date""", (today,)), "supplier_risks"))
+                             'accepted') AND review_date < ? ORDER BY review_date""", (today,)), "supplier_risks", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE status IN ('open','in_treatment','accepted')")))
         checks.append(_check("risks_no_context", "Süreç, tedarikçi veya varlık bağı olmayan riskler",
                              "Bağlamı belirsiz risk sahiplenilemez ve kontrollere bağlanamaz (ISO 31000 6.3).", "low",
                              rows(db, """SELECT id, code, title FROM tdr_supplier_risks WHERE status IN ('open','in_treatment')
                              AND process_id IS NULL AND supplier_id IS NULL AND origin_ref IS NULL ORDER BY code"""),
-                             "supplier_risks"))
+                             "supplier_risks", population=_n(db, OPEN_RISKS)))
         checks.append(_check("appetite_breach", "İştah üstünde kalan ve kabul edilmemiş riskler",
                              "Artık risk iştahı aşıyorsa ya işlenmeli ya da yetkili istisnayla kabul edilmeli.", "critical",
                              rows(db, """SELECT id, code, title FROM tdr_supplier_risks WHERE status IN ('open','in_treatment')
-                             AND residual_score > appetite ORDER BY residual_score DESC"""), "supplier_risks"))
+                             AND residual_score > appetite ORDER BY residual_score DESC"""), "supplier_risks", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE status IN ('open','in_treatment') AND residual_score IS NOT NULL")))
     if c.app.enabled("cmdb"):
         checks.append(_check("cis_no_company", "Şirketi eşlenmemiş CI'lar",
                              "Şirketi bilinmeyen CI'ın riski kimin riski olduğu belirlenemediği için kayda alınamaz.",
                              "medium", rows(db, """SELECT id, code, name AS title FROM tdr_cmdb_cis WHERE company_id IS NULL
-                             AND stale=0 ORDER BY name"""), "cmdb_cis"))
+                             AND stale=0 ORDER BY name"""), "cmdb_cis", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_cmdb_cis WHERE stale=0")))
         checks.append(_check("cmdb_risks_cleared", "Etkilenen CI'ı kalmayan CMDB riskleri",
                              "Kural kaynaklı riskte etkilenen CI kalmadıysa risk sahibi kapatmayı değerlendirmeli.", "low",
                              rows(db, """SELECT id, code, title FROM tdr_supplier_risks r WHERE origin_ref LIKE 'cmdb:%' AND
                              status IN ('open','in_treatment') AND NOT EXISTS (SELECT 1 FROM tdr_risk_cis m WHERE
-                             m.risk_id=r.id AND m.link_source='rule')"""), "supplier_risks"))
+                             m.risk_id=r.id AND m.link_source='rule')"""), "supplier_risks", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks WHERE origin_ref LIKE 'cmdb:%' AND status IN ('open','in_treatment')")))
     if c.app.enabled("continuity"):
         months = int(policy(db, "bcm.exercise_months", 12))
         limit = (date.today() - timedelta(days=round(months * 30.44))).isoformat()
@@ -379,36 +412,36 @@ def health(c):
                              "ISO 22301 8.2.2: kritik faaliyetler BİA ile belirlenir; ana süreçler analiz edilmeli.",
                              "high", rows(db, """SELECT id, code, name AS title FROM tdr_processes p WHERE active=1 AND
                              process_type='core' AND NOT EXISTS (SELECT 1 FROM tdr_bias b WHERE b.process_id=p.id AND
-                             b.status='approved') ORDER BY code"""), "processes"))
+                             b.status='approved') ORDER BY code"""), "processes", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1 AND process_type='core'")))
         checks.append(_check("critical_bia_no_plan", "Onaylı planı olmayan kritik / yüksek BİA'lar",
                              "ISO 22301 8.4: kritik faaliyet için iş sürekliliği planı gerekir.", "critical",
                              rows(db, """SELECT id, code, title FROM tdr_bias b WHERE status='approved' AND criticality IN
                              ('critical','high') AND NOT EXISTS (SELECT 1 FROM tdr_bc_plan_bias pb JOIN tdr_bc_plans p ON
-                             p.id=pb.plan_id WHERE pb.bia_id=b.id AND p.status='approved')"""), "bias"))
+                             p.id=pb.plan_id WHERE pb.bia_id=b.id AND p.status='approved')"""), "bias", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_bias WHERE status='approved' AND criticality IN ('critical','high')")))
         checks.append(_check("plans_not_exercised", f"{months} ay içinde tatbik edilmemiş onaylı planlar",
                              "ISO 22301 8.5: planlar düzenli aralıklarla tatbik edilmeli.", "high",
                              rows(db, """SELECT id, code, title FROM tdr_bc_plans p WHERE status='approved' AND NOT EXISTS
                              (SELECT 1 FROM tdr_bc_exercises x WHERE x.plan_id=p.id AND x.status='completed' AND
-                             x.actual_date >= ?)""", (limit,)), "bc_plans"))
+                             x.actual_date >= ?)""", (limit,)), "bc_plans", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_bc_plans WHERE status='approved'")))
     if c.app.enabled("documents"):
         checks.append(_check("documents_review_overdue", "Gözden geçirme tarihi geçmiş yayımlanmış dokümanlar",
                              "ISO 9001 7.5.3: dokümante bilgi güncel ve uygun tutulmalı.", "medium",
                              rows(db, """SELECT id, code, title FROM tdr_documents WHERE status IN ('published','active') AND
-                             review_date < ? ORDER BY review_date""", (today,)), "documents"))
+                             review_date < ? ORDER BY review_date""", (today,)), "documents", population=_n(db, PUBLISHED_DOCS)))
         checks.append(_check("documents_no_process", "Sürece bağlı olmayan yayımlanmış dokümanlar",
                              "ISO 9001 4.4: süreçleri destekleyen dokümanlar süreçle ilişkilendirilmeli.", "low",
                              rows(db, """SELECT id, code, title FROM tdr_documents WHERE status IN ('published','active') AND
-                             process_id IS NULL ORDER BY code"""), "documents"))
+                             process_id IS NULL ORDER BY code"""), "documents", population=_n(db, PUBLISHED_DOCS)))
     checks.append(_check("processes_no_owner", "Sahibi olmayan süreçler",
                          "Sahibi olmayan süreçte risk, kontrol ve BİA sorumluluğu belirsiz kalır.", "medium",
                          rows(db, """SELECT id, code, name AS title FROM tdr_processes WHERE active=1 AND (owner IS NULL OR
-                         owner='') ORDER BY code"""), "processes"))
+                         owner='') ORDER BY code"""), "processes", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1")))
     checks = [x for x in checks if _readable(c, x["resource"])]
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     checks.sort(key=lambda x: (x["count"] == 0, order[x["severity"]], -x["count"]))
     weights = {"critical": 4, "high": 3, "medium": 2, "low": 1}
     total = sum(weights[x["severity"]] for x in checks)
-    passed = sum(weights[x["severity"]] for x in checks if x["count"] == 0)
+    passed = sum(weights[x["severity"]] * (1 - x["count"] / x["population"] if x["population"] else 1) for x in checks)
     return {"score": round(100 * passed / total) if total else None, "checks": checks}
 
 
@@ -476,6 +509,7 @@ def register(app):
         app.route("GET", API + "/objectives/{id}/context", objective_context)
         app.route("POST", API + "/objectives/{id}/risks", objective_risks)
         app.route("GET", API + "/clauses/{id}/context", clause_context)
+        app.route("POST", API + "/documents/{id}/clauses", document_clauses)
     app.route("GET", API + "/processes/{id}/context", process_context)
     app.route("GET", API + "/processes-map", process_map)
     app.route("GET", API + "/calendar", calendar)

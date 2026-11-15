@@ -97,24 +97,33 @@ const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', '
 const LONG = new Set(['value_json', 'description', 'cause', 'risk_event', 'consequence', 'treatment', 'note', 'comment', 'intro', 'outro',
   'help', 'rationale', 'resolution', 'decision_rationale', 'exception_rationale', 'text', 'details', 'method', 'expected_result',
   'audit_objective', 'scope', 'conclusion', 'root_cause', 'closure_note', 'verification_note', 'justification']);
-const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective']);
-const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled', 'fail', 'ineffective']);
+const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective', 'approved',
+  'successful', 'green', 'resolved', 'operational', 'success']);
+const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled', 'fail', 'ineffective',
+  'failed', 'red', 'obsolete', 'retired']);
 const WARN = new Set(['open', 'in_treatment', 'pending', 'draft', 'expiring', 'medium', 'offboarding', 'prospect', 'important',
-  'in_progress', 'validation', 'ending', 'planned', 'escalation', 'delivery_delay', 'inconclusive', 'partially_effective']);
+  'in_progress', 'validation', 'ending', 'planned', 'escalation', 'delivery_delay', 'inconclusive', 'partially_effective',
+  'partially_successful', 'amber', 'in_review', 'partial', 'repair']);
 const PILLS = new Set(['status', 'tier', 'severity', 'criticality', 'priority', 'event_type', 'segment', 'beneficiary', 'kind',
   'purpose', 'subject', 'audience', 'category', 'response_strategy', 'source', 'raci', 'role', 'execution_mode', 'frequency',
-  'opinion', 'confidentiality', 'nature', 'method_type']);
+  'opinion', 'confidentiality', 'nature', 'method_type', 'exercise_type', 'plan_type', 'outcome', 'process_type', 'ci_class', 'environment',
+  'rule', 'impact_area', 'link_source', 'risk_type', 'last_status', 'operational_status', 'mode', 'dimension']);
 function tone(value) { return GOOD.has(value) ? 'good' : BAD.has(value) ? 'bad' : WARN.has(value) ? 'warn' : 'neutral'; }
 function roleLabel(code) { return (S.meta.roles.find(r => r.value === code) || {}).label || code; }
 function pill(text, cls = 'neutral') { return h('span', {class: 'pill ' + cls, text}); }
 function refRecord(res, id) { return (S.cache[res] || []).find(r => r.id === id); }
 function titleOf(r) { if (!r) return ''; return [r.code, r.name || r.title || r.username].filter(Boolean).join(' — ') || ('#' + r.id); }
+const NAME_ONLY = new Set(['companies', 'org_units', 'processes', 'catalog_items', 'supplier_types']);   // kod yerine ad yeter
 function display(res, name, value) {
   if (value === null || value === undefined || value === '') return h('span', {class: 'muted', text: '—'});
   const f = META.field(res, name);
   if (!f) return String(value);
-  if (f.ref) { const r = refRecord(f.ref, value); return r ? titleOf(r) : '#' + value; }
-  if (f.options) { const label = META.option(res, name, value); return PILLS.has(name) ? pill(label, tone(value)) : label; }
+  if (f.ref) { const r = refRecord(f.ref, value); return r ? (NAME_ONLY.has(f.ref) ? r.name || titleOf(r) : titleOf(r)) : '#' + value; }
+  if (f.options) {
+    const label = META.option(res, name, value);
+    if (name === 'risk_level' || (res === 'bias' && name === 'criticality') || name === 'business_criticality') return pill(label, 'level-' + value);
+    return PILLS.has(name) ? pill(label, tone(value)) : label;
+  }
   if (FLAGS.has(name)) return value ? pill('Evet', name === 'disabled' ? 'bad' : 'good') : pill('Hayır', 'neutral');
   if (f.kind === 'DATE') return fmt.date(value);
   if (f.kind === 'TIMESTAMP') return fmt.datetime(value);
@@ -205,7 +214,7 @@ function barChart(items, {max, format = v => fmt.num(v, 1), onclick} = {}) {
     const y = i * rowH + 4; const w = Math.max(2, (width - labelW - 60) * item.value / top);
     const g = s('g', onclick ? {class: 'clickable', tabindex: '0'} : {});
     g.append(s('text', {x: 0, y: y + 15}, item.label.length > 26 ? item.label.slice(0, 25) + '…' : item.label));
-    g.append(s('rect', {x: labelW, y: y + 3, width: (width - labelW - 60), height: 16, rx: 5, fill: '#eef2f7'}));
+    g.append(s('rect', {x: labelW, y: y + 3, width: (width - labelW - 60), height: 16, rx: 4, fill: '#f0f1f3'}));
     g.append(s('rect', {x: labelW, y: y + 3, width: w, height: 16, rx: 5, class: 'c' + (item.color ?? 0)}));
     g.append(s('text', {x: labelW + w + 6, y: y + 15, class: 'value'}, format(item.value)));
     if (onclick) { g.addEventListener('click', () => onclick(item)); g.addEventListener('keydown', e => { if (e.key === 'Enter') onclick(item); }); }
@@ -217,33 +226,33 @@ function donut(items, {center} = {}) {
   const data = items.filter(i => i.value > 0); const total = data.reduce((a, b) => a + b.value, 0);
   const wrap = h('div', {class: 'gauge'});
   const svg = s('svg', {viewBox: '0 0 42 42', role: 'img', 'aria-label': data.map(i => i.label + ': ' + i.value).join(', ')});
-  svg.append(s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 6, stroke: '#e7edf5'}));
+  svg.append(s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 6, stroke: '#eceef1'}));
   let offset = 25;
   data.forEach((item, i) => {
     const part = 100 * item.value / total;
     svg.append(s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 6, 'stroke-dasharray': `${part} ${100 - part}`,
-      'stroke-dashoffset': offset, stroke: PALETTE[(item.color ?? i) % 6]}));
+      'stroke-dashoffset': offset, stroke: PALETTE[(item.color ?? i) % PALETTE.length]}));
     offset -= part;
   });
-  svg.append(s('text', {x: 21, y: 24, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 800, fill: '#1b355a'}, center ?? String(total)));
-  wrap.append(svg, h('div', {class: 'legend'}, data.map((item, i) => h('span', {}, h('i', {class: 'c' + (item.color ?? i % 6)}), `${item.label}: ${item.value}`))));
+  svg.append(s('text', {x: 21, y: 24, 'text-anchor': 'middle', 'font-size': 8, 'font-weight': 800, fill: '#1d2026'}, center ?? String(total)));
+  wrap.append(svg, h('div', {class: 'legend'}, data.map((item, i) => h('span', {}, h('i', {class: 'c' + (item.color ?? i % PALETTE.length)}), `${item.label}: ${item.value}`))));
   return wrap;
 }
-const PALETTE = ['#2667db', '#168c86', '#e0a23a', '#d1495b', '#7a5af8', '#64748b'];
+const PALETTE = ['#2f3b52', '#0f8a5f', '#e0a020', '#d50c2d', '#6d4bd1', '#9aa3af', '#ea6c1d'];
 function gauge(value, label, {suffix = '', good = 75, mid = 50, sub = '', text = null} = {}) {
   const has = value !== null && value !== undefined; const v = has ? Math.max(0, Math.min(100, value)) : 0;
   const cls = !has ? 'g-none' : v >= good ? 'g-good' : v >= mid ? 'g-mid' : 'g-bad';
   const svg = s('svg', {viewBox: '0 0 42 42', role: 'img', 'aria-label': label + ': ' + (has ? fmt.num(value) + suffix : 'veri yok')},
-    s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 5, class: 'g-track', stroke: '#e7edf5'}),
+    s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 5, class: 'g-track', stroke: '#eceef1'}),
     s('circle', {cx: 21, cy: 21, r: 15.9, fill: 'none', 'stroke-width': 5, 'stroke-dasharray': `${v} ${100 - v}`, 'stroke-dashoffset': 25,
-      'stroke-linecap': v > 0 ? 'round' : 'butt', stroke: {'g-good': '#168c86', 'g-mid': '#e0a23a', 'g-bad': '#d1495b', 'g-none': '#cbd5e1'}[cls]}),
-    s('text', {x: 21, y: 24.5, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 800, fill: '#1b355a'}, text ?? (has ? fmt.num(value, 0) + suffix : '—')));
+      'stroke-linecap': v > 0 ? 'round' : 'butt', stroke: {'g-good': '#0f8a5f', 'g-mid': '#e0a020', 'g-bad': '#d50c2d', 'g-none': '#d4d7dd'}[cls]}),
+    s('text', {x: 21, y: 24.5, 'text-anchor': 'middle', 'font-size': 9, 'font-weight': 800, fill: '#1d2026'}, text ?? (has ? fmt.num(value, 0) + suffix : '—')));
   return h('div', {class: 'gauge'}, svg, h('div', {}, h('div', {class: 'metric-label', text: label}), sub ? h('div', {class: 'metric-foot', text: sub}) : null));
 }
 function progressBar(value) {
   const v = Math.max(0, Math.min(100, value || 0));
   return s('svg', {class: 'chart', viewBox: '0 0 100 4', preserveAspectRatio: 'none', role: 'img', 'aria-label': '%' + Math.round(v)},
-    s('rect', {x: 0, y: 0, width: 100, height: 4, rx: 2, fill: '#e9eff6'}), s('rect', {x: 0, y: 0, width: v, height: 4, rx: 2, fill: '#2667db'}));
+    s('rect', {x: 0, y: 0, width: 100, height: 4, rx: 2, fill: '#eceef1'}), s('rect', {x: 0, y: 0, width: v, height: 4, rx: 2, fill: '#d50c2d'}));
 }
 function metric(label, value, foot = '', cls = '', onclick = null) {
   const el = h(onclick ? 'button' : 'div', {class: 'metric ' + cls, type: onclick ? 'button' : null},
@@ -324,7 +333,8 @@ function showErrors(form, errors, message) {
 }
 const AUTO = new Set(['created_at', 'updated_at', 'id']);
 function editableFields(res, {only, skip = []} = {}) {
-  return (META.def(res).fields || []).filter(f => !f.readonly && !AUTO.has(f.name) && (!f.name.endsWith('_json') || res === 'policies') && !skip.includes(f.name) && (!only || only.includes(f.name)));
+  const fields = (META.def(res).fields || []).filter(f => !f.readonly && !AUTO.has(f.name) && (!f.name.endsWith('_json') || res === 'policies') && !skip.includes(f.name) && (!only || only.includes(f.name)));
+  return only ? fields.sort((a, b) => only.indexOf(a.name) - only.indexOf(b.name)) : fields;      // form sırası `only` listesindeki sıradır
 }
 /** Kayıt formu: oluşturma ve düzenleme. Yalnızca değişen alanlar gönderilir. */
 async function recordForm(res, record = null, {defaults = {}, only, skip, title, onsaved, extra} = {}) {
@@ -370,25 +380,50 @@ const Router = {
   go(path) { const target = '#/' + path; if (location.hash === target) render(); else location.hash = target; },
 };
 function setPage(title, sub = '', actions = [], crumbs = []) {
-  $('pageTitle').textContent = title; $('pageSub').textContent = sub; document.title = title + ' • Tedarik Portalı';
+  $('pageTitle').textContent = title; $('pageSub').textContent = sub; document.title = title + ' • ' + (S.meta?.app_name || 'GRC Platformu');
   append(clear($('topActions')), actions.filter(Boolean));
-  append(clear($('crumbs')), crumbs.map((c, i) => [i ? ' / ' : '', h('a', {href: '#/' + c[1], text: c[0]})]));
+  const trail = [['Genel Bakış', '']].concat(crumbs);
+  append(clear($('crumbs')), [trail.map((c, i) => [i ? ' / ' : '', h('a', {href: '#/' + c[1], text: c[0]})]), title !== 'Genel Bakış' ? [' / ', h('span', {text: title})] : []]);
 }
 function content(...nodes) { const c = clear($('content')); append(c, nodes); return c; }
 
 // ------------------------------------------------------------------ menü ve ekran tanımları
+// Menü: [başlık, [[rota, ikon, etiket?, gereken yetki?]]]. Etiket yoksa kaynağın Türkçe adı kullanılır.
 const MENU = [
-  ['GENEL', [['home', '▦', 'Genel Bakış'], ['schedule', '◷', 'Takvim'], ['my-surveys', '✎', 'Anketlerim']]],
-  ['TEDARİK', [['r/suppliers', '◉'], ['r/engagements', '⇄'], ['r/contracts', '▤'], ['r/catalog_items', '◫']]],
-  ['PERFORMANS', [['r/sla_definitions', '◷'], ['r/sla_measurements', '✓'], ['r/performance_events', '⚑'], ['r/performance_reviews', '★']]],
-  ['RİSK', [['r/supplier_risks', '△'], ['r/risk_actions', '↗'], ['r/risk_catalog', '◇']]],
-  ['UYUM', [['compliance', '◎', 'Uyum Panosu'], ['r/controls', '✓'], ['r/audits', '⌕'], ['r/findings', '⚑'], ['r/grc_actions', '↻'], ['r/evidence', '▣']]],
-  ['ÇERÇEVE', [['r/standards', '§'], ['r/clauses', '¶'], ['r/processes', '⟳'], ['r/objectives', '◎'], ['r/documents', '▤']]],
-  ['ANKET', [['r/survey_templates', '▧'], ['r/survey_campaigns', '✉']]],
-  ['KAYNAK BULMA', [['r/needs', '◇'], ['r/quotes', '₺']]],
-  ['VERİ', [['transfer', '⇅', 'Aktarım', 'manage'], ['r/import_batches', '☰']]],
-  ['YÖNETİM', [['r/org_units', '⌂'], ['r/supplier_types', '◈'], ['r/review_criteria', '☆'], ['r/policies', '⚖'], ['users', '⚙', 'Kullanıcılar', 'admin'], ['r/audit_log', '≡']]],
+  ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
+  ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
+  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
+  ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
+  ['Dokümanlar', [['r/documents', 'file']]],
+  ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
+  ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi']]],
+  ['Performans ve anket', [['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
+  ['Mimari ve çerçeve', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/standards', 'book'], ['r/clauses', 'list']]],
+  ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
+  ['Yönetim', [['r/companies', 'building'], ['r/org_units', 'home'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
+const ICONS = {
+  home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
+  calendar: 'M4 5h16v15H4zM4 10h16M8 3v4M16 3v4', pulse: 'M3 12h4l2-6 4 12 2-6h6', edit: 'M4 20h4L19 9l-4-4L4 16zM14 6l4 4',
+  gauge: 'M4 16a8 8 0 1 1 16 0M12 16l4-5M4 16h2M18 16h2', alert: 'M12 4l9 16H3zM12 10v4M12 17v.5', trend: 'M3 17l6-6 4 4 8-8M15 7h6v6',
+  activity: 'M3 12h4l3 7 4-14 3 7h4', repeat: 'M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4',
+  book: 'M4 4h11a3 3 0 0 1 3 3v13H7a3 3 0 0 1-3-3zM4 17a3 3 0 0 1 3-3h11', target: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 12h.01',
+  sliders: 'M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4', shield: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7zM9 12l2 2 4-4',
+  check: 'M4 12l5 5L20 6', search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5', flag: 'M5 21V4h11l-1.5 4L16 12H5',
+  paperclip: 'M21 11l-8.5 8.5a5 5 0 0 1-7-7L14 4a3.5 3.5 0 0 1 5 5l-8.5 8.5a2 2 0 0 1-3-3L15 7', lifebuoy: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM5.6 5.6l3.6 3.6M14.8 14.8l3.6 3.6M18.4 5.6l-3.6 3.6M9.2 14.8l-3.6 3.6',
+  layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5', clipboard: 'M9 4h6v3H9zM7 5H5v16h14V5h-2M8 11h8M8 15h6', zap: 'M13 2L4 14h7l-1 8 9-12h-7z',
+  file: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5', server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01', box: 'M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9',
+  building: 'M4 21V5l8-3v19M12 9h8v12M7 8h2M7 12h2M7 16h2M15 13h2M15 17h2M2 21h20', link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z', clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 3',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
+  mail: 'M3 5h18v14H3zM3 6l9 7 9-7', flow: 'M3 6h6v4H3zM15 14h6v4h-6zM9 8h3a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2', share: 'M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
+  coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9h4.5a2 2 0 0 1 0 4H9h5a2 2 0 0 1 0 4H9M11 7v2M11 17v-2', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
+  swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
+};
+function icon(name, cls = '') {
+  return s('svg', {viewBox: '0 0 24 24', class: 'icon ' + cls, 'aria-hidden': 'true'}, s('path', {d: ICONS[name] || ICONS.list}));
+}
+const PAGES = {};   // ek sayfalar (pages.js): PAGES[rota](parçalar, parametreler)
 const COLUMNS = {
   suppliers: ['code', 'name', 'tier', 'status', 'segment', 'owner', 'city'],
   engagements: ['code', 'supplier_id', 'catalog_item_id', 'org_unit_id', 'beneficiary', 'criticality', 'business_owner', 'status'],
@@ -403,7 +438,22 @@ const COLUMNS = {
   performance_events: ['occurred_at', 'supplier_id', 'event_type', 'severity', 'description', 'source'],
   performance_reviews: ['supplier_id', 'engagement_id', 'period_start', 'period_end', 'reviewer'],
   review_scores: ['review_id', 'criterion_id', 'score', 'note'],
-  supplier_risks: ['code', 'title', 'supplier_id', 'category', 'owner', 'status', 'review_date'],
+  supplier_risks: ['code', 'title', 'company_id', 'category', 'risk_level', 'residual_score', 'owner', 'status', 'review_date'],
+  companies: ['code', 'name', 'kind', 'parent_id', 'sector', 'active'],
+  kris: ['code', 'name', 'risk_id', 'last_value', 'unit', 'last_status', 'last_measured_at', 'owner'],
+  kri_values: ['kri_id', 'period', 'value', 'status', 'source', 'recorded_by'],
+  risk_cycles: ['code', 'name', 'company_id', 'period_start', 'period_end', 'status', 'owner'],
+  risk_appetites: ['code', 'category', 'appetite', 'tolerance', 'statement', 'review_date', 'active'],
+  risk_criteria: ['dimension', 'level', 'label', 'frequency', 'financial', 'operational'],
+  cmdb_cis: ['code', 'name', 'ci_class', 'company_id', 'environment', 'business_criticality', 'os', 'os_version', 'source', 'stale'],
+  ci_exposures: ['ci_id', 'rule', 'status', 'detail', 'detected_at', 'risk_id'],
+  cmdb_sync_runs: ['started_at', 'source', 'mode', 'status', 'created', 'updated', 'unchanged', 'stale_marked'],
+  bias: ['code', 'title', 'process_id', 'company_id', 'criticality', 'mtpd_hours', 'rto_hours', 'rpo_hours', 'status', 'review_date'],
+  bc_plans: ['code', 'title', 'plan_type', 'company_id', 'owner', 'version', 'status', 'review_date'],
+  bc_exercises: ['code', 'title', 'exercise_type', 'plan_id', 'planned_date', 'status', 'outcome'],
+  bc_plan_steps: ['plan_id', 'phase', 'position', 'action', 'responsible', 'target_minutes'],
+  bia_applications: ['bia_id', 'ci_id', 'required_rto_hours', 'note'], bia_suppliers: ['bia_id', 'supplier_id', 'engagement_id', 'note'],
+  bia_risks: ['bia_id', 'risk_id', 'note'], bc_plan_applications: ['plan_id', 'ci_id', 'recovery_order', 'target_rto_hours'],
   risk_actions: ['code', 'title', 'risk_id', 'owner', 'due_date', 'priority', 'status'],
   survey_templates: ['code', 'name', 'purpose', 'version', 'status', 'updated_at'],
   survey_campaigns: ['code', 'name', 'template_id', 'subject', 'audience', 'status', 'closes_on'],
@@ -411,11 +461,11 @@ const COLUMNS = {
   import_batches: ['created_at', 'kind', 'source_system', 'filename', 'status', 'created_by'],
   policies: ['code', 'value_json', 'description'],
   standards: ['code', 'name', 'version', 'issuer', 'active'], clauses: ['code', 'title', 'standard_id', 'applicable'],
-  processes: ['code', 'name', 'owner', 'org_unit_id', 'active'], objectives: ['code', 'name', 'description'],
-  documents: ['code', 'title', 'category', 'version', 'owner', 'status', 'review_date'],
+  processes: ['code', 'name', 'process_type', 'parent_id', 'owner', 'org_unit_id', 'active'], objectives: ['code', 'name', 'process_id', 'owner'],
+  documents: ['code', 'title', 'category', 'version', 'process_id', 'owner', 'status', 'effective_date', 'review_date'],
   controls: ['code', 'name', 'execution_mode', 'frequency', 'criticality', 'owner', 'active'],
   audits: ['code', 'name', 'kind', 'status', 'planned_start', 'planned_end', 'lead_auditor'],
-  findings: ['code', 'title', 'severity', 'status', 'owner', 'due_date', 'recurrence'],
+  findings: ['code', 'title', 'source', 'severity', 'status', 'owner', 'due_date', 'recurrence'],
   grc_actions: ['code', 'title', 'owner', 'org_unit_id', 'due_date', 'priority', 'status'],
   evidence: ['code', 'title', 'source', 'confidentiality', 'status', 'expires_at', 'current_version'],
   executions: ['executed_at', 'control_id', 'status', 'source', 'audit_id', 'recorded_by'],
@@ -424,13 +474,16 @@ const COLUMNS = {
 };
 const FILTERS = {
   suppliers: ['tier', 'status', 'segment', 'type_id'], engagements: ['supplier_id', 'org_unit_id', 'beneficiary', 'criticality', 'status'],
-  contracts: ['supplier_id', 'status'], catalog_items: ['kind'], supplier_risks: ['supplier_id', 'status', 'category'],
+  contracts: ['supplier_id', 'status'], catalog_items: ['kind'], supplier_risks: ['company_id', 'status', 'risk_level', 'category', 'source', 'process_id'],
+  companies: ['kind'], kris: ['last_status', 'frequency'], risk_cycles: ['status', 'company_id'], cmdb_cis: ['ci_class', 'environment', 'company_id', 'business_criticality', 'source'],
+  ci_exposures: ['rule', 'status'], cmdb_sync_runs: ['status', 'source'], bias: ['status', 'criticality', 'company_id'], bc_plans: ['status', 'plan_type'],
+  bc_exercises: ['status', 'exercise_type', 'outcome'], processes: ['process_type'], objectives: ['process_id'],
   risk_actions: ['status', 'priority'], performance_events: ['supplier_id', 'event_type', 'severity'], sla_measurements: ['sla_id', 'met'],
   sla_definitions: ['engagement_id'], performance_reviews: ['supplier_id'], survey_campaigns: ['status', 'subject'],
   survey_templates: ['purpose', 'status'], import_batches: ['kind'],
   clauses: ['standard_id', 'applicable'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
-  findings: ['severity', 'status', 'control_id'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
-  documents: ['category', 'status'], executions: ['status', 'source'], risk_catalog: ['category'],
+  findings: ['source', 'severity', 'status'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
+  documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
 };
 const DESCRIPTIONS = {
   suppliers: 'Tekil tüzel kişiler. Kritiklik seviyesi değerlendirme, anket ve risk gözden geçirme sıklığını belirler.',
@@ -438,15 +491,28 @@ const DESCRIPTIONS = {
   contracts: 'Sözleşme referansları; asıl kayıt kaynak sistemdedir.', catalog_items: 'Alınan ürün ve hizmetler.',
   sla_definitions: 'Angajman bazında hizmet seviyesi hedefleri.', sla_measurements: 'Dönemlik ölçümler; hedefin tutup tutmadığı sunucuda hesaplanır.',
   performance_events: 'SLA ihlali, kesinti, gecikme, eskalasyon ve takdir kayıtları.', performance_reviews: 'Kriter bazlı dönemlik değerlendirmeler.',
-  supplier_risks: 'Kurumsal ve tedarikçi riskleri tek kayıtta. KS GRC modeli: olasılık × etki, kontrol katkısı, artık risk, iştah ve değişmez kararlar.',
+  supplier_risks: 'Kurumsal risk kaydı (ISO 31000): kendi şirketlerimizin ve müşterilerimizin riskleri; tedarikçi, CMDB ve anket kaynaklı riskler dahil. Olasılık × etki, kontrol katkısı, artık risk, iştah ve değişmez kararlar.',
+  companies: 'Kendi grup şirketlerimiz ve müşterilerimiz. Her risk, BİA, plan ve CI bir şirkete bağlanır; böylece kendi risklerimizle müşteri riskleri ayrışır.',
+  kris: 'Anahtar risk göstergeleri: eşik aşıldığında riskin yeniden değerlendirilmesi gerektiğini erken bildirir.',
+  kri_values: 'Gösterge ölçümleri; durum (yeşil, sarı, kırmızı) eşiklere göre sunucuda hesaplanır ve değiştirilemez.',
+  risk_cycles: 'Dönemsel risk değerlendirmeleri (ör. yarıyıl). İlerleme, dönem içinde değerlendirilen risklerle ölçülür.',
+  risk_appetites: 'Kategori bazında risk iştahı ve toleransı; yeni riskin iştah eşiği buradan gelir.',
+  risk_criteria: 'Olasılık ve etki ölçeklerinin tanımları (ISO 31000 6.3.4). Değerlendirmede ortak dil sağlar.',
+  cmdb_cis: 'Konfigürasyon öğeleri: ServiceNow CMDB\'den senkronlanan veya MCP ile itilen uygulama, sunucu ve veritabanları.',
+  ci_exposures: 'CMDB kurallarının bulduğu riskli öğeler: destek dışı İS ve uygulama, eksik kritik yama, uzun süre yeniden başlatılmama.',
+  cmdb_sync_runs: 'CMDB senkron çalıştırmalarının değiştirilemez kaydı.',
+  bias: 'İş etki analizleri (ISO 22301 8.2.2): kesintinin zamanla etkisi, MTPD, RTO, RPO ve uygulama, tedarikçi bağımlılıkları.',
+  bc_plans: 'İş sürekliliği ve felaket kurtarma planları: devreye alma, müdahale, kurtarma ve normale dönüş adımları.',
+  bc_exercises: 'Tatbikatlar (ISO 22301 8.5): planın sınanması, hedef ve gerçekleşen kurtarma süresi, alınan dersler ve bulgular.',
   risk_catalog: 'Yeniden kullanılabilir risk senaryoları. Bir senaryodan risk kaydı açabilirsiniz.',
   standards: 'Uyulması gereken standart ve düzenlemeler. Maddeler kontrollerle eşlenir.',
   clauses: 'Standart maddeleri. Kapsam dışı bırakılan madde gerekçe ister (uygulanabilirlik bildirimi).',
-  processes: 'Kontrollerin bağlı olduğu iş süreçleri.', objectives: 'Kontrollerin hizmet ettiği kontrol hedefleri.',
-  documents: 'Politika, prosedür ve talimatlar. Yürürlüğe giren doküman onay ister; gözden geçirme tarihi izlenir.',
+  processes: 'Süreç haritası (ISO 9001 4.4): yönetim, ana ve destek süreçleri; riskler, kontroller, BİA ve dokümanlar sürece bağlanır.',
+  objectives: 'Kontrol hedefleri: hangi riski ele aldığı ve hangi kontrollerle karşılandığı izlenir.',
+  documents: 'Dokümante edilmiş bilgi (ISO 9001 7.5): taslak → onay → yayın; her yayın değiştirilemez bir revizyon ve dosya bütünlük özeti bırakır.',
   controls: 'Kontrol kütüphanesi. Manuel kontroller denetçi tarafından, otomatik kontroller MCP veya portal verisiyle test edilir.',
   audits: 'Denetim planı, kapsamı ve yürütme durumu. Tamamlanan denetimin planı dondurulur.',
-  findings: 'Başarısız kontrol sonuçlarından ve denetimlerden doğan bulgular.',
+  findings: 'Denetim, kontrol testi, tatbikat ve diğer kaynaklardan doğan bulgular; DÖF ile kapatılır.',
   grc_actions: 'Düzeltici ve önleyici faaliyetler (DÖF). Etkinliği faaliyet sahibinden farklı biri doğrular.',
   evidence: 'Kanıt kayıtları ve değiştirilemez dosya sürümleri (SHA-256 ile).',
   risk_actions: 'Risk işleme faaliyetleri.', survey_templates: 'Memnuniyet, risk ve bağımsız anket şablonları. Yayımlanan şablon donar.',
@@ -462,30 +528,55 @@ const RELATED = {
   org_units: [['engagements', 'org_unit_id']], catalog_items: [['engagements', 'catalog_item_id']],
   import_batches: [['import_rows', 'batch_id']], supplier_types: [], contracts: [],
   standards: [['clauses', 'standard_id']],
+  companies: [['supplier_risks', 'company_id'], ['bias', 'company_id'], ['bc_plans', 'company_id'], ['cmdb_cis', 'company_id'], ['risk_cycles', 'company_id']],
+  risk_appetites: [], risk_criteria: [], cmdb_sync_runs: [], ci_exposures: [],
 };
 const EXTRA_ACTIONS = {}; // genel detay paneline kaynağa özgü düğmeler
 const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 
+function navVisible([key, , , need]) {
+  if (need && !META.can(need)) return false;
+  if (key.startsWith('r/')) return !!META.def(key.slice(2));
+  const modules = {'my-surveys': 'surveys', compliance: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
+    calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights'}[key];
+  return !modules || S.meta.modules.includes(modules);
+}
+/** Menü bir kez kurulur; sonraki gezinmelerde yalnızca etkin öğe değişir (kaydırma konumu korunur). */
 function navigation() {
-  const nav = clear($('nav')); const current = Router.parse().parts.slice(0, 2).join('/') || 'home';
-  for (const [title, items] of MENU) {
-    const visible = items.filter(([key, , , need]) => {
-      if (need && !META.can(need)) return false;
-      if (key.startsWith('r/')) return !!META.def(key.slice(2));
-      if (key === 'my-surveys') return S.meta.modules.includes('surveys');
-      if (key === 'compliance') return S.meta.modules.includes('grc');
-      return true;
-    });
-    if (!visible.length) continue;
-    nav.append(h('div', {class: 'nav-title', text: title}));
-    for (const [key, icon, label] of visible) {
-      const text = label || META.def(key.slice(2)).label;
-      const active = current === key || (key === 'home' && current === 'home') || current.startsWith(key + '/');
-      nav.append(h('button', {type: 'button', class: 'nav-button' + (active ? ' active' : ''), dataset: {nav: key}, 'aria-current': active ? 'page' : null,
-        onclick: () => Router.go(key)}, h('span', {class: 'nav-icon', 'aria-hidden': 'true', text: icon}), text,
-        key === 'my-surveys' && S.mySurveys ? h('span', {class: 'nav-count', text: S.mySurveys, title: 'Yanıt bekleyen anket'}) : null));
+  const nav = $('nav'); const current = Router.parse().parts.slice(0, 2).join('/') || 'home';
+  if (!nav.dataset.built) {
+    let closed = {}; try { closed = JSON.parse(localStorage.getItem('tdr.navClosed') || '{}'); } catch (e) { /* boş */ }
+    for (const [title, items] of MENU) {
+      const visible = items.filter(navVisible); if (!visible.length) continue;
+      const group = h('div', {class: 'nav-group' + (closed[title] ? ' closed' : '')});
+      const head = h('button', {type: 'button', class: 'nav-title', 'aria-expanded': closed[title] ? 'false' : 'true'}, h('span', {text: title}), icon('chev', 'chev'));
+      head.addEventListener('click', () => {
+        group.classList.toggle('closed'); head.setAttribute('aria-expanded', !group.classList.contains('closed'));
+        closed[title] = group.classList.contains('closed'); try { localStorage.setItem('tdr.navClosed', JSON.stringify(closed)); } catch (e) { /* boş */ }
+      });
+      const list = h('div', {class: 'nav-items'});
+      for (const [key, ico, label] of visible) {
+        list.append(h('button', {type: 'button', class: 'nav-button', dataset: {nav: key}, onclick: () => { document.body.classList.remove('nav-open'); Router.go(key); }},
+          h('span', {class: 'nav-icon'}, icon(ico)), h('span', {text: label || META.def(key.slice(2)).label}),
+          key === 'my-surveys' ? h('span', {class: 'nav-count hidden', id: 'surveyCount', title: 'Yanıt bekleyen anket'}) : null,
+          key === 'my-work' ? h('span', {class: 'nav-count hidden', id: 'workCount', title: 'Açık işleriniz'}) : null));
+      }
+      group.append(head, list); nav.append(group);
     }
+    nav.dataset.built = '1';
   }
+  let activeButton = null;
+  nav.querySelectorAll('.nav-button').forEach(b => {
+    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/'));
+    b.classList.toggle('active', on); if (on) { b.setAttribute('aria-current', 'page'); activeButton = b; } else b.removeAttribute('aria-current');
+  });
+  if (activeButton) {
+    const group = activeButton.closest('.nav-group'); if (group && group.classList.contains('closed')) group.classList.remove('closed');
+    const r = activeButton.getBoundingClientRect(); const box = nav.getBoundingClientRect();
+    if (r.top < box.top || r.bottom > box.bottom) activeButton.scrollIntoView({block: 'nearest'});
+  }
+  const sc = $('surveyCount'); if (sc) { sc.textContent = S.mySurveys; sc.classList.toggle('hidden', !S.mySurveys); }
+  const wc = $('workCount'); if (wc) { wc.textContent = S.myWork || ''; wc.classList.toggle('hidden', !S.myWork); }
 }
 
 // ------------------------------------------------------------------ genel liste
@@ -575,7 +666,9 @@ async function listView(res, {params} = {}) {
 function singular(label) {
   return {Tedarikçiler: 'Tedarikçi', Angajmanlar: 'Angajman', Birimler: 'Birim', Riskler: 'Risk', 'Risk Kaydı': 'Risk', 'Risk Kataloğu': 'Senaryo',
     Kontroller: 'Kontrol', Denetimler: 'Denetim', Bulgular: 'Bulgu', Kanıtlar: 'Kanıt', 'Düzeltici Faaliyetler': 'Faaliyet', Standartlar: 'Standart',
-    Maddeler: 'Madde', Süreçler: 'Süreç', 'Kontrol Hedefleri': 'Hedef', Dokümanlar: 'Doküman'}[label] || 'kayıt';
+    Maddeler: 'Madde', Süreçler: 'Süreç', 'Kontrol Hedefleri': 'Hedef', Dokümanlar: 'Doküman', Şirketler: 'Şirket', 'Anahtar Risk Göstergeleri': 'Gösterge',
+    'Risk Değerlendirme Dönemleri': 'Dönem', 'Risk İştahı': 'İştah beyanı', 'Risk Kriterleri': 'Kriter', 'Konfigürasyon Öğeleri': 'CI', 'İş Etki Analizleri': 'BİA',
+    'İş Sürekliliği Planları': 'Plan', Tatbikatlar: 'Tatbikat', 'Risk İşleme Faaliyetleri': 'Faaliyet', 'KRİ Ölçümleri': 'Ölçüm'}[label] || 'kayıt';
 }
 function presetLabel(res, k, v) {
   const [name, op] = k.split('__'); const label = META.label(res, name);
@@ -759,8 +852,9 @@ async function editTypes(supplier) {
 
 // ------------------------------------------------------------------ risk
 const WEIGHT = {low: 0.2, medium: 0.4, high: 0.6};
-const RISK_FIELDS = ['code', 'title', 'supplier_id', 'engagement_id', 'entity_name', 'category', 'description', 'cause', 'risk_event', 'consequence',
-  'likelihood', 'impact', 'appetite', 'owner', 'response_strategy', 'treatment', 'review_date', 'catalog_id', 'control_risk_ref'];
+const RISK_FIELDS = ['title', 'company_id', 'risk_type', 'category', 'process_id', 'org_unit_id', 'supplier_id', 'engagement_id', 'entity_name', 'impact_area',
+  'cause', 'risk_event', 'consequence', 'likelihood', 'impact', 'target_likelihood', 'target_impact', 'appetite', 'owner', 'consulted', 'response_strategy',
+  'treatment', 'review_date', 'catalog_id', 'description'];
 CREATE.supplier_risks = defaults => recordForm('supplier_risks', null, {only: RISK_FIELDS, defaults: {likelihood: 3, impact: 3, appetite: 9, owner: S.me.username, ...defaults},
   onsaved: r => { refreshList('supplier_risks'); openRecord('supplier_risks', r.id); },
   extra: h('div', {class: 'notice wide', text: 'Risk ifadesi KS GRC ile aynıdır: "… nedeniyle (neden), … olabilir (olay), bu da … sonucunu doğurur (etki)". Tedarikçi riski değilse etkilenen varlık / hizmeti yazın. Kabul ve kapanış için önce değerlendirme yapılır.'})});
@@ -1626,7 +1720,7 @@ function transition(title, note, field, okText, apply, {required = true} = {}) {
     btn(okText, async () => { if (required && !text.value.trim()) { text.focus(); throw new Error(field + ' gerekli'); } await apply(text.value.trim()); Modal.close(); })]);
 }
 DETAILS.findings = async function findingDetail(id) {
-  await Promise.all([list('controls'), list('audits'), list('suppliers')]);
+  await Promise.all(['controls', 'audits', 'suppliers', 'clauses', 'processes', 'supplier_risks', 'companies'].map(r => list(r).catch(() => [])));
   let f; try { f = await api(`findings/${id}/context`); } catch (e) { toast(e.message, false); return; }
   const can = META.def('findings').can_write; const reload = () => { refreshList('findings'); DETAILS.findings(id); };
   const open = ['open', 'in_progress'].includes(f.status);
@@ -1638,7 +1732,12 @@ DETAILS.findings = async function findingDetail(id) {
     section('Bulgu', kv([['Açıklama', f.description], ['Kök neden', f.root_cause], ['Sahip', f.owner], ['Hedef tarih', fmt.date(f.due_date)],
       ['Kontrol', f.control ? h('a', {href: '#/r/controls/' + f.control.id, text: f.control.code + ' · ' + f.control.name}) : null],
       ['Denetim', f.audit_id ? h('a', {href: '#/audit/' + f.audit_id, text: titleOf(refRecord('audits', f.audit_id))}) : null],
-      ['Tedarikçi', display('findings', 'supplier_id', f.supplier_id)], ['Son görülme', fmt.datetime(f.last_seen_at)], ['Kapanış / kabul notu', f.closure_note]])),
+      ['Tedarikçi', display('findings', 'supplier_id', f.supplier_id)], ['Kaynak', display('findings', 'source', f.source)],
+      ['Standart maddesi', f.clause_id ? h('a', {href: '#/r/clauses/' + f.clause_id, text: titleOf(refRecord('clauses', f.clause_id)) || '#' + f.clause_id}) : null],
+      ['Süreç', f.process_id ? h('a', {href: '#/r/processes/' + f.process_id, text: titleOf(refRecord('processes', f.process_id)) || '#' + f.process_id}) : null],
+      ['İlgili risk', f.risk_id ? h('a', {href: '#/r/supplier_risks/' + f.risk_id, text: titleOf(refRecord('supplier_risks', f.risk_id)) || '#' + f.risk_id}) : null],
+      ['Şirket', display('findings', 'company_id', f.company_id)],
+      ['Son görülme', fmt.datetime(f.last_seen_at)], ['Kapanış / kabul notu', f.closure_note]])),
     f.execution ? section('Kaynak test sonucu', h('div', {}, h('div', {class: 'chips'}, resultPill(f.execution.status), display('executions', 'source', f.execution.source), h('span', {class: 'chip', text: fmt.datetime(f.execution.executed_at)})),
       btn('Test ayrıntısı', () => showExecution(f.execution.id), 'ghost small'))) : null,
     section(`Düzeltici faaliyetler (${f.actions.length})`, f.actions.length ? h('ul', {class: 'mini'}, f.actions.map(a => h('li', {class: 'link', onclick: () => openRecord('grc_actions', a.id)},
@@ -1846,10 +1945,11 @@ async function render() {
 async function renderPage() {
   const {parts, params} = Router.parse(); const key = parts[0] || 'home';
   if (Modal.isOpen()) Modal.close();
-  navigation(); window.scrollTo(0, 0);
+  navigation(); window.scrollTo(0, 0); document.body.classList.remove('nav-open');
   const keepDrawer = key === 'r' && parts[2]; if (!keepDrawer && Drawer.isOpen()) Drawer.close();
   try {
-    if (key === 'home') await home();
+    if (PAGES[key]) await PAGES[key](parts, params);
+    else if (key === 'home') await home();
     else if (key === 'r' && parts[1]) { await listView(parts[1], {params}); if (parts[2]) openRecord(parts[1], Number(parts[2])); }
     else if (key === 'templates' && parts[1]) await templateBuilder(Number(parts[1]));
     else if (key === 'surveys' && parts[1]) await campaignPage(Number(parts[1]), params.get('tab'));
@@ -1875,14 +1975,20 @@ async function start() {
     if (S.meta?.auth_mode === 'dev') { toast('Geliştirme modunda oturum kapatılmaz'); return; }
     try { await api('/api/logout', {method: 'POST', body: {}}); } finally { location.assign('/login'); }
   });
+  $('menuToggle').addEventListener('click', () => document.body.classList.toggle('nav-open'));
+  $('searchOpen').addEventListener('click', () => typeof openPalette === 'function' && openPalette());
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (Modal.isOpen()) Modal.close(); else if (Drawer.isOpen()) Drawer.close(); }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k' && typeof openPalette === 'function') { e.preventDefault(); openPalette(); return; }
+    if (e.key === 'Escape') { if (Modal.isOpen()) Modal.close(); else if (Drawer.isOpen()) Drawer.close(); else document.body.classList.remove('nav-open'); }
     if (e.key === '/' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) && $('tableSearch') && !$('tableSearch').disabled) { e.preventDefault(); $('tableSearch').focus(); }
   });
   try { S.meta = await api('metadata'); } catch (e) { content(h('div', {class: 'notice bad', text: e.message})); return; }
   S.me = S.meta.user;
   append(clear($('identity')), [h('strong', {text: S.me.display_name || S.me.username}), h('span', {class: 'role', text: S.me.role_label})]);
+  $('avatar').textContent = (S.me.display_name || S.me.username).split(/[\s.]+/).filter(Boolean).slice(0, 2).map(w => w[0].toLocaleUpperCase(TR)).join('');
+  $('brandName').textContent = S.meta.app_name || 'GRC Platformu';
   if (S.meta.modules.includes('surveys')) api('my/surveys').then(items => { S.mySurveys = items.filter(i => i.open && i.state !== 'submitted').length; navigation(); }).catch(() => {});
+  if (S.meta.modules.includes('insights') && S.me.auth_type !== 'api_key') api('my-work').then(w => { S.myWork = w.total; navigation(); }).catch(() => {});
   window.addEventListener('hashchange', render);
   render();
 }

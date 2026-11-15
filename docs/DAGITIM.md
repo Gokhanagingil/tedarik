@@ -14,7 +14,7 @@ Hedef: Tedarik Portalı'nı başka uygulamaların da çalıştığı bir Linux s
 | Port çakışması | 18090 başka bir süreçteyse kurulum durur (`TEDARIK_PORT` ile başka port seçilir) |
 | Denetim | Kurulumdan önce ve sonra diğer tüm konteynerlerin kimliği ve başlama zamanı karşılaştırılır; fark varsa kurulum hata verir |
 | Yasak işlemler | Sunucu genelinde `docker system prune`, `docker compose down -v`, başka uygulamanın ters vekil ayarı değiştirilmez |
-| Cron | Yalnızca kendi dosyaları: `/etc/cron.d/tedarik-backup` (günlük yedek, 02:17), `/etc/cron.d/tedarik-grc` (iç otomatik kontroller, 05:43) |
+| Cron | Yalnızca kendi dosyaları: `/etc/cron.d/tedarik-backup` (günlük yedek, 02:17), `/etc/cron.d/tedarik-grc` (iç otomatik kontroller, 05:43), `/etc/cron.d/tedarik-cmdb` (CMDB senkronu ve CI risk kuralları, 04:23) |
 
 ## İlk kurulum (GitHub Actions ile)
 
@@ -39,9 +39,26 @@ Kurulum işinde `domain` verilirse (test sunucusu: `tedarik.204-168-247-101.ssli
 
 Vekil arkasında uygulama `TEDARIK_TRUST_PROXY=1` ile çalışır: giriş hız sınırı Caddy'nin yazdığı `X-Forwarded-For` (gerçek istemci adresi) ile uygulanır. Bu ayar yalnızca uygulamanın önünde kendi vekilimiz varken açılır.
 
+## ServiceNow CMDB bağlantısı (K-019, isteğe bağlı)
+
+Portal ServiceNow Table API'sini salt okunur kullanıcıyla okur (`cmdb_ci_business_app`, `cmdb_ci_appl`, `cmdb_ci_server`,
+`cmdb_ci_db_instance`, `cmdb_rel_ci`; sayfalı, `sys_updated_on` ile artımlı). Bağlantı yoksa CMDB verisi MCP ile itilir
+(`docs/MCP_SOZLESMESI.md`, Akış 5) ve gece görevi yalnızca risk kurallarını çalıştırır.
+
+1. ServiceNow'da `cmdb_read` (ve ilişki tablosu için okuma) yetkili, etkileşimsiz bir hizmet hesabı açın.
+2. Kurulumu `TEDARIK_SN_INSTANCE=https://<kurum>.service-now.com` ve `TEDARIK_SN_USER=<hesap>` ile çalıştırın (ayarlar
+   `/opt/tedarik/servicenow.env` dosyasında saklanır; adres `https://` ile başlamalıdır).
+3. Parolayı yalnızca sunucuda yazın: `sudo sh -c 'umask 077; printf %s "<parola>" > /opt/tedarik/secrets/sn_password'`
+   ve uygulamayı yeniden başlatın (`docker compose -p tedarik restart app`). Parola Git'e, CI günlüğüne ve arayüze girmez.
+4. Sunucunun ServiceNow adresine HTTPS (443) ile çıkabildiğini doğrulayın; CMDB Panosu'ndan "ServiceNow'dan senkronize et".
+
+Alan ve değer eşlemesi (`cmdb.servicenow`) ile kural eşikleri (`cmdb.rules`: kapsam ortamı, yama 35 gün, yeniden başlatma
+100 gün, uyarı günleri) Politika Parametreleri'nden değişir. Özel alanlar (ör. `u_os_end_of_support`, `u_last_patch_date`)
+kurumun CMDB'sindeki adlarla eşlenmelidir.
+
 ## Demo verisi ve kabul testi
 
-- `seed_demo` işaretlenirse sentetik demo verisi yüklenir (`python -m tedarik.demo`; yalnızca boş ya da yalnızca demo verisi içeren veritabanına). Demo kullanıcılarının geçici parolaları `/opt/tedarik/.demo-users` dosyasındadır (yalnızca root). Yönetici, Kullanıcılar ekranında "Geçici parola ver" ile yeni parola da üretebilir.
+- `seed_demo` işaretlenirse sentetik demo verisi yüklenir (`python -m tedarik.demo`; yalnızca boş ya da yalnızca demo verisi içeren veritabanına). Önceki sürümle yüklenmiş demoya yeni sürümün bölümleri (şirketler, süreç haritası, kurumsal risk, dokümanlar, CMDB, iş sürekliliği) kullanıcılara ve mevcut kayıtlara dokunmadan eklenir. Demo kullanıcılarının geçici parolaları `/opt/tedarik/.demo-users` dosyasındadır (yalnızca root). Yönetici, Kullanıcılar ekranında "Geçici parola ver" ile yeni parola da üretebilir.
 - `acceptance` işaretlenirse kurulumdan sonra `scripts/acceptance.py` canlı adrese karşı çalışır: rol bazlı uçtan uca senaryolar, güvenlik, MCP, yanıt süreleri ve tarayıcı turu. `kabul.yonetici` hesabı geçici parolayla açılır/sıfırlanır; parola ve MCP anahtarı günlükte maskelenir, iş sonunda kabul yöneticisinin parolası yeniden rastgele yapılır. Test, "KABUL" işaretli kayıtlar yazar ve kendi açtığı test hesaplarını devre dışı bırakır. Sonuç, işin özetinde ve `kabul-<çalıştırma>` eserinde (ekran görüntüleri yalnızca sentetik veri).
 
 ## Erişim (SSH ile, TLS olmadan)

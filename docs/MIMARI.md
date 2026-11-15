@@ -1,4 +1,4 @@
-# Tedarik Portalı Mimarisi
+# GRC Platformu Mimarisi (Tedarik Portalı altyapısı)
 
 ## Amaç
 
@@ -21,8 +21,9 @@ Tarayıcı (derlemesiz istemci)      MCP uygulaması (ServiceNow, Dynamics)     
             +---------------- HTTP: /api/tdr/... (tedarik/http.py) --------------+
                  kimlik -> yetki -> köken denetimi -> tekrar koruması -> işlem
                                         |
-        Modüller (tedarik/modules): core · performance · surveys · risks
-                                    transfer · dashboard · workflow · sourcing
+        Modüller (tedarik/modules): core · performance · surveys · risks · documents · grc
+                                    cmdb · continuity · insights · transfer · dashboard
+                                    workflow · sourcing (kapalı)
                                         |
         Ortak kayıt işlemleri (crud.py) · denetim izi (audit.py) · şema kaydı (schema.py)
                                         |
@@ -34,10 +35,15 @@ Tarayıcı (derlemesiz istemci)      MCP uygulaması (ServiceNow, Dynamics)     
 
 | Modül | Sorumluluk | Varsayılan |
 | --- | --- | --- |
-| `core` | Birimler, tedarikçi tipleri, ürün/hizmet kataloğu, tedarikçiler, angajmanlar, sorumluluklar, sözleşme referansları, kaynak sistem eşlemeleri | Açık |
+| `core` | Şirketler (kendi / müşteri), birimler, süreçler, tedarikçi tipleri, ürün/hizmet kataloğu, tedarikçiler, angajmanlar, sorumluluklar, sözleşme referansları, kaynak sistem eşlemeleri, politika parametreleri, kod sayaçları | Açık |
 | `performance` | SLA tanımı ve ölçümü, kriter bazlı değerlendirme, performans olay günlüğü, scorecard | Açık |
 | `surveys` | Anket motoru: memnuniyet, risk ve bağımsız anketler; şablon sürümü, bölüm, koşullu soru, puan, anonimlik, sonuç, risk sinyali | Açık |
-| `risks` | Tedarikçi riski, değerlendirme geçmişi, işleme faaliyetleri | Açık |
+| `risks` | Kurumsal risk yönetimi (ISO 31000): şirket bazında risk kaydı, kriterler, iştah ve tolerans, değerlendirme dönemleri, KRİ, işleme faaliyetleri, değişmez değerlendirme ve kararlar | Açık |
+| `documents` | Doküman yönetimi (ISO 9001 7.5): onay akışı, dört göz, değişmez revizyon ve dosya | Açık |
+| `grc` | Uyum ve denetim: standart, madde, kontrol hedefi, kontrol, denetim, kanıt, bulgu, DÖF | Açık |
+| `cmdb` | ServiceNow CMDB senkronu ve MCP itme; CI risk kuralları (destek dışı İS/uygulama, yama, yeniden başlatma) | Açık |
+| `continuity` | İş sürekliliği (ISO 22301): BİA, plan, tatbikat | Açık |
+| `insights` | İlişki bağlamları, GRC takvimi, İşlerim, sağlık kontrolü, arama, ilişki modeli, süreç haritası | Açık |
 | `transfer` | İçe aktarma hattı, dışa aktarma | Açık |
 | `dashboard` | Pano özet verisi | Açık |
 | `workflow` | Genel iş akışı motoru, politika parametreleri | Kapalı |

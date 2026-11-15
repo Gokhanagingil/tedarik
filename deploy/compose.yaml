@@ -42,7 +42,12 @@ services:
       TEDARIK_DATABASE_URL_FILE: /run/secrets/database_url
       TEDARIK_API_KEY_FILE: /run/secrets/mcp_api_key
       TEDARIK_DB_POOL_SIZE: "10"
-    secrets: [database_url, mcp_api_key]
+      # ServiceNow CMDB (K-019): adres ve kullanıcı ayar dosyasından; parola yalnızca sunucudaki sır dosyasında
+      TEDARIK_SN_INSTANCE: ${TEDARIK_SN_INSTANCE:-}
+      TEDARIK_SN_USER: ${TEDARIK_SN_USER:-}
+      TEDARIK_SN_PASSWORD_FILE: /run/secrets/sn_password
+      TEDARIK_APP_NAME: ${TEDARIK_APP_NAME:-GRC Platformu}
+    secrets: [database_url, mcp_api_key, sn_password]
     ports:
       - "127.0.0.1:${TEDARIK_PORT:-18090}:8090"
     networks: [internal, edge]
@@ -97,3 +102,5 @@ secrets:
     file: ${TEDARIK_SECRETS}/database_url
   mcp_api_key:
     file: ${TEDARIK_SECRETS}/mcp_api_key
+  sn_password:
+    file: ${TEDARIK_SECRETS}/sn_password
