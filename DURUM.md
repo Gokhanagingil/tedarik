@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-13 · Aşama: uygulama ve dağıtım dosyaları hazır; sunucuya kurulum için GitHub'a SSH gizli değerleri bekleniyor.
+Son güncelleme: 2026-11-15 · Aşama: test sunucusuna (204.168.247.101) kuruldu; şimdilik yalnızca SSH port yönlendirmesiyle erişiliyor.
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -76,6 +76,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **Adım 6 (2026-11-13): Dağıtım.** `Dockerfile` (KS GRC düzeni), `deploy/compose.yaml` (PostgreSQL 16 iç ağda, uygulama yalnızca 127.0.0.1:18090, kaynak sınırları, salt okunur, root olmayan), `deploy/deploy.sh` (sırları sunucuda üretir, önce yedek, ilk yönetici, sağlık denetimi, diğer konteynerlerin değişmediğini doğrular), `deploy/backup.sh` (günlük pg_dump, özet, 14 gün), `.github/workflows/deploy.yml` (elle başlatılır, önce testler). Yan yana çalışan ilgisiz bir konteynerle prova edildi: kurulum, güncelleme, yedek, geri yükleme, Docker yeniden başlatması. Belge: `docs/DAGITIM.md`.
 - **Adım 7 (2026-11-13): Periyodik işler.** `policies` tablosu çekirdeğe taşındı (her kurulumda var). Kritiklik seviyesine göre değerlendirme ve anket sıklığı (`review.cadence_months`, `survey.cadence_months`) ve uyarı süresi politikadır; yönetici arayüzden değiştirir. `GET /api/tdr/schedule` ve "Takvim" ekranı: geciken ve yaklaşan değerlendirme, anket ve risk gözden geçirmeleri; pano uyarıları. Not: hatırlatma e-postası yok (uygulama dışarıya ileti göndermez; KS GRC ile aynı ilke).
 - CI düzeltildi: iş akışı dosyasındaki YAML hatası yüzünden adım 3'ten beri CI işleri hiç başlamamıştı. Paketsiz kurulumda Entra modu artık anlaşılır bir hatayla durur.
+- **Test sunucusuna kurulum (2026-11-15):** 204.168.247.101 (Hetzner, Ubuntu 24.04). Sunucuda `tedarik-deploy` kullanıcısı (anahtarla giriş, parolasız sudo) açıldı; root girişi yalnızca anahtarla (varsayılan). Docker (Ubuntu paketleri) kuruldu. GitHub Actions "Deploy Tedarik (isolated)" işiyle kuruldu; sunucudaki mevcut nginx (80) ve yerel PostgreSQL (127.0.0.1:5432) uygulamasına dokunulmadı. Uygulama `127.0.0.1:18090`; ilk yönetici `tdradmin`.
 - Testler: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
 - Belgeler: `docs/MIMARI.md`, `docs/VERI_MODELI.md`, `docs/UYUM_SOZLESMESI.md`, `docs/KARARLAR.md`.
 
@@ -85,7 +86,6 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - **PostgreSQL yedekleme ve geri yükleme yok** (adım 6).
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
-- **Sunucuya henüz kurulmadı.** Bu çalışma ortamından sunucuya SSH kapalı; kurulum GitHub Actions ile yapılacak (gizli değerler eklenince).
 - **Dışarıya erişim kararı bekleniyor** (alan adı ve TLS); şimdilik yalnızca SSH port yönlendirmesiyle erişilir.
 - **CI güvenlik kapıları eksik** (gitleaks, trivy, bandit, pip-audit).
 - **Periyodik işler yok** (gözden geçirme hatırlatmaları, kampanya takvimi).
