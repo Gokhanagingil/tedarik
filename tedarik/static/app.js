@@ -510,6 +510,9 @@ const COLUMNS = {
   obligations: ['code', 'title', 'source', 'article', 'regulator', 'applicability'], policy_exceptions: ['code', 'title', 'owner', 'end_date', 'risk_level', 'status'],
   attestation_campaigns: ['code', 'title', 'document_id', 'due_date', 'status'], attestations: ['campaign_id', 'display_name', 'status', 'acknowledged_at'],
   notifications: ['created_at', 'channel', 'recipient', 'subject', 'status'],
+  loss_events: ['code', 'title', 'event_type', 'occurred_on', 'net_loss', 'status'], privacy_breaches: ['code', 'title', 'detected_at', 'notify_decision', 'status', 'owner'],
+  rcsa_campaigns: ['code', 'title', 'period', 'due_date', 'status'], access_reviews: ['code', 'title', 'system', 'reviewer', 'due_date', 'status'],
+  bc_incidents: ['code', 'title', 'severity', 'declared_at', 'status'],
   processes: ['code', 'name', 'process_type', 'parent_id', 'owner', 'org_unit_id', 'active'], objectives: ['code', 'name', 'process_id', 'owner'],
   documents: ['code', 'title', 'category', 'version', 'process_id', 'owner', 'status', 'effective_date', 'review_date'],
   controls: ['code', 'name', 'execution_mode', 'frequency', 'criticality', 'owner', 'active'],
@@ -532,7 +535,8 @@ const FILTERS = {
   survey_templates: ['purpose', 'status'], import_batches: ['kind'],
   clauses: ['standard_id', 'applicable'], clause_links: ['relation', 'source', 'active'], evidence_requests: ['status', 'audit_id'], workpapers: ['status', 'audit_id'],
   audit_universe: ['entity_type', 'active'], certifications: ['status', 'standard_id'], obligations: ['regulator', 'source_type', 'applicability'],
-  policy_exceptions: ['status', 'risk_level'], attestation_campaigns: ['status'], notifications: ['channel', 'status'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
+  policy_exceptions: ['status', 'risk_level'], attestation_campaigns: ['status'], notifications: ['channel', 'status'],
+  loss_events: ['event_type', 'status', 'company_id'], privacy_breaches: ['status', 'notify_decision'], rcsa_campaigns: ['status'], access_reviews: ['status'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
   findings: ['source', 'severity', 'status'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
   documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
 };
@@ -568,6 +572,11 @@ const DESCRIPTIONS = {
   policy_exceptions: 'Politika istisnaları: gerekçe, telafi edici kontrol ve süre. Talep eden onaylayamaz; süresi dolan istisna kendiliğinden kapanır.',
   attestation_campaigns: 'Politika okundu beyanı kampanyaları; kapanınca sonuç kanıt olarak kaydedilir.',
   notifications: 'E-posta ve Teams bildirim kutusu.',
+  loss_events: 'Operasyonel olay ve gerçekleşen kayıplar (brüt, geri kazanım, net); risklere bağlanır ve nicel analizi gerçek veriyle besler.',
+  privacy_breaches: 'Kişisel veri ihlalleri (KVKK md. 12/5): tespitten itibaren 72 saat içinde Kurula bildirim, karar ve gerekçe.',
+  rcsa_campaigns: 'Risk ve kontrol öz değerlendirmesi: süreç sahipleri risklerini ve kontrollerinin işleyişini dönemsel olarak değerlendirir.',
+  access_reviews: 'Erişim gözden geçirme kampanyaları: her hesap–yetki için kalsın/kaldırılsın kararı; sonuç kanıt olarak kontrole bağlanır.',
+  bc_incidents: 'Kriz kayıtları. Etkin krizi yönetmek için: İş sürekliliği → Kriz Yönetimi.',
   processes: 'Süreç haritası (ISO 9001 4.4): yönetim, ana ve destek süreçleri; riskler, kontroller, BİA ve dokümanlar sürece bağlanır.',
   objectives: 'Kontrol hedefleri: hangi riski ele aldığı ve hangi kontrollerle karşılandığı izlenir.',
   documents: 'Dokümante edilmiş bilgi (ISO 9001 7.5): taslak → onay → yayın; her yayın değiştirilemez bir revizyon ve dosya bütünlük özeti bırakır.',
@@ -595,6 +604,7 @@ const RELATED = {
 const EXTRA_ACTIONS = {}; // genel detay paneline kaynağa özgü düğmeler
 const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 
+DETAILS.bc_incidents = id => Router.go('crisis/' + id);
 const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications']);   // dış denetçi
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
@@ -1842,7 +1852,8 @@ DETAILS.grc_actions = async function actionDetail(id) {
     section('Faaliyet', kv([['Açıklama', a.description], ['Sahip', a.owner], ['Birim', display('grc_actions', 'org_unit_id', a.org_unit_id)], ['Hedef tarih', fmt.date(a.due_date)],
       ['Öncelik', display('grc_actions', 'priority', a.priority)], ['Bulgu', a.finding_id ? h('a', {href: '#/r/findings/' + a.finding_id, text: titleOf(refRecord('findings', a.finding_id))}) : null],
       ['Kontrol', a.control_id ? h('a', {href: '#/r/controls/' + a.control_id, text: titleOf(refRecord('controls', a.control_id))}) : null]])),
-    section('Sonuç ve doğrulama', kv([['Yapılanlar', a.resolution], ['Doğrulayan', a.verified_by], ['Doğrulama notu', a.verification_note], ['Kapanış', fmt.datetime(a.closed_at)]])));
+    section('Sonuç ve doğrulama', kv([['Yapılanlar', a.resolution], ['Doğrulayan', a.verified_by], ['Doğrulama notu', a.verification_note], ['Kapanış', fmt.datetime(a.closed_at)]])),
+    typeof serviceNowSection === 'function' ? serviceNowSection(a, reload) : null);
   const buttons = !can || done ? [] : [
     btn('Düzenle', () => recordForm('grc_actions', a, {skip: ['code', 'status', 'verification_note'], onsaved: reload}), 'secondary'),
     a.status === 'open' ? btn('Başla', () => patch({status: 'in_progress'}), 'secondary') : null,

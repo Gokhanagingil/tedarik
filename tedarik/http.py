@@ -239,6 +239,8 @@ def resource_routes(app, res):
         guard_readonly(res, c.body)
         record_id = crud.insert(c.db, res, c.body, c.principal)
         audit.log(c.db, c.principal, "CREATE", res.name, record_id, c.body)
+        if res.after_create:
+            res.after_create(c.db, record_id, c.principal)
         return 201, {"id": record_id}
 
     def update(c):

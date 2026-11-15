@@ -172,6 +172,29 @@ FIELDS = {
     "workpapers.conclusion": "Denetçi kanaati", "workpapers.reviewer": "Gözden geçiren",
     "policy_exceptions.scope": "İstisnanın kapsamı (sistem, süreç, kişi)", "statement": "Beyan metni",
     "attestation_campaigns.revision": "Doküman revizyonu", "attestations.revision": "Doküman revizyonu",
+    # olay, kayıp, KVKK ihlali, RCSA, nicel risk, erişim gözden geçirme, kriz (K-027)
+    "account": "Hesap", "decided_by": "Karar veren", "decision": "Karar", "entitlement": "Yetki / rol",
+    "last_login": "Son giriş", "remediated": "Uygulandı", "remediated_at": "Uygulama zamanı", "completed_at": "Tamamlanma",
+    "instructions": "Açıklama / yönerge", "system": "Sistem / uygulama", "author": "Yazan", "incident_id": "Kriz",
+    "logged_at": "Zaman", "done_at": "Tamamlanma", "done_by": "Tamamlayan", "commander": "Kriz lideri",
+    "declared_at": "İlan zamanı", "declared_by": "İlan eden", "recovered_at": "Kurtarma zamanı",
+    "summary": "Olay sonrası rapor", "external_number": "ServiceNow no", "external_status": "ServiceNow durumu",
+    "external_synced_at": "ServiceNow eşitleme", "grc_actions.external_id": "ServiceNow kayıt kimliği",
+    "discovered_on": "Fark edilme tarihi", "external_ref": "Dış kayıt no (ITSM)", "gross_loss": "Brüt kayıp (TL)",
+    "near_miss": "Ramak kala", "net_loss": "Net kayıp (TL)", "occurred_on": "Olay tarihi", "recovery": "Geri kazanım (TL)",
+    "authority_notified_at": "Kurula bildirim zamanı", "authority_reference": "Kurul bildirim referansı",
+    "consequences": "Olası sonuçlar", "data_categories": "Veri kategorileri", "decision_rationale": "Bildirim kararı gerekçesi",
+    "delay_reason": "Gecikme gerekçesi", "loss_event_id": "Kayıp olayı", "measures": "Alınan önlemler",
+    "notify_decision": "Kurula bildirim kararı", "special_categories": "Özel nitelikli veri var",
+    "subject_groups": "İlgili kişi grupları", "subjects_count": "Etkilenen kişi sayısı",
+    "subjects_notified_at": "İlgili kişilere bildirim", "privacy_breaches.detected_at": "Tespit zamanı",
+    "detected_at": "Tespit zamanı", "privacy_breaches.occurred_at": "İhlal zamanı",
+    "effectiveness": "Kontrol etkinliği (öz değerlendirme)", "item_type": "Kalem türü", "respondent": "Yanıtlayan",
+    "curve_json": "Kayıp aşım eğrisi", "inputs_json": "Girdiler", "iterations": "Benzetim sayısı",
+    "mean_loss": "Beklenen yıllık kayıp (TL)", "p50": "Medyan yıllık kayıp (TL)", "p90": "%90 yıllık kayıp (TL)",
+    "p95": "%95 yıllık kayıp (TL)", "p99": "%99 yıllık kayıp (TL)", "zero_share": "Kayıpsız yıl olasılığı",
+    "ale": "Beklenen yıllık kayıp (TL)", "quantified_at": "Nicel analiz zamanı", "plan_id": "Plan",
+    "bc_incidents.description": "Durum (ne oldu, neyi etkiliyor)",
     "attestation_campaigns.audience": "Hedef kitle", "risk_level": "Risk seviyesi", "external": "Dış denetçi",
 }
 
@@ -330,6 +353,29 @@ CHOICES.update({
     "response_status": {"pending": "Bekleniyor", "agreed": "Katılıyor", "partially_agreed": "Kısmen katılıyor",
                         "disagreed": "Katılmıyor"},
 })
+CHOICES.update({
+    "loss_events.event_type": {"internal_fraud": "İç dolandırıcılık", "external_fraud": "Dış dolandırıcılık",
+                               "employment": "Çalışan ve iş güvenliği", "clients_products": "Müşteri, ürün ve iş uygulamaları",
+                               "physical_assets": "Fiziksel varlık hasarı", "systems": "İş kesintisi ve sistem hatası",
+                               "execution_process": "Süreç yönetimi ve işlem hatası"},
+    "loss_events.status": {"open": "Açık", "analysis": "Kök neden analizinde", "closed": "Kapalı"},
+    "loss_events.source": {"manual": "Elle", "servicenow": "ServiceNow", "mcp": "MCP"},
+    "notify_decision": {"pending": "Karar bekleniyor", "notify": "Bildirilecek", "not_required": "Bildirim gerekmiyor"},
+    "privacy_breaches.status": {"open": "Açık", "notified": "Kurula bildirildi", "closed": "Kapalı"},
+    "rcsa_campaigns.status": {"draft": "Taslak", "open": "Açık", "closed": "Kapandı"},
+    "rcsa_items.status": {"pending": "Bekliyor", "submitted": "Yanıtlandı"},
+    "item_type": {"risk": "Risk", "control": "Kontrol"},
+    "effectiveness": {"effective": "Etkin", "partially_effective": "Kısmen etkin", "ineffective": "Etkin değil",
+                      "not_operating": "Çalışmıyor"},
+    "access_reviews.status": {"draft": "Taslak", "open": "Gözden geçiriliyor", "completed": "Tamamlandı"},
+    "access_reviews.source": {"import": "Dosyadan", "portal_users": "Portal kullanıcıları", "mcp": "MCP"},
+    "decision": {"pending": "Karar bekliyor", "keep": "Kalsın", "revoke": "Kaldırılsın", "modify": "Değiştirilsin"},
+    "bc_incidents.severity": {"medium": "Orta", "high": "Yüksek", "critical": "Kritik"},
+    "bc_incidents.status": {"active": "Etkin", "recovering": "Normale dönüş", "closed": "Kapalı"},
+    "bc_incident_tasks.status": {"todo": "Yapılacak", "doing": "Yapılıyor", "done": "Tamamlandı", "skipped": "Atlandı"},
+    "bc_incident_log.kind": {"decision": "Karar", "communication": "İletişim", "update": "Durum notu", "status": "Durum değişikliği"},
+})
+CHOICES["exercise_type"]["real_incident"] = "Gerçek olay (kriz)"
 CHOICES["risk_category"] = CHOICES["category"]
 
 

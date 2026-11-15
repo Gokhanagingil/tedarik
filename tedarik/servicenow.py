@@ -50,10 +50,25 @@ class Client:
         self.timeout, self.retries, self.sleep = timeout, retries, sleep
         self.requests = 0
 
-    def _get(self, path, params):
+    def create(self, table, payload):
+        """Tek kayıt oluşturur (yalnızca GRC görev eşlemesi, K-027; CMDB'ye yazılmaz). Dönüş: kayıt alanları."""
+        if not table.replace("_", "").isalnum():
+            raise ServiceNowError("Geçersiz tablo adı")
+        return self._get(f"/api/now/table/{table}", {"sysparm_display_value": "false"}, body=payload).get("result", {})
+
+    def record(self, table, sys_id, fields):
+        if not table.replace("_", "").isalnum() or not sys_id.isalnum():
+            raise ServiceNowError("Geçersiz tablo veya kayıt kimliği")
+        return self._get(f"/api/now/table/{table}/{sys_id}", {"sysparm_fields": ",".join(fields),
+                                                                "sysparm_display_value": "all"}).get("result", {})
+
+    def _get(self, path, params, body=None):
         url = f"{self.instance}{path}?{urllib.parse.urlencode(params)}"
-        request = urllib.request.Request(url, headers={"Accept": "application/json", "Authorization": self.auth,
-                                                       "User-Agent": "grc-platform-cmdb/1"})
+        headers = {"Accept": "application/json", "Authorization": self.auth, "User-Agent": "grc-platform-cmdb/1"}
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        request = urllib.request.Request(url, headers=headers, method="POST" if body is not None else "GET",
+                                         data=json.dumps(body).encode("utf-8") if body is not None else None)
         attempt = 0
         while True:
             attempt += 1
@@ -69,13 +84,13 @@ class Client:
                 if exc.code in (401, 403):
                     raise ServiceNowError(f"ServiceNow erişimi reddedildi ({exc.code}); hesap ve tablo yetkisini "
                                           "denetleyin") from None
-                if exc.code in (429, 500, 502, 503, 504) and attempt <= self.retries:
+                if exc.code in (429, 500, 502, 503, 504) and attempt <= self.retries and body is None:
                     wait = exc.headers.get("Retry-After") if exc.headers else None
                     self.sleep(min(float(wait), 60) if wait and wait.isdigit() else 2 ** attempt)
                     continue
                 raise ServiceNowError(f"ServiceNow isteği başarısız ({exc.code}): {path}") from None
             except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                if attempt <= self.retries:
+                if attempt <= self.retries and body is None:      # yazma isteği tekrarlanmaz (çift kayıt olmasın)
                     self.sleep(2 ** attempt)
                     continue
                 raise ServiceNowError(f"ServiceNow'a bağlanılamadı: {type(exc).__name__}") from None

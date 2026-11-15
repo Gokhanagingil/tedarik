@@ -96,7 +96,8 @@ EXERCISES = Resource("bc_exercises", "Tatbikatlar", {
     "target_recovery_minutes": "INTEGER", "achieved_recovery_minutes": "INTEGER", "outcome": "TEXT",
     "lessons_learned": "TEXT", "report": "TEXT", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="manage", code_prefix="TAT", code_yearly=True, search=("code", "title", "scenario"),
-    enums={"exercise_type": ("tabletop", "walkthrough", "simulation", "functional", "full_scale", "call_tree"),
+    enums={"exercise_type": ("tabletop", "walkthrough", "simulation", "functional", "full_scale", "call_tree",
+                             "real_incident"),
            "status": ("planned", "completed", "cancelled"),
            "outcome": ("successful", "partially_successful", "failed")})
 
@@ -469,6 +470,7 @@ def register(app):
     app.route("GET", API + "/bc_exercises/{id}/context", exercise_context)
     app.route("POST", API + "/bc_exercises/{id}/findings", exercise_finding)
     app.route("GET", API + "/bcm/overview", overview)
+    _crisis.register(app)
 
 
 DEFAULT_POLICIES = (
@@ -483,3 +485,6 @@ def seed(db):
     for code, value, description in DEFAULT_POLICIES:
         db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, json.dumps(value), description))
+
+
+from . import crisis as _crisis  # noqa: E402  (kriz yönetimi modu; K-027)

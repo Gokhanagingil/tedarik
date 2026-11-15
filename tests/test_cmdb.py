@@ -37,6 +37,13 @@ class FakeServiceNow:
                     self.send_response(401)
                     self.end_headers()
                     return
+                parts = url.path.split("/")
+                if len(parts) == 6 and parts[5] in outer.created:            # /api/now/table/<tablo>/<sys_id>
+                    body = json.dumps({"result": outer.created[parts[5]]}).encode()
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 table = url.path.rsplit("/", 1)[-1]
                 records = outer.tables.get(table, [])
                 mark = next((p.split(">=", 1)[1] for p in query.get("sysparm_query", "").split("^")
@@ -50,6 +57,17 @@ class FakeServiceNow:
                 self.end_headers()
                 self.wfile.write(body)
 
+            def do_POST(self):                                              # görev eşlemesi (K-027)
+                payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                sys_id = f"t{len(outer.created) + 1:031d}"
+                outer.created[sys_id] = {"sys_id": sys_id, "number": f"TASK{1000 + len(outer.created)}",
+                                         "state": {"value": "1", "display_value": "Open"}, **payload}
+                body = json.dumps({"result": outer.created[sys_id]}).encode()
+                self.send_response(201)
+                self.end_headers()
+                self.wfile.write(body)
+
+        self.created = {}
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         threading.Thread(target=self.server.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.server.server_address[1]}"

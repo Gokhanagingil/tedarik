@@ -186,6 +186,10 @@ const WORK_GROUPS = [
   ['bias_to_review', 'Gözden geçirme zamanı gelen BİA\'larım', 'bias', () => [], 'review_date'],
   ['evidence_requests', 'Benden istenen kanıtlar', 'evidence_requests', r => [display('evidence_requests', 'status', r.status)], 'due_date'],
   ['finding_responses', 'Yönetim yanıtı beklenen bulgularım', 'findings', r => [display('findings', 'severity', r.severity)], 'due_date'],
+  ['crisis_tasks', 'Kriz görevlerim', 'bc_incident_tasks', r => [pill(META.option('bc_incident_tasks', 'phase', r.phase), 'bad')], null],
+  ['breaches', 'Sorumlusu olduğum kişisel veri ihlalleri', 'privacy_breaches', () => [pill('72 saat', 'bad')], null],
+  ['rcsa', 'Öz değerlendirme yanıtlarım', 'rcsa_items', r => [pill(META.option('rcsa_items', 'item_type', r.item_type), 'neutral')], 'due_date'],
+  ['access_reviews', 'Erişim gözden geçirmelerim', 'access_reviews', r => [h('span', {class: 'chip', text: r.system})], 'due_date'],
   ['attestations', 'Okundu beyanı bekleyen politikalar', 'attestations', () => [pill('Beyan bekleniyor', 'warn')], 'due_date'],
   ['evidence_to_review', 'İncelememi bekleyen kanıtlar', 'evidence_requests', r => [h('span', {class: 'chip', text: 'Teslim eden: ' + r.assignee})], 'due_date'],
   ['workpapers_to_review', 'Gözden geçirmemi bekleyen çalışma kâğıtları', 'workpapers', r => [h('span', {class: 'chip', text: 'Hazırlayan: ' + (r.preparer || '—')})], null],
@@ -206,7 +210,8 @@ PAGES['my-work'] = async function myWork() {
     const d = dateKey ? r[dateKey] : null;
     const li = h('li', {class: 'link', tabindex: '0'}, d ? h('span', {class: 'due' + (late(d) ? ' late' : ''), text: fmt.date(d) + ' · ' + dueText(d)}) : null,
       h('strong', {text: [r.code, r.title || r.name].filter(Boolean).join(' · ')}), h('div', {class: 'chips'}, chips(r)));
-    const go = () => (res === 'survey_campaigns' ? Router.go('my-surveys') : res === 'attestations' && typeof acknowledgeDialog === 'function' ? acknowledgeDialog(r) : openRecord(res, r.id));
+    const go = () => (res === 'survey_campaigns' ? Router.go('my-surveys') : res === 'attestations' && typeof acknowledgeDialog === 'function' ? acknowledgeDialog(r)
+      : res === 'rcsa_items' && typeof rcsaRespond === 'function' ? rcsaRespond(r, render) : res === 'bc_incident_tasks' ? Router.go('crisis/' + r.incident_id) : openRecord(res, r.id));
     li.addEventListener('click', go); li.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     return li;
   })), null, String(w[key].length)))));
@@ -352,7 +357,8 @@ PAGES.risk = async function riskBoard(parts, params) {
       h('tbody', {}, d.top.map(r => h('tr', {class: 'clickable', onclick: () => openRecord('supplier_risks', r.id)}, h('td', {class: 'cell-primary', text: r.code}), h('td', {text: r.title}),
         h('td', {text: titleOf(refRecord('companies', r.company_id)).replace(/^SRK-\d+ — /, '')}), h('td', {}, levelPill(r.risk_level)), h('td', {class: 'num', text: r.inherent_score}),
         h('td', {class: 'num' + (r.residual_score > r.appetite ? ' over' : ''), text: r.residual_score === null ? '—' : fmt.num(r.residual_score)}), h('td', {class: 'num', text: r.appetite}),
-        h('td', {}, display('supplier_risks', 'status', r.status))))))) : empty('Risk yok', '')));
+        h('td', {}, display('supplier_risks', 'status', r.status))))))) : empty('Risk yok', '')),
+    typeof quantPanel === 'function' ? await quantPanel() : null);
 };
 
 // ------------------------------------------------------------------ risk detayı (ISO 31000)
@@ -420,6 +426,7 @@ DETAILS.supplier_risks = async function riskDetail(id, tab) {
   if (hasModule('grc')) items.push({key: 'controls', label: 'Kontroller', count: r.controls.length, render: controls});
   if (hasModule('cmdb')) items.push({key: 'cis', label: 'Varlıklar', count: r.cis.length, render: cis});
   items.push({key: 'decisions', label: 'Kararlar', count: r.decisions.length, render: decisions});
+  for (const t of (typeof RISK_TABS === 'undefined' ? [] : RISK_TABS)) items.push({key: t.key, label: t.label, render: () => t.render(r, reload)});
   const body = h('div', {}, h('div', {class: 'chips'}, levelPill(r.risk_level), display('supplier_risks', 'status', r.status), display('supplier_risks', 'category', r.category),
     r.risk_type === 'opportunity' ? pill('Fırsat', 'good') : null, r.source && r.source !== 'manual' ? pill(META.option('supplier_risks', 'source', r.source), 'purple') : null), h('br'), tabs(items, tab));
   Drawer.open(r.code + ' · ' + r.title, body, can ? (terminal ? [btn('Yeniden aç', () => decision(r, 'open', () => reload()), 'secondary')] : [

@@ -29,6 +29,12 @@ def main(argv=None):
             else:
                 result = cmdb.evaluate_rules(db, SYSTEM)
                 print(f"ServiceNow yapılandırılmadı; kurallar değerlendirildi: açık maruziyet {result['open']}")
+            if channel == "servicenow" and app.enabled("grc"):        # K-027: DÖF ↔ ServiceNow görev durumu (isteğe bağlı)
+                from .modules.access_reviews import pull_status
+                try:
+                    print(f"ServiceNow görev durumu güncellendi: {pull_status(db, app)} faaliyet")
+                except Exception as exc:                               # noqa: BLE001 - senkronun geri kalanı etkilenmez
+                    print(f"ServiceNow görev durumu alınamadı: {type(exc).__name__}")
     finally:
         app.close()
     return 0

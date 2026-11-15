@@ -203,9 +203,11 @@ ACTIONS = Resource("grc_actions", "Düzeltici Faaliyetler", {
     "control_id": fk("controls", False), "description": "TEXT", "owner": "TEXT NOT NULL",
     "org_unit_id": fk("org_units", False), "due_date": "DATE NOT NULL", "priority": "TEXT NOT NULL DEFAULT 'medium'",
     "status": "TEXT NOT NULL DEFAULT 'open'", "resolution": "TEXT", "verified_by": "TEXT",
-    "verification_note": "TEXT", "closed_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL",
+    "verification_note": "TEXT", "closed_at": "TIMESTAMP", "external_id": "TEXT", "external_number": "TEXT",
+    "external_status": "TEXT", "external_synced_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL",
     "updated_at": "TIMESTAMP"},
-    module=M, code_prefix="DOF", code_yearly=True, search=("code", "title"), write_roles=CONTRIBUTORS, readonly=("verified_by", "closed_at"),
+    module=M, code_prefix="DOF", code_yearly=True, search=("code", "title", "external_number"), write_roles=CONTRIBUTORS,
+    readonly=("verified_by", "closed_at", "external_id", "external_number", "external_status", "external_synced_at"),
     enums={"priority": ("low", "medium", "high", "critical"),
            "status": ("open", "in_progress", "validation", "completed", "cancelled")})
 
@@ -1321,6 +1323,7 @@ def register(app):
     app.route("GET", API + "/grc/overview", overview)
     _assurance.register(app)
     _compliance.register(app)
+    _access.register(app)
 
 
 DEFAULT_POLICIES = {
@@ -1334,6 +1337,7 @@ def seed(db):
                    (code, json.dumps(value), description))
     _assurance.seed(db)
     _compliance.seed(db)
+    _access.seed(db)
 
 
-from . import assurance as _assurance, compliance as _compliance  # noqa: E402  (kaynak tanımları bu modülün tablolarına bağlıdır)
+from . import access_reviews as _access, assurance as _assurance, compliance as _compliance  # noqa: E402  (kaynak tanımları bu modülün tablolarına bağlıdır)

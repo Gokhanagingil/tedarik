@@ -332,6 +332,16 @@ def my_work(c):
         take("exceptions_to_approve", "policy_exceptions", f"""SELECT id, code, title, risk_level, start_date AS due_date
             FROM tdr_policy_exceptions WHERE status='requested' AND COALESCE(requested_by,'') NOT IN ({marks})
             AND owner NOT IN ({marks}) ORDER BY start_date""", (*names, *names))
+    take("rcsa", "rcsa_items", f"""SELECT i.id, k.code, k.title, k.due_date, i.item_type, i.risk_id, i.control_id
+        FROM tdr_rcsa_items i JOIN tdr_rcsa_campaigns k ON k.id=i.campaign_id WHERE i.respondent IN ({marks})
+        AND i.status='pending' AND k.status='open' ORDER BY k.due_date""", names)
+    take("access_reviews", "access_reviews", f"""SELECT id, code, title, due_date, system FROM tdr_access_reviews
+        WHERE reviewer IN ({marks}) AND status='open' ORDER BY due_date""", names)
+    take("breaches", "privacy_breaches", f"""SELECT id, code, title, detected_at FROM tdr_privacy_breaches
+        WHERE owner IN ({marks}) AND status<>'closed' ORDER BY detected_at""", names)
+    take("crisis_tasks", "bc_incident_tasks", f"""SELECT t.id, k.code, t.action AS title, t.phase, t.incident_id
+        FROM tdr_bc_incident_tasks t JOIN tdr_bc_incidents k ON k.id=t.incident_id WHERE t.responsible IN ({marks})
+        AND t.status IN ('todo','doing') AND k.status<>'closed' ORDER BY t.id""", names)
     take("attestations", "attestations", """SELECT a.id, k.code, k.title, k.due_date, k.statement, k.document_id
         FROM tdr_attestations a JOIN tdr_attestation_campaigns k ON k.id=a.campaign_id WHERE a.username=?
         AND a.status='pending' AND k.status='open' ORDER BY k.due_date""", (c.principal.username,))

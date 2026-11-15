@@ -285,4 +285,164 @@ class AssuranceSections:
                        (doc["current_revision"], stamp(5), camp))
 
 
-ASSURANCE_SECTIONS = (("standards", "grc"), ("assurance", "grc"), ("compliance", "grc"))
+    # -------------------------------------------------------------- olay, kayıp, ihlal, RCSA, nicel risk (K-027)
+    def incidents(self):
+        import json as _json
+        from datetime import datetime, timedelta, timezone
+        from . import crud
+        from .demo_platform import TAG, day, stamp
+        from .modules import incidents as I
+        db = self.db
+        admin = Principal("selin.aydin", "ADMIN", "system", "Selin Aydın")
+        risks = rows(db, "SELECT id, code, title, company_id, process_id, category FROM tdr_supplier_risks WHERE status IN "
+                         "('open','in_treatment') ORDER BY COALESCE(residual_score, inherent_score) DESC, id LIMIT 8")
+        losses = (("Ödeme ağ geçidinde 3 saatlik kesinti", "systems", -40, 420000, 0, "INC0019811"),
+                  ("Tedarikçi faturasında mükerrer ödeme", "execution_process", -75, 86000, 86000, None),
+                  ("Sahte tedarikçi e-postasıyla ödeme talebi (önlendi)", "external_fraud", -20, 0, 0, None),
+                  ("Yedekleme ajanı hatası nedeniyle veri kaybı", "systems", -120, 150000, 20000, "INC0017302"),
+                  ("SLA ihlali nedeniyle müşteri cezai şartı", "clients_products", -60, 275000, 0, None),
+                  ("Sunucu odası klima arızası", "physical_assets", -200, 64000, 30000, None),
+                  ("Yanlış konfigürasyonla yayımlanan sürüm", "execution_process", -15, 98000, 0, "INC0020144"),
+                  ("Çağrı merkezi personel devri nedeniyle hizmet aksaması", "employment", -95, 45000, 0, None))
+        for i, (title, kind, ago, gross, rec, ref) in enumerate(losses):
+            r = risks[i % len(risks)] if risks else {}
+            crud.insert(db, I.LOSS_EVENTS, {"title": title, "event_type": kind, "occurred_on": day(ago), "discovered_on": day(ago + 1),
+                                            "gross_loss": gross, "recovery": rec, "near_miss": 1 if gross == 0 else 0,
+                                            "risk_id": r.get("id"), "company_id": r.get("company_id"), "process_id": r.get("process_id"),
+                                            "external_ref": ref, "source": "servicenow" if ref else "manual",
+                                            "status": "closed" if ago < -90 else "analysis",
+                                            "root_cause": "Kök neden analizi tamamlandı; kalıcı çözüm DÖF ile izleniyor." if ago < -90 else None,
+                                            "description": TAG}, admin)
+        estimates = ((0.2, 0.5, 2, 300000, 1500000, 9000000), (1, 3, 8, 20000, 90000, 600000), (0.05, 0.15, 0.5, 2000000, 8000000, 40000000),
+                     (2, 6, 15, 5000, 25000, 150000), (0.1, 0.3, 1, 500000, 2500000, 12000000))
+        for r, (a, b, c, d, e, f) in zip(risks, estimates):
+            inputs = {"freq_min": a, "freq_likely": b, "freq_max": c, "loss_min": d, "loss_likely": e, "loss_max": f}
+            losses_sim = I.simulate(inputs, 10000, 1000 + r["id"])
+            mean = sum(losses_sim) / len(losses_sim)
+            top = losses_sim[-1] or 1
+            curve = [[round(top * k / 20, 2), round(sum(1 for v in losses_sim if v > top * k / 20) / len(losses_sim), 4)] for k in range(21)]
+            db.execute("INSERT INTO tdr_risk_quant_runs (risk_id, inputs_json, iterations, mean_loss, p50, p90, p95, p99, zero_share, "
+                       "curve_json, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                       (r["id"], _json.dumps(inputs), 10000, round(mean, 2), round(I._percentile(losses_sim, 50), 2),
+                        round(I._percentile(losses_sim, 90), 2), round(I._percentile(losses_sim, 95), 2),
+                        round(I._percentile(losses_sim, 99), 2), round(sum(1 for v in losses_sim if v == 0) / len(losses_sim), 4),
+                        _json.dumps(curve), "selin.aydin", stamp(4)))
+            db.execute("UPDATE tdr_supplier_risks SET ale=?, quantified_at=? WHERE id=?", (round(mean, 2), stamp(4), r["id"]))
+        now = datetime.now(timezone.utc)
+        company = self._by("companies", "name", "Demo Ödeme Hizmetleri A.Ş.")
+        crud.insert(db, I.BREACHES, {"title": "Müşteri bildirim listesinin yanlış alıcıya e-postalanması", "company_id": company,
+                                     "owner": "selin.aydin", "detected_at": (now - timedelta(hours=40)).isoformat(timespec="seconds"),
+                                     "occurred_at": (now - timedelta(hours=44)).isoformat(timespec="seconds"),
+                                     "description": "Toplu bilgilendirme e-postası yanlış dağıtım listesiyle gönderildi. " + TAG,
+                                     "data_categories": "Ad soyad, e-posta, müşteri numarası", "subjects_count": 312,
+                                     "subject_groups": "Kurumsal müşteri yetkilileri", "consequences": "Kimlik avı riski",
+                                     "measures": "Alıcıdan silme teyidi istendi; dağıtım listesi kilitlendi."}, admin)
+        closed = crud.insert(db, I.BREACHES, {"title": "Kayıp dizüstü bilgisayar (şifreli disk)", "company_id": company, "owner": "okan.yildiz",
+                                              "detected_at": (now - timedelta(days=60)).isoformat(timespec="seconds"),
+                                              "description": "Saha ekibine ait şifreli dizüstü bilgisayar kayboldu. " + TAG,
+                                              "data_categories": "İş iletişim bilgileri", "subjects_count": 40}, admin)
+        db.execute("UPDATE tdr_privacy_breaches SET notify_decision='not_required', decision_rationale=?, decided_by='selin.aydin', "
+                   "decided_at=?, status='closed', measures=? WHERE id=?",
+                   ("Disk tam şifreli (BitLocker), anahtar cihazda değil; kişiler için risk düşük.", stamp(59),
+                    "Cihaz uzaktan kilitlendi, hesaplar sıfırlandı.", closed))
+        # RCSA
+        proc = one(db, "SELECT id FROM tdr_processes WHERE name='Olay Yönetimi'")
+        camp = crud.insert(db, I.RCSA_CAMPAIGNS, {"title": f"{date.today().year} 2. yarıyıl öz değerlendirmesi — Olay Yönetimi",
+                                                  "period": f"{date.today().year}-H2", "process_id": proc["id"] if proc else None,
+                                                  "due_date": day(12), "instructions": "Risklerinizi ve kontrollerinizin son 6 aydaki işleyişini değerlendirin."},
+                           admin)
+        items = rows(db, "SELECT id, owner FROM tdr_supplier_risks WHERE status IN ('open','in_treatment')"
+                         + (" AND process_id=?" if proc else "") + " LIMIT 4", (proc["id"],) if proc else ())
+        controls = rows(db, "SELECT k.id, k.owner FROM tdr_controls k JOIN tdr_control_processes m ON m.control_id=k.id "
+                            "WHERE m.process_id=? AND k.execution_mode='manual' LIMIT 3", (proc["id"],)) if proc else []
+        for i, r in enumerate(items):
+            db.execute("INSERT INTO tdr_rcsa_items (campaign_id, item_type, risk_id, respondent, status, likelihood, impact, comment, "
+                       "submitted_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+                       (camp, "risk", r["id"], r["owner"] or "zeynep.demir", "submitted" if i < 2 else "pending",
+                        4 if i == 0 else 2 if i == 1 else None, 4 if i == 0 else 3 if i == 1 else None,
+                        "Hafta sonu vardiyasında eskalasyon gecikiyor" if i == 0 else None, stamp(1) if i < 2 else None, stamp(3)))
+        for i, k in enumerate(controls):
+            db.execute("INSERT INTO tdr_rcsa_items (campaign_id, item_type, control_id, respondent, status, effectiveness, comment, "
+                       "submitted_at, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                       (camp, "control", k["id"], "zeynep.demir", "submitted" if i < 2 else "pending",
+                        ("partially_effective" if i == 0 else "effective") if i < 2 else None,
+                        "Gece vardiyasında ikinci onay atlanabiliyor" if i == 0 else None, stamp(1) if i < 2 else None, stamp(3)))
+        db.execute("UPDATE tdr_rcsa_campaigns SET status='open', launched_at=? WHERE id=?", (stamp(3), camp))
+
+    def access_and_crisis(self):
+        """Erişim gözden geçirme (tamamlanmış ve açık) ve geçmiş bir kriz (gerçek olay tatbikatıyla)."""
+        from . import crud
+        from .demo_platform import TAG, day, stamp
+        from .modules import access_reviews as AR, crisis as CR
+        from .modules.grc import store_file
+        db = self.db
+        admin = Principal("selin.aydin", "ADMIN", "system", "Selin Aydın")
+        if self.enabled("grc"):
+            ctl = (one(db, "SELECT id FROM tdr_controls WHERE name LIKE '%Yönetici hesaplarına erişim%' LIMIT 1") or {}).get("id")
+            accounts = [("a.yilmaz", "Ayşe Yılmaz", "DBA"), ("m.kaya", "Mehmet Kaya", "Sunucu yöneticisi"),
+                        ("eski.personel", "Ayrılan Personel", "Domain Admin"), ("svc_backup", "Yedekleme hizmet hesabı", "Backup Operator"),
+                        ("k.aksoy", "Kerem Aksoy", "Sunucu yöneticisi"), ("tedarikci.bakim", "Tedarikçi bakım hesabı", "VPN + yerel yönetici")]
+            done = crud.insert(db, AR.REVIEWS, {"title": "Yönetici hesapları — üçüncü çeyrek gözden geçirmesi", "system": "Active Directory (ayrıcalıklı gruplar)",
+                                                "control_id": ctl, "reviewer": "okan.yildiz", "due_date": day(-20)}, admin)
+            open_ = crud.insert(db, AR.REVIEWS, {"title": "Yönetici hesapları — dördüncü çeyrek gözden geçirmesi", "system": "Active Directory (ayrıcalıklı gruplar)",
+                                                 "control_id": ctl, "reviewer": "okan.yildiz", "due_date": day(9)}, admin)
+            for review, finished in ((done, True), (open_, False)):
+                for j, (acc, person, ent) in enumerate(accounts):
+                    decision = ("revoke" if acc in ("eski.personel",) else "modify" if acc == "tedarikci.bakim" else "keep") if finished else "pending"
+                    db.execute("INSERT INTO tdr_access_review_items (review_id, account, person, entitlement, last_login, decision, comment, "
+                               "decided_by, decided_at, remediated, remediated_at, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                               (review, acc, person, ent, day(-j * 7), decision,
+                                "Ayrılmış çalışan" if decision == "revoke" else "Yalnızca bakım penceresinde etkin olsun" if decision == "modify" else None,
+                                "okan.yildiz" if finished else None, stamp(25) if finished else None, 1 if finished and decision == "revoke" else 0,
+                                stamp(22) if finished and decision == "revoke" else None, stamp(30)))
+            evidence_id = crud.insert(db, RESOURCES_EVIDENCE(), {"title": "Erişim gözden geçirmesi — Active Directory (Q3)", "source": "system",
+                                                                 "confidentiality": "confidential", "description": TAG}, None)
+            store_file(db, evidence_id, "erisim-gozden-gecirme-q3.csv", "Hesap;Karar\na.yilmaz;Kalsın\n".encode("utf-8"), "okan.yildiz")
+            if ctl:
+                db.execute("INSERT INTO tdr_evidence_controls (evidence_id, control_id) VALUES (?,?) ON CONFLICT DO NOTHING", (evidence_id, ctl))
+            db.execute("UPDATE tdr_access_reviews SET status='completed', launched_at=?, completed_at=?, evidence_id=? WHERE id=?",
+                       (stamp(30), stamp(24), evidence_id, done))
+            db.execute("UPDATE tdr_access_reviews SET status='open', launched_at=? WHERE id=?", (stamp(2), open_))
+        if self.enabled("continuity"):
+            plan = one(db, "SELECT id, code FROM tdr_bc_plans WHERE status='approved' ORDER BY id LIMIT 1")
+            if plan:
+                incident = crud.insert(db, CR.INCIDENTS, {"title": "Birincil veri merkezinde enerji kesintisi", "severity": "critical",
+                                                          "status": "closed", "description": "Trafo arızası nedeniyle birincil veri merkezi 3 saat enerjisiz kaldı. " + TAG,
+                                                          "commander": "Kerem Aksoy", "declared_by": "kerem.aksoy",
+                                                          "declared_at": stamp(140, 2)}, admin)
+                db.execute("INSERT INTO tdr_bc_incident_plans (incident_id, plan_id) VALUES (?,?)", (incident, plan["id"]))
+                for step in rows(db, "SELECT * FROM tdr_bc_plan_steps WHERE plan_id=? ORDER BY position", (plan["id"],)):
+                    db.execute("INSERT INTO tdr_bc_incident_tasks (incident_id, plan_id, phase, position, action, responsible, target_minutes, "
+                               "status, done_at, done_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                               (incident, plan["id"], step["phase"], step["position"], step["action"], step["responsible"],
+                                step["target_minutes"], "done", stamp(140, 4), "kerem.aksoy", stamp(140, 2)))
+                for hour, kind, text in ((2, "status", "Kriz ilan edildi; DR planı devreye alındı."),
+                                         (2, "decision", "Kritik hizmetlerin ikincil merkeze geçişine karar verildi."),
+                                         (3, "communication", "Müşterilere ve BDDK'ya ön bilgilendirme yapıldı."),
+                                         (5, "status", "Enerji geri geldi; hizmetler birincil merkeze döndü.")):
+                    db.execute("INSERT INTO tdr_bc_incident_log (incident_id, kind, text, author, logged_at) VALUES (?,?,?,?,?)",
+                               (incident, kind, text, "kerem.aksoy", stamp(140, hour)))
+                exercise = crud.insert(db, RESOURCES_EXERCISES(), {"title": "Gerçek olay: Birincil veri merkezinde enerji kesintisi",
+                                                                   "exercise_type": "real_incident", "plan_id": plan["id"],
+                                                                   "scenario": "Trafo arızası", "planned_date": day(-140), "actual_date": day(-140),
+                                                                   "status": "completed", "facilitator": "Kerem Aksoy",
+                                                                   "achieved_recovery_minutes": 185, "outcome": "successful",
+                                                                   "lessons_learned": "Jeneratör yakıt tedarik sözleşmesi 24 saate çıkarılmalı.",
+                                                                   "report": "Kritik hizmetler 45 dakikada ikincil merkezden sürdürüldü."}, None)
+                db.execute("UPDATE tdr_bc_incidents SET closed_at=?, recovered_at=?, summary=?, lessons_learned=?, exercise_id=? WHERE id=?",
+                           (stamp(140, 6), stamp(140, 5), "Kritik hizmetler 45 dakikada ikincil merkezden sürdürüldü; 3 saat sonra normale dönüldü.",
+                            "Jeneratör yakıt tedarik sözleşmesi 24 saate çıkarılmalı.", exercise, incident))
+
+
+def RESOURCES_EVIDENCE():
+    from .schema import RESOURCES
+    return RESOURCES["evidence"]
+
+
+def RESOURCES_EXERCISES():
+    from .schema import RESOURCES
+    return RESOURCES["bc_exercises"]
+
+
+ASSURANCE_SECTIONS = (("standards", "grc"), ("assurance", "grc"), ("compliance", "grc"), ("incidents", "risks"),
+                      ("access_and_crisis", "core"))

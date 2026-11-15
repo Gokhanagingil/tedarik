@@ -61,9 +61,11 @@ RISKS = Resource("supplier_risks", "Risk Kaydı", {
     "risk_type": "TEXT NOT NULL DEFAULT 'threat'", "source": "TEXT NOT NULL DEFAULT 'manual'", "impact_area": "TEXT",
     "target_likelihood": "INTEGER", "target_impact": "INTEGER", "consulted": "TEXT",
     "inherent_score": "INTEGER", "residual_score": "REAL", "risk_level": "TEXT", "last_assessed_at": "TIMESTAMP",
+    "ale": "DECIMAL", "quantified_at": "TIMESTAMP",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", api=("list", "get", "create"), search=("code", "title"), machine="r", code_prefix="RSK",
-    readonly=("origin_ref", "source", "inherent_score", "residual_score", "risk_level", "last_assessed_at"),
+    readonly=("origin_ref", "source", "inherent_score", "residual_score", "risk_level", "last_assessed_at", "ale",
+              "quantified_at"),
     indexes=(("company_id", "status"),),
     enums={"category": CATEGORIES, "status": ("open", "in_treatment", "accepted", "closed"),
            "response_strategy": ("mitigate", "avoid", "transfer", "accept", "exploit"),
@@ -550,6 +552,7 @@ def register(app):
     app.route("GET", API + "/supplier_risks/{id}/context", risk_context)
     app.route("GET", API + "/risks/overview", overview)
     app.route("GET", API + "/risk_cycles/{id}/context", cycle_context)
+    _incidents.register(app)
 
 
 DEFAULT_POLICIES = (
@@ -576,6 +579,7 @@ def seed(db):
     for code, value, description in DEFAULT_POLICIES:
         db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, json.dumps(value), description))
+    _incidents.seed(db)
     if not one(db, "SELECT id FROM tdr_risk_criteria LIMIT 1"):     # öneri ölçek; kurum kendi eşikleriyle değiştirir
         for level, label, description, frequency in LIKELIHOOD:
             db.execute("INSERT INTO tdr_risk_criteria (dimension, level, label, description, frequency) VALUES (?,?,?,?,?)",
@@ -583,3 +587,6 @@ def seed(db):
         for level, label, financial, operational, reputational, legal in IMPACT:
             db.execute("INSERT INTO tdr_risk_criteria (dimension, level, label, financial, operational, reputational, "
                        "legal) VALUES (?,?,?,?,?,?,?)", ("impact", level, label, financial, operational, reputational, legal))
+
+
+from . import incidents as _incidents  # noqa: E402  (olay, kayıp, KVKK ihlali, RCSA, nicel risk; K-027)
