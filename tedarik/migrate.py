@@ -40,9 +40,35 @@ def _risk_supplier_optional(db):
         raise RuntimeError("Risk kaydı göçünden sonra bütünlük denetimi başarısız")
 
 
+def _risk_company_and_scores(db):
+    """K-018: şirketi olmayan risk varsayılan "kendi şirketimiz" kaydına bağlanır; özet puanlar doldurulur."""
+    if "company_id" not in db.columns("tdr_supplier_risks"):
+        return
+    if db.execute("SELECT 1 FROM tdr_supplier_risks WHERE company_id IS NULL LIMIT 1").fetchone():
+        own = db.execute("SELECT id FROM tdr_companies WHERE kind='own' ORDER BY id LIMIT 1").fetchone()
+        if own is None:
+            own_id = db.execute("INSERT INTO tdr_companies (code, name, kind, active, created_at) VALUES (?,?,?,?,?)",
+                                ("SRK-0001", "Kendi Şirketimiz", "own", 1, utcnow())).lastrowid
+        else:
+            own_id = own["id"]
+        db.execute("UPDATE tdr_supplier_risks SET company_id=? WHERE company_id IS NULL", (own_id,))
+    db.execute("UPDATE tdr_supplier_risks SET inherent_score=likelihood*impact WHERE inherent_score IS NULL")
+    db.execute("""UPDATE tdr_supplier_risks SET residual_score=(SELECT a.residual FROM tdr_risk_assessments a
+        WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.id DESC LIMIT 1), last_assessed_at=(SELECT a.assessed_at FROM
+        tdr_risk_assessments a WHERE a.risk_id=tdr_supplier_risks.id ORDER BY a.id DESC LIMIT 1)
+        WHERE residual_score IS NULL""")
+    db.execute("""UPDATE tdr_supplier_risks SET source=CASE WHEN origin_ref LIKE 'survey:%' THEN 'survey'
+        WHEN supplier_id IS NOT NULL THEN 'supplier' ELSE 'manual' END WHERE source='manual'""")
+    db.execute("""UPDATE tdr_supplier_risks SET risk_level=CASE
+        WHEN COALESCE(residual_score, inherent_score) <= 4 THEN 'low' WHEN COALESCE(residual_score, inherent_score) <= 9
+        THEN 'medium' WHEN COALESCE(residual_score, inherent_score) <= 15 THEN 'high' ELSE 'critical' END
+        WHERE risk_level IS NULL""")
+
+
 # (sıra, açıklama, işlev(db)). Tablo yapısı bildirimsel eşitlemeden gelir; burada yalnızca dönüşümler.
 MIGRATIONS = [
     (1, "Tek risk kaydı: supplier_risks.supplier_id isteğe bağlı (K-015)", _risk_supplier_optional),
+    (2, "Kurumsal risk: şirket bağı ve özet puanlar (K-018)", _risk_company_and_scores),
 ]
 
 

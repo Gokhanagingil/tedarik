@@ -800,9 +800,8 @@ def apply_signals(c):
             raise crud.Invalid("Sinyal bulunamadı veya artık eşiğin altında değil")
         if signal["risk"]:
             continue
-        count = one(c.db, "SELECT COUNT(*) AS n FROM tdr_supplier_risks")["n"] + 1
         risk_id = crud.insert(c.db, risks, {
-            "code": f"ANK-{campaign['code']}-{count:04d}", "title": f"Anket sinyali: {signal['question']}"[:300],
+            "title": f"Anket sinyali: {signal['question']}"[:300],
             "supplier_id": signal["supplier_id"], "category": signal["category"], "owner": c.principal.username,
             "appetite": int(c.body.get("appetite", 9)), "origin_ref": ref,
             "description": (f"'{campaign['name']}' anketinde ortalama puan {signal['average_score']}, "

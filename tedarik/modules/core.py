@@ -240,7 +240,16 @@ DEFAULT_POLICIES = (
 )
 
 
+def default_company(db):
+    """Tek aktif "kendi şirketimiz" varsa onu döner (formda ön seçim ve eski kayıtlar için); yoksa None."""
+    own = rows(db, "SELECT id FROM tdr_companies WHERE kind='own' AND active=1 ORDER BY id LIMIT 2")
+    return own[0]["id"] if len(own) == 1 else None
+
+
 def seed(db):
+    if not one(db, "SELECT id FROM tdr_companies LIMIT 1"):      # her kurulumda en az bir şirket (adı değiştirilir)
+        crud.insert(db, COMPANIES, {"name": "Kendi Şirketimiz", "kind": "own",
+                                    "description": "Kurulumda açıldı; adını şirketinizin adıyla değiştirin."})
     for code, value, description in DEFAULT_POLICIES:     # öneri; yönetici Politika Parametreleri'nden değiştirir
         db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, json.dumps(value), description))
