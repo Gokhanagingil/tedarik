@@ -6,6 +6,9 @@ savunma hattı modelinde birinci hat (süreç sahipleri), ikinci hat (risk, uyum
 denetim) için araç kuran bir uygulayıcı. Türkiye bağlamı: KVKK, BDDK Bilgi Sistemleri ve Elektronik Bankacılık
 Yönetmeliği, SPK ve TCMB ödeme hizmetleri düzenlemeleri; AB'deki müşteriler için NIS2 ve DORA.
 
+Güncel yol haritası artık uygulamanın içindedir: **Yönetim → Yol Haritası** (kaynak: `tedarik/data/roadmap.json`, K-028).
+Bu belge ilk uzman değerlendirmesini ve gerekçeleri saklar.
+
 ## Durum (2026-11-15)
 
 Aşağıdaki eksiklerden yapılanlar: kanıt talep listesi (PBC), risk bazlı yıllık plan, çalışma kâğıtları ve gözden geçirme
@@ -13,7 +16,8 @@ imzası, denetim raporu ve yönetim yanıtı, dış denetçi erişimi, SoA rapor
 politika istisnaları, okundu beyanı, ortak kontrol çerçevesi ve standartlar arası madde ilişkileri, RCSA, olay ve kayıp
 veritabanı, kişisel veri ihlali kaydı (72 saat), nicel risk (Monte Carlo, TL), erişim gözden geçirme kampanyaları,
 kriz yönetimi modu, bildirim altyapısı (e-posta, Teams), DÖF → ServiceNow görev eşlemesi, insan onaylı yapay zekâ
-yardımı (K-023 – K-027). Kalanlar: veri envanteri ve sınıflandırma (veri yönetişimi modülü), zafiyet bulguları
+yardımı (K-023 – K-027). Veri yönetişimi Faz 1 (veri sözlüğü ve katalog) tamamlandı; Faz 2 KVKK envanteri ve sınıflandırmadır.
+Kalanlar: zafiyet bulguları
 entegrasyonu, yapılandırılabilir onay akışları, rapor şablonları ve PDF/Excel, denetim izinin dışarıdan doğrulanması,
 İngilizce arayüz, Entra gruplarından birim ataması, tedarikçi riskinde dış istihbarat.
 

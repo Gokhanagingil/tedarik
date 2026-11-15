@@ -129,3 +129,53 @@ async function evidenceSuggestions(evidence, done) {
       canWrite('evidence') ? btn('Bağla', () => link(k), 'ghost small') : null))) : h('div', {class: 'muted small', text: 'Uygun kontrol bulunamadı.'}),
     aiNotice(out)), [btn('Kapat', () => Modal.close(), 'secondary')], true);
 }
+
+// ------------------------------------------------------------------ yol haritası (K-028)
+function rmBar(v) {   // yol haritası ilerlemesi: tamamlananlar yeşil, süren mavi (kırmızı uyarı rengi kullanılmaz)
+  const x = Math.max(0, Math.min(100, v || 0));
+  return s('svg', {class: 'chart', viewBox: '0 0 100 4', preserveAspectRatio: 'none', role: 'img', 'aria-label': '%' + Math.round(x)},
+    s('rect', {x: 0, y: 0, width: 100, height: 4, rx: 2, fill: '#eceef1'}), s('rect', {x: 0, y: 0, width: x, height: 4, rx: 2, fill: x >= 100 ? '#0f8a5f' : '#2b5fd9'}));
+}
+const RM_STATUS = {planned: ['Planlandı', 'neutral'], in_progress: ['Yapılıyor', 'purple'], blocked: ['Bilgi bekleniyor', 'warn'], done: ['Tamamlandı', 'good'], deferred: ['Ertelendi', 'neutral']};
+PAGES.roadmap = async function roadmapPage(parts, params) {
+  const d = await api('roadmap');
+  const current = params.get('m') || d.modules[0].key;
+  setPage('Yol Haritası', 'Modül ve faz bazında planlanan, yapılmakta olan ve tamamlanan özellikler. Sürümle gelen maddeler her güncellemede yenilenir; "Bilgi bekleniyor" maddeleri kurumdan bilgi veya onay gelince ilerler.', [
+    d.can_edit ? btn('+ Kurum maddesi', () => recordForm('roadmap_items', null, {defaults: {module: current}, only: ['module', 'phase', 'title', 'description', 'status', 'target', 'needs', 'note'], onsaved: () => render()})) : null]);
+  const mods = h('div', {class: 'rm-mods'}, d.modules.map(m => h('button', {type: 'button', class: 'rm-mod' + (m.key === current ? ' on' : ''), 'aria-pressed': String(m.key === current), onclick: () => Router.go('roadmap?m=' + m.key)},
+    h('strong', {text: m.label}), h('span', {class: 'small muted', text: `${m.done}/${m.total} tamamlandı`}), rmBar(m.total ? 100 * m.done / m.total : 0))));
+  // Kurumdan beklenenler: tüm modüller için tek, açılır kapanır özet (seçili modülün maddeleri fazların içinde de görünür)
+  const needs = d.needs.length ? h('details', {class: 'panel rm-needbox'}, h('summary', {}, h('strong', {text: `Kurumdan beklenenler (${d.needs.length})`}),
+    h('span', {class: 'muted small', text: ' · bu bilgiler gelince ilgili madde ilerler'})),
+    h('div', {class: 'tablewrap plain'}, h('table', {}, h('thead', {}, h('tr', {}, ['Madde', 'Modül', 'Beklenen'].map(x => h('th', {text: x})))),
+      h('tbody', {}, d.needs.map(n => h('tr', {class: 'link', onclick: () => Router.go('roadmap?m=' + n.module)}, h('td', {}, h('strong', {text: n.title})),
+        h('td', {class: 'small', text: `${META.option('roadmap_items', 'module', n.module)} · Faz ${n.phase}`}), h('td', {class: 'small', text: n.needs}))))))) : null;
+  const edit = it => {
+    if (!d.can_edit) return null;
+    const only = it.source === 'release' ? ['target', 'note'] : ['module', 'phase', 'title', 'description', 'status', 'target', 'needs', 'note'];
+    return () => recordForm('roadmap_items', it, {only, title: it.source === 'release' ? 'Hedef ve kurum notu: ' + it.title : 'Düzenle: ' + it.title, onsaved: () => render()});
+  };
+  const phases = d.phases.filter(p => p.module === current);
+  const phaseCard = p => {
+    const [label, cls] = RM_STATUS[p.status] || [p.status, 'neutral'];
+    return h('section', {class: 'rm-phase ' + p.status},
+      h('div', {class: 'rm-head'}, h('div', {}, h('div', {class: 'rm-num', text: `Faz ${p.phase}`}), h('h3', {text: p.title})),
+        h('div', {class: 'chips'}, pill(label, cls), p.total ? h('span', {class: 'small muted', text: `${p.done}/${p.total}`}) : null)),
+      p.goal ? h('p', {class: 'small muted', text: p.goal}) : null,
+      p.total ? rmBar(100 * p.done / p.total) : null,
+      h('ul', {class: 'rm-items'}, p.items.map(it => {
+        const open = edit(it);
+        const li = h('li', {class: 'rm-item' + (open ? ' clickable' : ''), tabindex: open ? '0' : null, title: open ? (it.source === 'release' ? 'Hedef dönem ve kurum notu ekleyin' : 'Düzenle') : null},
+          h('span', {class: 'rm-mark ' + it.status, 'aria-hidden': 'true', text: it.status === 'done' ? '✓' : ''}),
+          h('div', {}, h('div', {class: 'chips'}, h('strong', {text: it.title}), it.status !== 'done' && it.status !== 'planned' ? pill(RM_STATUS[it.status][0], RM_STATUS[it.status][1]) : null,
+            it.source === 'custom' ? pill('Kurum maddesi', 'neutral') : null, it.decision ? h('span', {class: 'chip', text: it.decision}) : null,
+            it.target ? h('span', {class: 'chip', text: 'Hedef: ' + it.target}) : null, it.completed_on ? h('span', {class: 'small muted', text: fmt.date(it.completed_on)}) : null),
+          it.description ? h('div', {class: 'small muted', text: it.description}) : null,
+          it.needs && it.status !== 'done' ? h('div', {class: 'rm-need', text: 'Kurumdan beklenen: ' + it.needs}) : null,
+          it.note ? h('div', {class: 'small', text: 'Kurum notu: ' + it.note}) : null));
+        if (open) { li.addEventListener('click', open); li.addEventListener('keydown', e => { if (e.key === 'Enter') open(); }); }
+        return li;
+      })));
+  };
+  content(mods, needs, h('div', {class: 'rm-phases'}, phases.length ? phases.map(phaseCard) : empty('Bu modülde madde yok', '')));
+};

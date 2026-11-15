@@ -181,6 +181,7 @@ EVENT_TYPES = {
     "exception_end": ("İstisna bitişi", "grc"), "attestation": ("Okundu beyanı", "grc"),
     "access_review": ("Erişim gözden geçirme", "grc"), "obligation_review": ("Yükümlülük gözden geçirme", "grc"),
     "rcsa": ("Öz değerlendirme", "risks"), "breach_deadline": ("KVKK bildirim süresi", "risks"),
+    "glossary_review": ("Sözlük terimi gözden geçirme", "datagov"),
 }
 
 
@@ -305,6 +306,10 @@ def calendar(c):
         for b in rows(db, "SELECT * FROM tdr_privacy_breaches WHERE status<>'closed'"):
             add("breach_deadline", f"{b['code']} {b['title']}", deadline(db, b).date().isoformat(), None,
                 "privacy_breaches", b["id"], b["status"])
+    if on("glossary_review") and _readable(c, "glossary_terms"):
+        from .datagov import calendar_events
+        for t in calendar_events(db):
+            add("glossary_review", f"{t['code']} {t['name']}", t["review_date"], None, "glossary_terms", t["id"], "approved")
     events.sort(key=lambda e: (e["start"], e["type"]))
     return {"from": lo, "to": hi, "types": [{"key": k, "label": v[0]} for k, v in EVENT_TYPES.items()
                                             if c.app.enabled(v[1])], "events": events}
@@ -378,6 +383,9 @@ def my_work(c):
     take("attestations", "attestations", """SELECT a.id, k.code, k.title, k.due_date, k.statement, k.document_id
         FROM tdr_attestations a JOIN tdr_attestation_campaigns k ON k.id=a.campaign_id WHERE a.username=?
         AND a.status='pending' AND k.status='open' ORDER BY k.due_date""", (c.principal.username,))
+    if c.app.enabled("datagov") and _readable(c, "glossary_terms"):
+        from .datagov import my_work_items
+        out.update(my_work_items(db, c.principal))
     if c.app.enabled("surveys"):
         out["surveys"] = rows(db, """SELECT c.id, c.code, c.name, c.closes_on FROM tdr_survey_invitations i
             JOIN tdr_survey_campaigns c ON c.id=i.campaign_id WHERE i.respondent=? AND i.status='pending'
@@ -534,6 +542,9 @@ def health(c):
                          "Sahibi olmayan süreçte risk, kontrol ve BİA sorumluluğu belirsiz kalır.", "medium",
                          rows(db, """SELECT id, code, name AS title FROM tdr_processes WHERE active=1 AND (owner IS NULL OR
                          owner='') ORDER BY code"""), "processes", population=_n(db, "SELECT COUNT(*) AS n FROM tdr_processes WHERE active=1")))
+    if c.app.enabled("datagov"):
+        from .datagov import health_checks
+        checks += health_checks(db, _check, _n)
     checks = [x for x in checks if _readable(c, x["resource"])]
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     checks.sort(key=lambda x: (x["count"] == 0, order[x["severity"]], -x["count"]))
@@ -554,7 +565,8 @@ def search(c):
     pattern = "%" + fold(q).replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     results = []
     for name, res in RESOURCES.items():
-        if not _readable(c, name) or not res.search or name in ("audit_log", "import_rows", "policies"):
+        if not _readable(c, name) or not res.search or name in ("audit_log", "import_rows", "policies", "data_columns",
+                                                               "catalog_changes", "catalog_imports", "roadmap_items"):
             continue
         fields = [f for f in res.search if f in ("code", "name", "title")] or list(res.search)[:2]
         label = "name" if "name" in res.fields else "title" if "title" in res.fields else fields[0]

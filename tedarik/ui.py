@@ -10,6 +10,7 @@ STATIC = Path(__file__).parent / "static"
 TYPES = {"app.js": "application/javascript; charset=utf-8", "pages.js": "application/javascript; charset=utf-8",
          "grc.js": "application/javascript; charset=utf-8", "admin.js": "application/javascript; charset=utf-8",
          "assurance.js": "application/javascript; charset=utf-8", "ops.js": "application/javascript; charset=utf-8",
+         "datagov.js": "application/javascript; charset=utf-8",
          "app.css": "text/css; charset=utf-8"}
 
 SHELL = """<!doctype html>
@@ -50,6 +51,7 @@ SHELL = """<!doctype html>
 <script src="/static/admin.js" defer></script>
 <script src="/static/assurance.js" defer></script>
 <script src="/static/ops.js" defer></script>
+<script src="/static/datagov.js" defer></script>
 </body></html>"""
 
 

@@ -376,6 +376,59 @@ CHOICES.update({
     "bc_incident_log.kind": {"decision": "Karar", "communication": "İletişim", "update": "Durum notu", "status": "Durum değişikliği"},
 })
 CHOICES["exercise_type"]["real_incident"] = "Gerçek olay (kriz)"
+
+# Yol haritası ve veri yönetişimi (K-028)
+FIELDS.update({
+    "key": "Anahtar", "module": "Modül", "roadmap_items.phase": "Faz", "needs": "Kurumdan beklenen", "roadmap_items.decision": "Karar kaydı",
+    "completed_on": "Tamamlanma tarihi", "target": "Hedef dönem", "sort": "Sıra", "roadmap_items.note": "Kurum notu",
+    "roadmap_items.source": "Kaynak", "roadmap_items.title": "Özellik",
+    "data_domains.parent_id": "Üst veri alanı", "data_domains.org_unit_id": "Sorumlu birim", "steward": "Veri yöneticisi",
+    "custodian": "Teknik sorumlu", "data_domains.owner": "Veri sahibi", "data_sources.owner": "Sistem sahibi",
+    "data_tables.owner": "Veri sahibi", "glossary_terms.owner": "Terim sahibi", "platform": "Platform",
+    "domain_id": "Veri alanı", "data_sources.ci_id": "CMDB öğesi (CI)", "data_sources.location": "Sunucu / örnek adı",
+    "last_import_at": "Son içe aktarım", "source_id": "Veri kaynağı", "schema_name": "Şema", "data_tables.object_type": "Nesne türü",
+    "technical_description": "Kaynaktaki açıklama", "business_name": "İş adı", "classification": "Gizlilik sınıfı",
+    "certified": "Onaylı veri seti", "row_count": "Satır sayısı", "first_seen_at": "İlk görülme", "removed_at": "Kaldırılma",
+    "table_id": "Tablo", "data_type": "Veri tipi", "data_length": "Uzunluk", "nullable": "Boş olabilir",
+    "is_primary_key": "Birincil anahtar", "references_to": "Referans (tablo / kolon)", "personal_data": "Kişisel veri",
+    "is_critical": "Kritik veri öğesi", "previous_type": "Önceki tip", "abbreviation": "Kısaltma",
+    "synonyms": "Eş anlamlılar", "definition": "Tanım", "glossary_terms.parent_id": "Üst terim", "example": "Örnek",
+    "format_rule": "Biçim / standart", "calculation": "Hesaplama kuralı", "source_reference": "Dayanak (mevzuat, standart, doküman)",
+    "submitted_by": "Onaya gönderen", "glossary_terms.submitted_at": "Onaya gönderilme",
+    "pending_json": "Önerilen değişiklik", "pending_by": "Değişikliği öneren",
+    "pending_note": "Değişiklik gerekçesi", "pending_at": "Öneri zamanı", "glossary_terms.review_note": "Son iade notu",
+    "replaced_by_id": "Yerine geçen terim", "term_id": "Terim", "snapshot_json": "Sürüm içeriği", "change_note": "Değişiklik notu",
+    "proposed_by": "Öneren", "column_id": "Kolon", "related_id": "İlişkili terim", "format": "Biçim",
+    "catalog_imports.scope": "Kapsam", "change": "Değişiklik", "object_name": "Nesne",
+    "import_id": "İçe aktarım", "catalog_imports.kind": "Tür", "glossary_terms.name": "Terim",
+    "data_tables.name": "Tablo adı", "data_columns.name": "Kolon adı", "data_columns.position": "Sıra",
+})
+CHOICES.update({
+    "roadmap_items.module": {"datagov": "Veri yönetişimi", "platform": "Platform", "integrations": "Entegrasyonlar",
+                             "compliance": "Uyum ve denetim", "risk": "Risk yönetimi", "continuity": "İş sürekliliği",
+                             "suppliers": "Tedarikçi yönetimi"},
+    "roadmap_items.status": {"planned": "Planlandı", "in_progress": "Yapılıyor", "blocked": "Bilgi bekleniyor",
+                             "done": "Tamamlandı", "deferred": "Ertelendi"},
+    "roadmap_items.source": {"release": "Sürümle gelen", "custom": "Kurum maddesi"},
+    "platform": {"sap_hana": "SAP HANA / S/4HANA", "servicenow": "ServiceNow", "dynamics365": "Dynamics 365 / Dataverse",
+                 "power_bi": "Power BI", "postgresql": "PostgreSQL", "sql_server": "SQL Server", "oracle": "Oracle",
+                 "mysql": "MySQL / MariaDB", "snowflake": "Snowflake", "bigquery": "BigQuery", "redshift": "Amazon Redshift",
+                 "mongodb": "MongoDB", "file": "Dosya / paylaşım", "other": "Diğer"},
+    "data_sources.environment": {"production": "Üretim", "test": "Test", "development": "Geliştirme"},
+    "data_sources.status": {"active": "Kullanımda", "retired": "Kullanımdan kalktı"},
+    "data_tables.object_type": {"table": "Tablo", "view": "Görünüm", "entity": "Varlık (CRM)", "semantic_model": "Anlamsal model",
+                    "report": "Rapor", "file": "Dosya", "collection": "Koleksiyon", "other": "Diğer"},
+    "classification": {"public": "Genel", "internal": "İç", "confidential": "Gizli", "restricted": "Çok gizli"},
+    "personal_data": {"none": "Yok", "personal": "Kişisel veri", "special": "Özel nitelikli kişisel veri"},
+    "data_tables.status": {"active": "Kullanımda", "deprecated": "Kullanım dışı", "removed": "Kaynakta kaldırıldı"},
+    "data_columns.status": {"active": "Kullanımda", "removed": "Kaynakta kaldırıldı"},
+    "glossary_terms.status": {"draft": "Taslak", "in_review": "Onayda", "approved": "Onaylı", "retired": "Kullanım dışı"},
+    "catalog_imports.kind": {"structure": "Yapı (tablo ve kolon)", "descriptions": "İş açıklamaları"},
+    "catalog_imports.scope": {"tables": "Yalnızca dosyadaki tablolar", "schemas": "Dosyadaki şemaların tamamı", "full": "Kaynağın tamamı"},
+    "catalog_changes.change": {"table_added": "Tablo eklendi", "table_removed": "Tablo kaldırıldı", "table_restored": "Tablo geri geldi",
+               "column_added": "Kolon eklendi", "column_removed": "Kolon kaldırıldı", "column_restored": "Kolon geri geldi",
+               "type_changed": "Tip değişti"},
+})
 CHOICES["risk_category"] = CHOICES["category"]
 
 

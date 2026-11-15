@@ -9,6 +9,7 @@ GROUPS = [
     {"key": "bcm", "label": "İş sürekliliği (ISO 22301)", "hint": "BİA, plan, adım, tatbikat"},
     {"key": "assets", "label": "Varlıklar (CMDB)", "hint": "CI ve CI risk maruziyetleri"},
     {"key": "supplier", "label": "Tedarikçi yönetimi", "hint": "Tedarikçi, angajman, sözleşme, SLA, anket"},
+    {"key": "data", "label": "Veri yönetişimi", "hint": "Veri alanı, kaynak, tablo, kolon, iş sözlüğü"},
 ]
 
 POSITIONS = {
@@ -23,4 +24,6 @@ POSITIONS = {
     "cmdb_cis": ("assets", 0), "ci_exposures": ("assets", 1),
     "suppliers": ("supplier", 0), "engagements": ("supplier", 1), "contracts": ("supplier", 2),
     "catalog_items": ("supplier", 3), "sla_definitions": ("supplier", 4), "survey_campaigns": ("supplier", 5),
+    "data_domains": ("data", 0), "data_sources": ("data", 1), "data_tables": ("data", 2), "data_columns": ("data", 3),
+    "glossary_terms": ("data", 4),
 }

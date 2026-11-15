@@ -4,9 +4,10 @@ Temel ayrım: Tedarikçi tekil tüzel kişidir (VKN ile). "Hangi birim, hangi ü
 kimin sahipliğinde alıyor" bilgisi Angajman kaydında durur. Performans, anket ve risk angajmana bağlanır.
 """
 import json
+from pathlib import Path
 
 from .. import audit, auth as authz, crud
-from ..db import one, rows
+from ..db import one, rows, utcnow
 from ..http import API
 from ..schema import RESOURCES, Resource, fk
 from . import integrations
@@ -219,7 +220,87 @@ def usage_report(c):
         ORDER BY i.name, s.name""")
 
 
+# ------------------------------------------------------------------ yol haritası (K-028)
+# Sürümle gelen maddeler tedarik/data/roadmap.json dosyasından her açılışta eşitlenir ve yalnızca hedef ve kurum notu
+# değiştirilebilir; kurum kendi maddelerini ekleyip yönetir. Faz başlıkları ve hedefleri dosyadan okunur.
+ROADMAP_FILE = Path(__file__).resolve().parent.parent / "data" / "roadmap.json"
+ROADMAP_MODULES = ("datagov", "platform", "integrations", "compliance", "risk", "continuity", "suppliers")
+ROADMAP = Resource("roadmap_items", "Yol Haritası", {
+    "key": "TEXT UNIQUE", "module": "TEXT NOT NULL", "phase": "INTEGER NOT NULL DEFAULT 1", "title": "TEXT NOT NULL",
+    "description": "TEXT", "status": "TEXT NOT NULL DEFAULT 'planned'", "needs": "TEXT", "decision": "TEXT",
+    "completed_on": "DATE", "target": "TEXT", "note": "TEXT", "source": "TEXT NOT NULL DEFAULT 'custom'",
+    "sort": "INTEGER", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    module=M, write_roles={"ADMIN"}, readonly=("key", "source", "sort"), search=("title", "description", "needs"),
+    enums={"module": ROADMAP_MODULES, "status": ("planned", "in_progress", "blocked", "done", "deferred")})
+RELEASE_EDITABLE = {"target", "note"}
+
+
+def _roadmap_rules(db, data, current, principal):
+    if principal is not None and current and current["source"] == "release" and set(data) - RELEASE_EDITABLE:
+        raise crud.Invalid("Sürümle gelen maddede yalnızca hedef ve kurum notu değiştirilebilir; kendi maddenizi ekleyebilirsiniz")
+    if data.get("status") == "done" and not (data.get("completed_on") or (current or {}).get("completed_on")):
+        from datetime import date
+        data["completed_on"] = date.today().isoformat()
+
+
+ROADMAP.before_save = _roadmap_rules
+
+
+def roadmap_file():
+    return json.loads(ROADMAP_FILE.read_text(encoding="utf-8"))
+
+
+def sync_roadmap(db):
+    """Sürüm maddelerini dosyayla eşitler: yeni anahtar eklenir, var olanın sürüm alanları güncellenir (hedef ve kurum
+    notu korunur). Dosyadan çıkarılan madde silinmez (kayıt silinmez ilkesi); kullanım dışı bırakılır."""
+    data = roadmap_file()
+    keys = set()
+    for order, item in enumerate(data["items"]):
+        keys.add(item["key"])
+        values = {"module": item["module"], "phase": item["phase"], "title": item["title"],
+                  "description": item.get("description"), "status": item["status"], "needs": item.get("needs"),
+                  "decision": item.get("decision"), "completed_on": item.get("completed_on"), "sort": order}
+        current = one(db, "SELECT * FROM tdr_roadmap_items WHERE key=?", (item["key"],))
+        if current is None:
+            crud.insert(db, ROADMAP, {**values, "key": item["key"], "source": "release"})
+        elif any(str(current[k] if current[k] is not None else "") != str(v if v is not None else "") for k, v in values.items()):
+            db.execute("UPDATE tdr_roadmap_items SET " + ", ".join(f"{k}=?" for k in values) + ", updated_at=? WHERE id=?",
+                       (*values.values(), utcnow(), current["id"]))
+    for r in rows(db, "SELECT id, key FROM tdr_roadmap_items WHERE source='release' AND status<>'deferred'"):
+        if r["key"] not in keys:
+            db.execute("UPDATE tdr_roadmap_items SET status='deferred', updated_at=? WHERE id=?", (utcnow(), r["id"]))
+
+
+def roadmap(c):
+    """Modüller, fazlar (başlık, hedef, ilerleme) ve maddeler; kurumdan beklenenler ayrıca listelenir."""
+    authz.check(c.principal, ROADMAP, "read")
+    data = roadmap_file()
+    items = rows(c.db, "SELECT * FROM tdr_roadmap_items ORDER BY module, phase, COALESCE(sort, 100000), id")
+    phases = {(p["module"], p["phase"]): {**p, "items": []} for p in data["phases"]}
+    for it in items:
+        phase = phases.setdefault((it["module"], it["phase"]), {"module": it["module"], "phase": it["phase"],
+                                                                "title": f"Faz {it['phase']}", "goal": "", "items": []})
+        phase["items"].append(it)
+    for p in phases.values():
+        states = [i["status"] for i in p["items"] if i["status"] != "deferred"]
+        p["total"], p["done"] = len(states), states.count("done")
+        p["status"] = ("done" if states and all(s == "done" for s in states) else
+                       "in_progress" if any(s in ("done", "in_progress") for s in states) else
+                       "blocked" if states and all(s == "blocked" for s in states) else "planned")
+    labels = {m["key"]: m["label"] for m in data["modules"]}
+    modules = []
+    for key in ROADMAP_MODULES:
+        own = [i for i in items if i["module"] == key and i["status"] != "deferred"]
+        modules.append({"key": key, "label": labels.get(key, key), "total": len(own),
+                        "done": sum(1 for i in own if i["status"] == "done")})
+    needs = [i for i in items if i["needs"] and i["status"] not in ("done", "deferred")]
+    return {"modules": modules, "phases": sorted(phases.values(), key=lambda p: (ROADMAP_MODULES.index(p["module"])
+                                                                                 if p["module"] in ROADMAP_MODULES else 99, p["phase"])),
+            "needs": needs, "can_edit": authz.can_write(c.principal, ROADMAP)}
+
+
 def register(app):
+    app.route("GET", API + "/roadmap", roadmap)
     app.route("GET", API + "/suppliers/{id}/context", supplier_context)
     app.route("POST", API + "/suppliers/{id}/types", lambda c: _replace_map(
         c, SUPPLIERS, "tdr_supplier_type_map", "supplier_id", "type_id", "type_ids"))
@@ -257,6 +338,7 @@ def default_company(db):
 
 
 def seed(db):
+    sync_roadmap(db)
     if not one(db, "SELECT id FROM tdr_companies LIMIT 1"):      # her kurulumda en az bir şirket (adı değiştirilir)
         crud.insert(db, COMPANIES, {"name": "Kendi Şirketimiz", "kind": "own",
                                     "description": "Kurulumda açıldı; adını şirketinizin adıyla değiştirin."})

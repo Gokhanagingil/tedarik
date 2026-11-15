@@ -39,6 +39,7 @@ EVENTS = {   # olay: (Türkçe ad, varsayılan e-posta, varsayılan Teams)
     "privacy_breach.deadline": ("Kişisel veri ihlali bildirim süresi yaklaşıyor", True, True),
     "crisis.declared": ("Kriz ilan edildi", True, True),
     "crisis.closed": ("Kriz kapatıldı", True, True),
+    "glossary.review": ("Sözlük terimi onay bekliyor / iade edildi", True, False),
 }
 
 

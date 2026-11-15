@@ -21,6 +21,7 @@ from .auth import Principal
 from .config import Config
 from .db import one, rows
 from .demo_assurance import ASSURANCE_SECTIONS, AssuranceSections
+from .demo_datagov import DATAGOV_SECTIONS, DatagovSections
 from .demo_platform import SECTIONS as PLATFORM_SECTIONS, PlatformSections
 from .schema import RESOURCES
 
@@ -114,10 +115,10 @@ TYPE_NAMES = {"HW": "Donanım", "SW": "Yazılım ve Lisans", "CLOUD": "Bulut Hiz
               "FACILITY": "Tesis ve Veri Merkezi"}
 
 
-SECTIONS = PLATFORM_SECTIONS + ASSURANCE_SECTIONS
+SECTIONS = PLATFORM_SECTIONS + ASSURANCE_SECTIONS + DATAGOV_SECTIONS
 
 
-class Seeder(PlatformSections, AssuranceSections):
+class Seeder(PlatformSections, AssuranceSections, DatagovSections):
     def __init__(self, db, app):
         self.db, self.app, self.rnd = db, app, random.Random(20261115)
         self.ids = {}

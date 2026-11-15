@@ -25,6 +25,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Standart kütüphanesi (yalnızca tam metniyle dağıtılabilenler: NIST), madde ilişkileri, bulgu etkisi, entegre denetim (K-023).
 - Entegrasyonlar arayüzden tanımlanır, sırlar şifreli; bildirimler kuyrukla gider (K-024). Yapay zekâ insan onaylı, SDK isteğe bağlı (K-025).
 - Güvence ve uyum iş akışları (K-026); olay, kayıp, KVKK ihlali, RCSA, nicel risk, erişim gözden geçirme, kriz, ServiceNow görev (K-027).
+- Veri yönetişimi Faz 1: veri sözlüğü ve katalog; ham veri platforma gelmez; dosyayla içe aktarım ve şema değişikliği geçmişi;
+  dört gözlü iş sözlüğü; uygulama içi yol haritası (K-028).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -38,7 +40,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 - Temel katman: yapılandırma, şema kaydı, veritabanı, ortak kayıt işlemleri, yönlendirici, güvenlik başlıkları, köken denetimi, tekrar koruması, denetim izi.
 - Yetki: beş rol, en az yetkili MCP anahtarı. Anonim erişim açılmaz.
-- Modüller: `core`, `performance`, `surveys`, `risks`, `grc`, `transfer`, `dashboard` (açık); `workflow`, `sourcing` (kapalı).
+- Modüller: `core`, `performance`, `surveys`, `risks`, `documents`, `grc`, `cmdb`, `continuity`, `transfer`, `dashboard`, `insights`, `datagov` (açık); `workflow`, `sourcing` (kapalı).
 - **Adım 1 (2026-11-13): KS GRC tam incelendi** (commit `7720f4b`). `docs/UYUM_SOZLESMESI.md` içindeki "Doğrulanacak" satırları kapatıldı. Düzeltilen farklar:
   - Tekrar koruması: anahtar biçimi `[A-Za-z0-9_.:-]{8,160}`, kanonik JSON özeti, alındı okunmadan önce yazma kilidi (eşzamanlı 8 tekrar tek kayıt üretir).
   - Denetim izi: KS GRC `activity_log` sütun adları (`occurred_at`, `method`, `object_type`, `object_id`, `description`); gizli alanlar maskelenir; anket yanıtı artık iz bırakıyor.
@@ -158,6 +160,31 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Test sunucusuna dağıtıldı (commit `8cd2880`): standart kütüphanesi kuruldu, demo verisine yeni bölümler eklendi;
     canlı kabul testi 23/23 geçti, 68 menü ekranı hatasız (GitHub Actions çalıştırması 43750698880, 2026-11-15).
     İlk denemede kabul betiği eski denetim ekranı metnini arıyordu; sekmeli test planına göre güncellendi.
+- **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
+  ve Power BI.
+  - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
+    sürüm maddeleri `tedarik/data/roadmap.json` dosyasından eşitlenir, kurum maddesi eklenebilir.
+  - *Katalog:* veri alanı → kaynak → şema → tablo/görünüm/varlık → kolon. İçe aktarım sihirbazı: platforma göre hazır sorgu
+    (kopyala), dosya yükleme (CSV/Excel/JSON, büyük dosya tarayıcıda gzip), kapsam seçimi, ön izleme. Tanınan biçimler: SAP HANA
+    kataloğu, SAP ABAP sözlüğü, ServiceNow sys_dictionary (JSON/CSV), Dynamics 365 EntityDefinitions, Power BI INFO.VIEW.COLUMNS,
+    information_schema (PostgreSQL, SQL Server, MySQL, Snowflake, BigQuery, Redshift), Oracle ve `tedarik.catalog.v1`.
+    Yeniden yüklemede iş tanımları korunur; eklenen/kaldırılan/geri gelen/tipi değişen nesneler değiştirilemez geçmişe yazılır.
+  - *İş sözlüğü:* tanım, kısaltma, eş anlamlılar, biçim, hesaplama kuralı, örnek, dayanak, sınıf, kişisel/kritik işaretleri, üst ve
+    ilişkili terimler; taslak → onayda → onaylı → kullanım dışı; öneren onaylayamaz; onaylı terim için değişiklik önerisi ve fark
+    görünümü; değiştirilemez sürüm geçmişi; Türkçe alfabe dizini.
+  - *Anlam ve kullanım:* "bu kolon ne anlama geliyor" paneli (iş açıklaması → terim tanımı → kaynaktaki açıklama sırasıyla), referans
+    çözümleme (FK, SAP kontrol tablosu, ServiceNow referansı) ve bu kolona referans verenler; "bu terim nerede kullanılıyor"
+    (kaynak → tablo → kolon). Katalog araması (terim, tablo, kolon).
+  - *Sahiplik:* veri sahibi / veri yöneticisi / teknik sorumlu, devralma (tablo → veri alanı → üst alan → kaynak), kişi bazında
+    sahiplik matrisi, sahipsiz tablolar, toplu atama (sahip, veri yöneticisi, teknik sorumlu, sınıf, veri alanı; kolonlarda sınıf,
+    kişisel veri, kritik).
+  - *Excel ile sözlük doldurma:* katalog CSV/Excel'e aktarılır, iş sütunları doldurulup geri yüklenir (ön izlemeli, satır hataları).
+  - *GRC bağlantıları:* kaynak ↔ CMDB CI ↔ BİA ↔ süreç; İşlerim (onay bekleyen/iade edilen terim, gözden geçirme), GRC takvimi,
+    sağlık kontrolü (sahipsiz tablo, 'Gizli' altında kalan kişisel veri, bekleyen terim), ilişki haritası; kişi alanlarında
+    kullanıcı dizininden öneri (tüm formlarda).
+  - Demo: SAP S/4HANA (ABAP sözlüğü, iki yükleme ve şema değişiklikleri), ServiceNow ITSM, Dynamics 365 CRM, Power BI modeli ve
+    sahipsiz bir pazarlama dosya paylaşımı; 22 terim (onaylı, onayda, değişiklik önerisi, iade, taslak, kullanım dışı).
+  - Testler: 145 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi veri yönetişimi akışıyla.
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
@@ -177,7 +204,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi modülü** henüz yok (Gökhan Bey ayrıca konuşmak istiyor).
+- **Veri yönetişimi Faz 2–6 yok:** kişisel veri keşfi ve VERBİS envanteri, otomatik bağlayıcılar, soy kütüğü, veri kalitesi
+  (yol haritası uygulamada: Yönetim → Yol Haritası). Faz 1 içe aktarımı dosyayla; hazır sorgular gerçek SAP, ServiceNow,
+  Dynamics ve Power BI ortamında henüz denenmedi (sentetik dosyalarla test edildi).
 
 ## Sıradaki adımlar (sırayla)
 
@@ -194,14 +223,22 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10. ~~**GRC platformu dönüşümü** (13 madde).~~ Tamamlandı (2026-11-15).
 10a0. ~~**Güvenlik taraması, Entra MFA, denetim arşivi, ServiceNow MCP istemcisi.**~~ Tamamlandı (2026-11-15).
 10a. **ServiceNow bağlantısı:** kurum adresi, salt okunur hizmet hesabı, özel alan eşlemesi; ilk senkron ve kural eşiklerinin kurumla belirlenmesi.
-10b. **Veri yönetişimi modülü:** kapsam görüşmesi (veri sahipliği, sınıflandırma, KVKK envanteri, veri kalitesi kuralları).
+10b. ~~**Veri yönetişimi Faz 0–1:** yol haritası, veri sözlüğü ve katalog.~~ Tamamlandı (2026-11-15, K-028).
+10d. **Veri yönetişimi Faz 2 — KVKK ve sınıflandırma:** kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
+     öneri → veri yöneticisi onayı), VERBİS uyumlu işleme envanteri (amaç, hukuki sebep, kategori, ilgili kişi grubu, alıcılar,
+     yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim
+     talebi akışları, KVKK ihlal kaydında etkilenen veri varlıkları. Ardından Faz 3: SAP HANA, ServiceNow, Dynamics 365, Power BI
+     bağlayıcıları (gerekenler aşağıda).
 10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
 11. ~~**Yol haritası Faz 1–4** (`docs/YOL_HARITASI.md`).~~ Büyük ölçüde tamamlandı (2026-11-15, K-023 – K-027); kalanlar yol haritası belgesinde. Ayrıca konteyner imajı taraması (trivy).
 12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
 
 ## Gökhan Bey'den beklenenler
 
-- Veri yönetişimi modülü görüşmesi (sıradaki iş).
+- Veri yönetişimi Faz 1'in gerçek kaynakla denenmesi: SAP (HANA kataloğu veya ABAP sözlüğü sorgusu), ServiceNow sys_dictionary,
+  Dynamics EntityDefinitions ve Power BI `INFO.VIEW.COLUMNS()` çıktıları (yalnızca meta veri, veri içeriği yok).
+- Faz 3 için: salt okunur SAP HANA kullanıcısı ve SAP hdbcli sürücüsünün toplayıcıya eklenmesi onayı; Power BI yönetici API
+  izni ve hizmet sorumlusu; Dataverse'te salt okunur uygulama kullanıcısı (Entra uygulama kaydı).
 - `anthropic` paketinin bağımlılığa eklenmesi onayı (yapay zekâ önerileri için) ve Claude API anahtarı.
 - SMTP sunucusu ve gönderici hesabı, Teams bildirim kanalı (Workflows web kancası).
 - Lisanslı standart metinleri (ISO 27001/27017/27701/20000-1/9001/14001/22301/45001/50001/10002, TS EN 50600, PCI DSS,

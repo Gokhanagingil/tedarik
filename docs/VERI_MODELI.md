@@ -160,6 +160,21 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `bc_incidents`, `bc_incident_plans`, `bc_incident_tasks`, `bc_incident_log` | Kriz yönetimi | Günlük değiştirilemez; kapanışta gerçek olay tatbikatı |
 | `integrations`, `notifications` | Entegrasyon tanımları ve bildirim kutusu | Sırlar Fernet ile şifreli, API'den dönmez |
 
+## Veri yönetişimi ve yol haritası (K-028)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `data_domains` | Veri alanı (Müşteri, Satış, Finans...), sorumlu birim, veri sahibi ve veri yöneticisi | Alt alan üstten devralır; Birim Kullanıcısı kapsamı buradan gelir |
+| `data_sources` | Sistem (SAP HANA, ServiceNow, Dynamics 365, Power BI, veritabanı, dosya); CI, tedarikçi, teknik sorumlu | Konum alanına sır yazılamaz |
+| `data_tables` | Tablo, görünüm, CRM varlığı, anlamsal model, dosya | (kaynak, şema, ad) tekil; "kaynakta kaldırıldı" yalnızca içe aktarımla; kaynak değiştirilemez |
+| `data_columns` | Kolon: teknik meta veri, iş adı ve açıklama, sınıf, kişisel veri, kritik veri öğesi | (tablo, ad) tekil; tip değişince önceki tip saklanır; silinmez |
+| `glossary_terms` | İş sözlüğü | Dört göz; onaylı terim değişiklik önerisiyle değişir; kullanım dışı bırakılır, silinmez |
+| `glossary_term_versions` | Terim sürümleri | Değiştirilemez; her onay bir sürüm |
+| `term_columns`, `term_tables`, `term_relations` | Terim ↔ kolon, terim ↔ tablo, ilişkili terimler | Kullanım dışı terim yeni kolona bağlanamaz |
+| `catalog_imports` | İçe aktarım geçmişi (yapı ve iş açıklamaları) | Değiştirilemez |
+| `catalog_changes` | Şema değişiklikleri (eklenen, kaldırılan, geri gelen, tipi değişen) | Değiştirilemez; ilk yüklemede yazılmaz |
+| `roadmap_items` | Uygulama içi yol haritası | Sürüm maddesi dosyadan eşitlenir, yalnızca hedef ve kurum notu değişir |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

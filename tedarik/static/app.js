@@ -98,21 +98,31 @@ const META = {
   option: (res, name, value) => (META.field(res, name)?.options || []).find(o => o.value === value)?.label ?? value,
   can: need => !!S.meta.permissions[need],
 };
-const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled']);
+const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled', 'certified', 'is_critical', 'is_primary_key', 'nullable']);
+// Kişi alanları: formda kullanıcı dizininden öneri (serbest metin de girilebilir; sahip alanları kullanıcı adı veya görünen adla eşleşir)
+const PERSON = new Set(['owner', 'steward', 'custodian', 'approver', 'assignee', 'reviewer', 'facilitator', 'preparer', 'respondent', 'business_owner', 'responsible']);
+async function ensurePeople() {
+  if (document.getElementById('peopleList') || !META.can('write')) return;
+  const people = await api('directory').catch(() => []);
+  if (document.getElementById('peopleList')) return;
+  document.body.append(h('datalist', {id: 'peopleList'}, people.map(p => h('option', {value: p.username, label: p.display_name || p.username}))));
+}
 const LONG = new Set(['value_json', 'description', 'cause', 'risk_event', 'consequence', 'treatment', 'note', 'comment', 'intro', 'outro',
   'help', 'rationale', 'resolution', 'decision_rationale', 'exception_rationale', 'text', 'details', 'method', 'expected_result',
-  'audit_objective', 'scope', 'conclusion', 'root_cause', 'closure_note', 'verification_note', 'justification']);
-const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective', 'approved',
+  'audit_objective', 'scope', 'conclusion', 'root_cause', 'closure_note', 'verification_note', 'justification', 'definition', 'calculation',
+  'technical_description', 'needs']);
+const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective', 'approved', 'production',
   'successful', 'green', 'resolved', 'operational', 'success']);
 const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled', 'fail', 'ineffective',
-  'failed', 'red', 'obsolete', 'retired']);
+  'failed', 'red', 'obsolete', 'retired', 'removed', 'restricted', 'special', 'table_removed', 'column_removed']);
 const WARN = new Set(['open', 'in_treatment', 'pending', 'draft', 'expiring', 'medium', 'offboarding', 'prospect', 'important',
   'in_progress', 'validation', 'ending', 'planned', 'escalation', 'delivery_delay', 'inconclusive', 'partially_effective',
-  'partially_successful', 'amber', 'in_review', 'partial', 'repair']);
+  'partially_successful', 'amber', 'in_review', 'partial', 'repair', 'blocked', 'deprecated', 'confidential', 'personal', 'type_changed']);
 const PILLS = new Set(['status', 'tier', 'severity', 'criticality', 'priority', 'event_type', 'segment', 'beneficiary', 'kind',
   'purpose', 'subject', 'audience', 'category', 'response_strategy', 'source', 'raci', 'role', 'execution_mode', 'frequency',
   'opinion', 'confidentiality', 'nature', 'method_type', 'exercise_type', 'plan_type', 'outcome', 'process_type', 'ci_class', 'environment',
-  'rule', 'impact_area', 'link_source', 'risk_type', 'last_status', 'operational_status', 'mode', 'dimension']);
+  'rule', 'impact_area', 'link_source', 'risk_type', 'last_status', 'operational_status', 'mode', 'dimension', 'platform', 'object_type', 'classification',
+  'personal_data', 'change', 'module']);
 function tone(value) { return GOOD.has(value) ? 'good' : BAD.has(value) ? 'bad' : WARN.has(value) ? 'warn' : 'neutral'; }
 function roleLabel(code) { return (S.meta.roles.find(r => r.value === code) || {}).label || code; }
 function pill(text, cls = 'neutral') { return h('span', {class: 'pill ' + cls, text}); }
@@ -139,7 +149,7 @@ function display(res, name, value) {
 }
 // Binlerce kaydı olabilen kaynaklar (ör. standart maddeleri) bütünüyle yüklenmez: formda aranarak seçilir,
 // listede yalnızca görünen kimlikler istenir (ensureRefs).
-const LARGE_REFS = new Set(['clauses']);
+const LARGE_REFS = new Set(['clauses', 'data_tables', 'data_columns', 'glossary_terms']);
 async function loadRefs(res, fields) {
   const refs = new Set((META.def(res)?.fields || []).filter(f => f.ref && !LARGE_REFS.has(f.ref) && (!fields || fields.includes(f.name))).map(f => f.ref));
   await Promise.all([...refs].map(r => list(r).catch(() => [])));
@@ -346,7 +356,8 @@ function inputFor(res, f, value) {
   } else if (['INTEGER', 'REAL', 'DECIMAL'].includes(f.kind)) {
     control = h('input', {id, name: f.name, type: 'number', step: f.kind === 'INTEGER' ? '1' : 'any', value: value ?? ''});
   } else {
-    control = h('input', {id, name: f.name, type: f.name === 'email' ? 'email' : f.name === 'website' ? 'url' : 'text', value: value ?? '', autocomplete: 'off'});
+    control = h('input', {id, name: f.name, type: f.name === 'email' ? 'email' : f.name === 'website' ? 'url' : 'text', value: value ?? '', autocomplete: 'off',
+      list: PERSON.has(f.name) ? 'peopleList' : null});
   }
   return h('label', {class: 'field' + (LONG.has(f.name) ? ' wide' : ''), for: id},
     h('span', {}, f.label, f.required ? h('span', {class: 'req', text: ' *'}) : null), h('div', {class: 'control'}, control));
@@ -385,7 +396,7 @@ function editableFields(res, {only, skip = []} = {}) {
 /** Kayıt formu: oluşturma ve düzenleme. Yalnızca değişen alanlar gönderilir. */
 async function recordForm(res, record = null, {defaults = {}, only, skip, title, onsaved, extra} = {}) {
   const def = META.def(res); const fields = editableFields(res, {only, skip});
-  await loadRefs(res, fields.map(f => f.name));
+  await Promise.all([loadRefs(res, fields.map(f => f.name)), fields.some(f => PERSON.has(f.name)) ? ensurePeople() : null]);
   const form = h('form', {class: 'formgrid', novalidate: true});
   form.append(h('div', {class: 'notice bad wide form-error hidden', role: 'alert'}));
   if (def.unit_scoped && S.me.role === 'UNIT_USER') form.append(h('div', {class: 'notice wide', text: 'Yalnızca kendi biriminizin kayıtlarını değiştirebilirsiniz.'}));
@@ -443,10 +454,12 @@ const MENU = [
   ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['crisis', 'zap', 'Kriz Yönetimi'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
+  ['Veri yönetişimi', [['datagov', 'database', 'Veri Yönetişimi Paneli'], ['glossary', 'book', 'İş Sözlüğü'], ['catalog', 'layers', 'Veri Kataloğu'],
+    ['r/data_sources', 'server'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
   ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi'], ['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
   ['Mimari', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/audit_universe', 'grid']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
-  ['Yönetim', [['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
+  ['Yönetim', [['roadmap', 'route', 'Yol Haritası'], ['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
 const ICONS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
@@ -465,7 +478,9 @@ const ICONS = {
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7', flow: 'M3 6h6v4H3zM15 14h6v4h-6zM9 8h3a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2', share: 'M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
   coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9h4.5a2 2 0 0 1 0 4H9h5a2 2 0 0 1 0 4H9M11 7v2M11 17v-2', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
   swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
-  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', scale: 'M12 3v18M5 21h14M4 7h16M7 7l-3 7h6zM17 7l-3 7h6z', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', scale: 'M12 3v18M5 21h14M4 7h16M7 7l-3 7h6zM17 7l-3 7h6z', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+  database: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  route: 'M6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 17V9a4 4 0 0 1 4-4h6M18 7v8a4 4 0 0 1-4 4H8', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
 function icon(name, cls = '') {
   return s('svg', {viewBox: '0 0 24 24', class: 'icon ' + cls, 'aria-hidden': 'true'}, s('path', {d: ICONS[name] || ICONS.list}));
@@ -528,6 +543,13 @@ const COLUMNS = {
   executions: ['executed_at', 'control_id', 'status', 'source', 'audit_id', 'recorded_by'],
   risk_catalog: ['code', 'title', 'category', 'likelihood', 'impact', 'active'],
   needs: ['code', 'title', 'org_unit_id', 'requester', 'needed_by'], quotes: ['need_id', 'supplier_id', 'amount', 'currency', 'received_at'],
+  data_domains: ['code', 'name', 'parent_id', 'org_unit_id', 'owner', 'steward', 'active'],
+  data_sources: ['code', 'name', 'platform', 'environment', 'domain_id', 'owner', 'custodian', 'last_import_at'],
+  data_tables: ['name', 'schema_name', 'source_id', 'business_name', 'object_type', 'classification', 'status'],
+  data_columns: ['name', 'table_id', 'business_name', 'data_type', 'classification', 'personal_data', 'status'],
+  glossary_terms: ['code', 'name', 'domain_id', 'owner', 'status', 'version'], catalog_imports: ['created_at', 'source_id', 'kind', 'format', 'filename', 'created_by'],
+  catalog_changes: ['created_at', 'source_id', 'change', 'object_name', 'detail'], glossary_term_versions: ['term_id', 'version', 'approved_by', 'created_at'],
+  roadmap_items: ['module', 'phase', 'title', 'status', 'target'],
 };
 const FILTERS = {
   suppliers: ['tier', 'status', 'segment', 'type_id'], engagements: ['supplier_id', 'org_unit_id', 'beneficiary', 'criticality', 'status'],
@@ -544,6 +566,8 @@ const FILTERS = {
   loss_events: ['event_type', 'status', 'company_id'], privacy_breaches: ['status', 'notify_decision'], rcsa_campaigns: ['status'], access_reviews: ['status'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
   findings: ['source', 'severity', 'status'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
   documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
+  data_sources: ['platform', 'environment', 'domain_id', 'status'], data_domains: ['org_unit_id', 'active'], catalog_changes: ['source_id', 'change'],
+  catalog_imports: ['source_id', 'kind'], roadmap_items: ['module', 'status'],
 };
 const DESCRIPTIONS = {
   suppliers: 'Tekil tüzel kişiler. Kritiklik seviyesi değerlendirme, anket ve risk gözden geçirme sıklığını belirler.',
@@ -595,6 +619,10 @@ const DESCRIPTIONS = {
   audit_log: 'Her yazma işleminin değiştirilemez izi.', import_batches: 'İçe aktarım geçmişi ve satır sonuçları.',
   org_units: 'İş birimleri. Birim Kullanıcıları yalnızca kendi birimlerinin kayıtlarına yazar.',
   policies: 'Süreç kuralları kodda değil burada durur: değerlendirme ve anket sıklığı, uyarı süresi, teklif sayısı. Değer JSON biçimindedir.',
+  data_domains: 'İş alanına göre veri grupları (Müşteri, Satış, Finans...). Sorumlu birim, veri sahibi ve veri yöneticisi buradan alanın tablolarına ve terimlerine devralınır.',
+  data_sources: 'Verinin durduğu sistemler: SAP HANA, ServiceNow, Dynamics 365, Power BI, veritabanları ve dosyalar. Tablo ve kolonlar kaynağın ekranından dosyayla içe aktarılır.',
+  catalog_imports: 'Katalog içe aktarımlarının değiştirilemez geçmişi.', catalog_changes: 'İçe aktarımlarda görülen şema değişiklikleri: eklenen, kaldırılan, geri gelen ve tipi değişen tablo ve kolonlar.',
+  roadmap_items: 'Yol haritası maddeleri. Sürümle gelenler her güncellemede yenilenir; kurum maddeleri buradan eklenir.',
 };
 const RELATED = {
   engagements: [['sla_definitions', 'engagement_id'], ['responsibilities', 'engagement_id'], ['supplier_risks', 'engagement_id'],
@@ -616,7 +644,8 @@ function navVisible([key, , , need]) {
   if (key.startsWith('r/')) return !!META.def(key.slice(2));
   if (S.me && S.me.external && !EXTERNAL_NAV.has(key)) return false;
   const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', obligations: 'grc', 'audit-plan': 'grc', crisis: 'continuity', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
-    calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights'}[key];
+    calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights',
+    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
 /** Menü bir kez kurulur; sonraki gezinmelerde yalnızca etkin öğe değişir (kaydırma konumu korunur). */
@@ -645,7 +674,7 @@ function navigation() {
   }
   let activeButton = null;
   nav.querySelectorAll('.nav-button').forEach(b => {
-    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/')) || (key === 'archive' && current.startsWith('archive'));
+    const key = b.dataset.nav; const on = current === key || current.startsWith(key + '/') || (key === 'r/audits' && current.startsWith('audit/')) || (key === 'archive' && current.startsWith('archive')) || (key === 'r/data_sources' && current.startsWith('datasource/'));
     b.classList.toggle('active', on); if (on) { b.setAttribute('aria-current', 'page'); activeButton = b; } else b.removeAttribute('aria-current');
   });
   if (activeButton) {
