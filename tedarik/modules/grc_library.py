@@ -574,6 +574,8 @@ def finding_impact_data(db, finding):
 def finding_impact(c):
     authz.check(c.principal, RESOURCES["findings"], "read")
     finding = crud.get(c.db, RESOURCES["findings"], c.params["id"])
+    if not RESOURCES["findings"].can_read(c.principal, finding):
+        raise crud.NotFound("Bulgu bulunamadı")
     return finding_impact_data(c.db, finding)
 
 
@@ -887,6 +889,7 @@ def integrated_data(db, audit_id, principal=None):
 
 def integrated(c):
     authz.check(c.principal, RESOURCES["audits"], "read")
+    authz.require_audit(c.principal, c.params["id"])
     return integrated_data(c.db, c.params["id"], c.principal)
 
 

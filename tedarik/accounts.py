@@ -17,3 +17,14 @@ USER_UNITS = Resource("user_units", "Kullanıcı Birimleri", {
     "user_id": "INTEGER NOT NULL REFERENCES users(id)", "org_unit_id": fk("org_units"),
     "assigned_by": "TEXT NOT NULL", "assigned_at": "TIMESTAMP NOT NULL"},
     module="core", api=(), search=(), write="admin", unique=(("user_id", "org_unit_id"),))
+
+# Süreli ve kapsamlı erişim (K-026): dış denetçi (salt okunur, yalnızca atanmış denetimler) ve süreli hesaplar.
+USER_ACCESS = Resource("user_access", "Kullanıcı erişim süresi", {
+    "user_id": "INTEGER NOT NULL UNIQUE REFERENCES users(id)", "expires_on": "DATE", "external": "INTEGER NOT NULL DEFAULT 0",
+    "note": "TEXT", "updated_by": "TEXT NOT NULL", "updated_at": "TIMESTAMP"},
+    module="core", api=(), search=(), write="admin")
+
+USER_AUDITS = Resource("user_audits", "Dış denetçinin denetimleri", {
+    "user_id": "INTEGER NOT NULL REFERENCES users(id)", "audit_id": "INTEGER NOT NULL",
+    "assigned_by": "TEXT NOT NULL", "assigned_at": "TIMESTAMP NOT NULL"},
+    module="core", api=(), search=(), write="admin", unique=(("user_id", "audit_id"),))

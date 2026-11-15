@@ -318,11 +318,29 @@ def my_work(c):
         facilitator IN ({marks}) AND status='planned' ORDER BY planned_date""", names)
     take("controls", "controls", f"""SELECT id, code, name FROM tdr_controls WHERE owner IN ({marks}) AND active=1
         ORDER BY code""", names)
+    take("evidence_requests", "evidence_requests", f"""SELECT id, code, title, status, due_date FROM tdr_evidence_requests
+        WHERE assignee IN ({marks}) AND status IN ('requested','rejected') ORDER BY due_date""", names)
+    take("finding_responses", "findings", f"""SELECT id, code, title, severity, response_due AS due_date FROM tdr_findings
+        WHERE owner IN ({marks}) AND response_status='pending' AND status IN ('open','in_progress') ORDER BY response_due""",
+         names)
+    if c.principal.role in ("ADMIN", "AUDITOR"):
+        take("evidence_to_review", "evidence_requests", f"""SELECT id, code, title, assignee, due_date FROM
+            tdr_evidence_requests WHERE status='submitted' AND assignee NOT IN ({marks}) ORDER BY due_date""", names)
+        take("workpapers_to_review", "workpapers", f"""SELECT id, code, title, preparer FROM tdr_workpapers
+            WHERE status='ready' AND COALESCE(preparer,'') NOT IN ({marks}) ORDER BY code""", names)
+    if c.principal.role == "ADMIN":
+        take("exceptions_to_approve", "policy_exceptions", f"""SELECT id, code, title, risk_level, start_date AS due_date
+            FROM tdr_policy_exceptions WHERE status='requested' AND COALESCE(requested_by,'') NOT IN ({marks})
+            AND owner NOT IN ({marks}) ORDER BY start_date""", (*names, *names))
+    take("attestations", "attestations", """SELECT a.id, k.code, k.title, k.due_date, k.statement, k.document_id
+        FROM tdr_attestations a JOIN tdr_attestation_campaigns k ON k.id=a.campaign_id WHERE a.username=?
+        AND a.status='pending' AND k.status='open' ORDER BY k.due_date""", (c.principal.username,))
     if c.app.enabled("surveys"):
         out["surveys"] = rows(db, """SELECT c.id, c.code, c.name, c.closes_on FROM tdr_survey_invitations i
             JOIN tdr_survey_campaigns c ON c.id=i.campaign_id WHERE i.respondent=? AND i.status='pending'
             AND c.status='open'""", (c.principal.username,))
-    out["overdue"] = sum(1 for key in ("risk_actions", "capa", "findings") for r in out.get(key, [])
+    out["overdue"] = sum(1 for key in ("risk_actions", "capa", "findings", "evidence_requests", "finding_responses")
+                         for r in out.get(key, [])
                          if r.get("due_date") and str(r["due_date"]) < today)
     out["total"] = sum(len(v) for k, v in out.items() if isinstance(v, list) and k != "controls")
     return out

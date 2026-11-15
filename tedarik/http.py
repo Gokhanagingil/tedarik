@@ -32,6 +32,25 @@ Resource("sequences", "Kod Sayaçları", {"name": "TEXT NOT NULL UNIQUE", "value
 PASSWORD_CHANGE_ROUTES = {"/api/me", "/api/change-password", "/api/logout", "/change-password"}
 
 
+# Dış denetçi (K-026): salt okunur; yalnızca atanmış denetimler, bulguları, kanıtları ve standart kütüphanesi.
+EXTERNAL_PATHS = re.compile(
+    r"^(/|/index\.html|/static/[a-z]+\.(js|css)|/change-password|/api/me|/api/logout|/api/change-password"
+    r"|/api/tdr/metadata"
+    r"|/api/tdr/audits(/\d+(/context|/report|/integrated)?)?"
+    r"|/api/tdr/findings(/\d+(/context|/impact)?)?"
+    r"|/api/tdr/evidence(/\d+(/context|/files/\d+)?)?"
+    r"|/api/tdr/executions/\d+(/context)?"
+    r"|/api/tdr/(evidence_requests|workpapers|certifications)(/\d+)?"
+    r"|/api/tdr/standards(/\d+(/tree)?)?|/api/tdr/clauses(/\d+)?|/api/tdr/controls(/\d+)?)$")
+EXTERNAL_WRITES = {"/api/logout", "/api/change-password"}
+
+
+def external_allowed(method, path):
+    if method != "GET":
+        return path in EXTERNAL_WRITES
+    return bool(EXTERNAL_PATHS.match(path))
+
+
 class Raw:
     """JSON dışı yanıt (ör. CSV dışa aktarımı, HTML sayfa)."""
 
@@ -106,6 +125,8 @@ class App:
             return redirect("/change-password")
         if url.path == "/api/health":      # KS GRC gibi kimlik ister; anonim istek 401 alır
             return 200, {"status": "ok"}
+        if principal.external and not external_allowed(method, url.path):
+            return 403, {"error": "Dış denetçi hesabı bu işleme yetkili değil"}
         fn, match = self._find(self.routes, method, url.path)
         if not fn:
             return 404, {"error": "Bulunamadı"}
@@ -209,7 +230,7 @@ def resource_routes(app, res):
     def get(c):
         authz.check(c.principal, res, "read")
         record = crud.get(c.db, res, c.params["id"])
-        if res.can_read and not res.can_read(c.principal, record):
+        if res.can_read and not res.can_read(c.principal, record, c.db):
             raise crud.NotFound(f"{res.label}: kayıt bulunamadı")      # varlığı da sızdırılmaz
         return record
 
@@ -223,7 +244,7 @@ def resource_routes(app, res):
     def update(c):
         authz.check(c.principal, res, "write")
         guard_readonly(res, c.body)
-        if res.can_read and not res.can_read(c.principal, crud.get(c.db, res, c.params["id"])):
+        if res.can_read and not res.can_read(c.principal, crud.get(c.db, res, c.params["id"]), c.db):
             raise crud.NotFound(f"{res.label}: kayıt bulunamadı")
         record = crud.update(c.db, res, c.params["id"], c.body, c.principal)
         audit.log(c.db, c.principal, "UPDATE", res.name, c.params["id"], c.body)

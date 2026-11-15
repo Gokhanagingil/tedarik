@@ -44,14 +44,18 @@ class Principal:
     user_id: int = None
     units: frozenset = field(default_factory=frozenset)   # Birim Kullanıcısının yazabildiği birimler
     must_change_password: bool = False
+    external: bool = False                                # dış denetçi: salt okunur, yalnızca atanmış denetimler (K-026)
+    audits: frozenset = field(default_factory=frozenset)
+    expires_on: str = None
 
     def can(self, need):
         return LEVELS[self.role] >= NEEDED[need]
 
     def public(self):
         return {"username": self.username, "display_name": self.display_name, "role": self.role,
-                "role_label": ROLES.get(self.role, "MCP"), "auth_type": self.auth_type,
-                "units": sorted(self.units), "must_change_password": self.must_change_password}
+                "role_label": ("Dış denetçi" if self.external else ROLES.get(self.role, "MCP")), "auth_type": self.auth_type,
+                "units": sorted(self.units), "must_change_password": self.must_change_password,
+                "external": self.external, "audits": sorted(self.audits), "expires_on": self.expires_on}
 
 
 class Auth:
@@ -91,8 +95,37 @@ class Auth:
                 raise Unauthenticated()
             units = frozenset(r["org_unit_id"] for r in db.execute(
                 "SELECT org_unit_id FROM tdr_user_units WHERE user_id=?", (user["id"],)).fetchall())
+            access = access_of(db, user["id"])
+            if access["expired"]:
+                raise Unauthenticated()
+            audits = frozenset(r["audit_id"] for r in db.execute(
+                "SELECT audit_id FROM tdr_user_audits WHERE user_id=?", (user["id"],)).fetchall()) \
+                if access["external"] else frozenset()
         return Principal(user["username"], role, "session", user["display_name"] or user["username"],
-                         user_id=user["id"], units=units, must_change_password=bool(user["must_change_password"]))
+                         user_id=user["id"], units=units, must_change_password=bool(user["must_change_password"]),
+                         external=access["external"], audits=audits, expires_on=access["expires_on"])
+
+
+def access_of(db, user_id):
+    """Hesabın süresi ve dış denetçi durumu. Süresi geçmiş hesap oturum açamaz, açık oturumu geçersiz olur."""
+    from datetime import date
+    row = db.execute("SELECT expires_on, external FROM tdr_user_access WHERE user_id=?", (user_id,)).fetchone()
+    expires = str(row["expires_on"])[:10] if row and row["expires_on"] else None
+    return {"expires_on": expires, "external": bool(row and row["external"]),
+            "expired": bool(expires and expires < date.today().isoformat())}
+
+
+def audit_allowed(principal, audit_id):
+    """Dış denetçi yalnızca kendisine atanmış denetimleri görür."""
+    if principal is None or not principal.external:
+        return True
+    return int(audit_id) in principal.audits
+
+
+def require_audit(principal, audit_id):
+    if not audit_allowed(principal, audit_id):
+        from .crud import NotFound
+        raise NotFound("Denetim bulunamadı")
 
 
 def check(principal, res, action):

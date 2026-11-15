@@ -432,16 +432,16 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 // Menü: [başlık, [[rota, ikon, etiket?, gereken yetki?]]]. Etiket yoksa kaynağın Türkçe adı kullanılır.
 const MENU = [
   ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
-  ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
-  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['archive', 'archive', 'Denetim Arşivi'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
-  ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
+  ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/rcsa_campaigns', 'check'], ['r/loss_events', 'coin'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
+  ['Uyum', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['obligations', 'scale', 'Yükümlülükler'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/policy_exceptions', 'flag'], ['r/attestation_campaigns', 'edit'], ['r/certifications', 'star'], ['r/access_reviews', 'users'], ['r/privacy_breaches', 'alert']]],
+  ['Denetim', [['audit-plan', 'calendar', 'Denetim Planı'], ['r/audits', 'search'], ['r/evidence_requests', 'inbox'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip'], ['archive', 'archive', 'Denetim Arşivi']]],
+  ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['crisis', 'zap', 'Kriz Yönetimi'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
-  ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi']]],
-  ['Performans ve anket', [['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
-  ['Mimari ve çerçeve', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow']]],
+  ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi'], ['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
+  ['Mimari', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/audit_universe', 'grid']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
-  ['Yönetim', [['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
+  ['Yönetim', [['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
 const ICONS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
@@ -460,7 +460,7 @@ const ICONS = {
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7', flow: 'M3 6h6v4H3zM15 14h6v4h-6zM9 8h3a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2', share: 'M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
   coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9h4.5a2 2 0 0 1 0 4H9h5a2 2 0 0 1 0 4H9M11 7v2M11 17v-2', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
   swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
-  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', scale: 'M12 3v18M5 21h14M4 7h16M7 7l-3 7h6zM17 7l-3 7h6z', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
 function icon(name, cls = '') {
   return s('svg', {viewBox: '0 0 24 24', class: 'icon ' + cls, 'aria-hidden': 'true'}, s('path', {d: ICONS[name] || ICONS.list}));
@@ -504,6 +504,12 @@ const COLUMNS = {
   policies: ['code', 'value_json', 'description'],
   standards: ['code', 'name', 'version', 'issuer', 'active'], clauses: ['code', 'title', 'standard_id', 'clause_type', 'applicable'],
   clause_links: ['from_clause_id', 'relation', 'to_clause_id', 'source', 'active'],
+  evidence_requests: ['code', 'title', 'audit_id', 'assignee', 'due_date', 'status'], workpapers: ['code', 'title', 'audit_id', 'preparer', 'result', 'status'],
+  audit_universe: ['code', 'name', 'entity_type', 'inherent_rating', 'frequency_months', 'owner'], audit_plans: ['code', 'year', 'title', 'status', 'approved_by'],
+  certifications: ['code', 'title', 'certification_body', 'expires_on', 'next_surveillance', 'status'],
+  obligations: ['code', 'title', 'source', 'article', 'regulator', 'applicability'], policy_exceptions: ['code', 'title', 'owner', 'end_date', 'risk_level', 'status'],
+  attestation_campaigns: ['code', 'title', 'document_id', 'due_date', 'status'], attestations: ['campaign_id', 'display_name', 'status', 'acknowledged_at'],
+  notifications: ['created_at', 'channel', 'recipient', 'subject', 'status'],
   processes: ['code', 'name', 'process_type', 'parent_id', 'owner', 'org_unit_id', 'active'], objectives: ['code', 'name', 'process_id', 'owner'],
   documents: ['code', 'title', 'category', 'version', 'process_id', 'owner', 'status', 'effective_date', 'review_date'],
   controls: ['code', 'name', 'execution_mode', 'frequency', 'criticality', 'owner', 'active'],
@@ -524,7 +530,9 @@ const FILTERS = {
   risk_actions: ['status', 'priority'], performance_events: ['supplier_id', 'event_type', 'severity'], sla_measurements: ['sla_id', 'met'],
   sla_definitions: ['engagement_id'], performance_reviews: ['supplier_id'], survey_campaigns: ['status', 'subject'],
   survey_templates: ['purpose', 'status'], import_batches: ['kind'],
-  clauses: ['standard_id', 'applicable'], clause_links: ['relation', 'source', 'active'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
+  clauses: ['standard_id', 'applicable'], clause_links: ['relation', 'source', 'active'], evidence_requests: ['status', 'audit_id'], workpapers: ['status', 'audit_id'],
+  audit_universe: ['entity_type', 'active'], certifications: ['status', 'standard_id'], obligations: ['regulator', 'source_type', 'applicability'],
+  policy_exceptions: ['status', 'risk_level'], attestation_campaigns: ['status'], notifications: ['channel', 'status'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
   findings: ['source', 'severity', 'status'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
   documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
 };
@@ -551,6 +559,15 @@ const DESCRIPTIONS = {
   standards: 'Uyulması gereken standart ve düzenlemeler. Maddeler kontrollerle eşlenir.',
   clauses: 'Standart maddeleri. Kapsam dışı bırakılan madde gerekçe ister (uygulanabilirlik bildirimi).',
   clause_links: 'Standartlar arası madde ilişkileri (çapraz eşleme). Bir maddedeki bulgu, eşdeğer veya kapsayan maddeleri de etkiler.',
+  evidence_requests: 'Denetçinin kontrol başına istediği kanıtlar (PBC). Kişi kanıtı yükler veya mevcut kanıtı gösterir; denetçi kabul eder veya iade eder.',
+  workpapers: 'Denetim çalışma kâğıtları: test adımları, örneklem, sonuç ve ikinci denetçinin gözden geçirme onayı (IIA 2340).',
+  audit_universe: 'Denetlenebilir birimler: süreç, şirket, tedarikçi, uygulama, yönetim sistemi. Öncelik puanı yıllık planı belirler.',
+  audit_plans: 'Risk bazlı yıllık iç denetim planları ve onayları. Plan ekranı: Denetim → Denetim Planı.',
+  certifications: 'Belgelendirmeler (ör. ISO/IEC 27001): kuruluş, kapsam, geçerlilik ve gözetim denetimi takvimi.',
+  obligations: 'Mevzuat ve sözleşme yükümlülükleri; kontrol ve standart maddeleriyle eşlenir. Özet: Uyum → Yükümlülükler.',
+  policy_exceptions: 'Politika istisnaları: gerekçe, telafi edici kontrol ve süre. Talep eden onaylayamaz; süresi dolan istisna kendiliğinden kapanır.',
+  attestation_campaigns: 'Politika okundu beyanı kampanyaları; kapanınca sonuç kanıt olarak kaydedilir.',
+  notifications: 'E-posta ve Teams bildirim kutusu.',
   processes: 'Süreç haritası (ISO 9001 4.4): yönetim, ana ve destek süreçleri; riskler, kontroller, BİA ve dokümanlar sürece bağlanır.',
   objectives: 'Kontrol hedefleri: hangi riski ele aldığı ve hangi kontrollerle karşılandığı izlenir.',
   documents: 'Dokümante edilmiş bilgi (ISO 9001 7.5): taslak → onay → yayın; her yayın değiştirilemez bir revizyon ve dosya bütünlük özeti bırakır.',
@@ -578,10 +595,12 @@ const RELATED = {
 const EXTRA_ACTIONS = {}; // genel detay paneline kaynağa özgü düğmeler
 const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 
+const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications']);   // dış denetçi
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
   if (key.startsWith('r/')) return !!META.def(key.slice(2));
-  const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
+  if (S.me && S.me.external && !EXTERNAL_NAV.has(key)) return false;
+  const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', obligations: 'grc', 'audit-plan': 'grc', crisis: 'continuity', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
@@ -1505,12 +1524,14 @@ async function usersPage() {
   [local ? btn('+ Kullanıcı', () => userForm()) : null]);
   const [users] = await Promise.all([api('users'), list('org_units')]);
   const units = id => (S.cache.org_units || []).find(u => u.id === id)?.name || '#' + id;
-  content(h('div', {class: 'panel'}, users.length ? h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Kullanıcı', 'Tür', 'Rol', 'Birimler', 'Durum', 'Son giriş'].map(t => h('th', {text: t})))),
+  content(h('div', {class: 'panel'}, users.length ? h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Kullanıcı', 'Tür', 'Rol', 'Birimler', 'Durum', 'Erişim', 'Son giriş'].map(t => h('th', {text: t})))),
     h('tbody', {}, users.map(u => { const tr = h('tr', {class: 'clickable', tabindex: '0', onclick: () => userForm(u)},
       h('td', {class: 'cell-primary'}, u.display_name, h('span', {class: 'cell-sub', text: u.kind === 'entra' ? 'Entra hesabı' : u.username})),
       h('td', {}, pill(u.kind === 'entra' ? 'Kurumsal' : 'Yerel', u.kind === 'entra' ? 'purple' : 'neutral')),
       h('td', {}, u.role ? roleLabel(u.role) : h('span', {class: 'muted', text: u.kind === 'entra' ? 'Entra rolü' : '—'})),
-      h('td', {text: u.org_unit_ids.map(units).join(', ')}), h('td', {}, u.is_active ? pill('Aktif', 'good') : pill('Devre dışı', 'bad')), h('td', {text: fmt.datetime(u.last_login_at)}));
+      h('td', {text: u.org_unit_ids.map(units).join(', ')}), h('td', {}, u.is_active ? pill('Aktif', 'good') : pill('Devre dışı', 'bad')),
+      h('td', {}, u.external ? pill('Dış denetçi', 'purple') : null, u.access_expires ? h('span', {class: 'cell-sub ' + (u.access_expired ? 'late' : ''), text: (u.access_expired ? 'Süresi doldu ' : 'Son: ') + fmt.date(u.access_expires)}) : h('span', {class: 'muted', text: 'Süresiz'})),
+      h('td', {text: fmt.datetime(u.last_login_at)}));
     tr.addEventListener('keydown', e => { if (e.key === 'Enter') userForm(u); }); return tr; })))) : empty('Kullanıcı yok', '')));
 }
 function userForm(user) {
@@ -1533,6 +1554,7 @@ function userForm(user) {
     [btn('Kopyala', async () => { await navigator.clipboard.writeText(r.temporary_password); toast('Kopyalandı'); }, 'secondary'), btn('Tamam', () => { Modal.close(); usersPage(); })]);
   const canReset = !isNew && local && user.kind !== 'entra' && user.username !== S.me.username;
   Modal.open(isNew ? 'Yeni kullanıcı' : user.display_name, body, [btn('Vazgeç', () => Modal.close(), 'secondary'),
+    !isNew && typeof accessForm === 'function' ? btn('Erişim süresi / dış denetçi', () => accessForm(user, usersPage), 'ghost') : null,
     canReset ? btn('Geçici parola ver', async () => {
       if (!await confirmDialog('Geçici parola ver: ' + user.username, 'Kullanıcının mevcut parolası geçersiz olur ve açık oturumları kapanır. Yeni geçici parola bir kez gösterilir; ilk girişte değiştirilir.', 'Geçici parola ver')) return;
       const r = await api(`users/${user.id}/reset-password`, {method: 'POST', body: {}});
@@ -1782,6 +1804,7 @@ DETAILS.findings = async function findingDetail(id) {
       ['İlgili risk', f.risk_id ? h('a', {href: '#/r/supplier_risks/' + f.risk_id, text: titleOf(refRecord('supplier_risks', f.risk_id)) || '#' + f.risk_id}) : null],
       ['Şirket', display('findings', 'company_id', f.company_id)],
       ['Son görülme', fmt.datetime(f.last_seen_at)], ['Kapanış / kabul notu', f.closure_note]])),
+    typeof responseSection === 'function' ? responseSection(f, reload) : null,
     typeof impactSection === 'function' ? impactSection(f.impact) : null,
     f.execution ? section('Kaynak test sonucu', h('div', {}, h('div', {class: 'chips'}, resultPill(f.execution.status), display('executions', 'source', f.execution.source), h('span', {class: 'chip', text: fmt.datetime(f.execution.executed_at)})),
       btn('Test ayrıntısı', () => showExecution(f.execution.id), 'ghost small'))) : null,

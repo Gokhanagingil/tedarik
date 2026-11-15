@@ -123,7 +123,7 @@ AUDITS = Resource("audits", "Denetimler", {
     "scope": "TEXT",
     "planned_start": "DATE", "planned_end": "DATE", "actual_start": "DATE", "actual_end": "DATE",
     "lead_auditor": "TEXT", "auditors": "TEXT", "auditees": "TEXT", "status": "TEXT NOT NULL DEFAULT 'planned'",
-    "conclusion": "TEXT", "opinion": "TEXT", "revision": "INTEGER NOT NULL DEFAULT 0",
+    "conclusion": "TEXT", "opinion": "TEXT", "executive_summary": "TEXT", "revision": "INTEGER NOT NULL DEFAULT 0",
     "plan_captured_at": "TIMESTAMP", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, code_prefix="DNT", code_yearly=True, write_roles=ASSURANCE, api=("list", "get"), readonly=("revision", "plan_captured_at"),
     enums={"kind": ("internal", "external", "certification", "supplier"),
@@ -187,10 +187,14 @@ FINDINGS = Resource("findings", "Bulgular", {
     "description": "TEXT", "severity": "TEXT NOT NULL DEFAULT 'medium'", "status": "TEXT NOT NULL DEFAULT 'open'",
     "owner": "TEXT", "due_date": "DATE", "root_cause": "TEXT", "closure_note": "TEXT",
     "recurrence": "INTEGER NOT NULL DEFAULT 1", "last_seen_at": "TIMESTAMP", "closed_at": "TIMESTAMP",
+    "response_status": "TEXT", "management_response": "TEXT", "response_due": "DATE", "responded_by": "TEXT",
+    "responded_at": "TIMESTAMP",
     "created_by": "TEXT", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, code_prefix="BLG", code_yearly=True, search=("code", "title"), write_roles=ASSURANCE,
-    readonly=("execution_id", "recurrence", "last_seen_at", "closed_at", "created_by"),
+    readonly=("execution_id", "recurrence", "last_seen_at", "closed_at", "created_by", "response_status",
+              "management_response", "responded_by", "responded_at"),
     enums={"severity": ("low", "medium", "high", "critical"),
+           "response_status": ("pending", "agreed", "partially_agreed", "disagreed"),
            "status": ("open", "in_progress", "closed", "accepted"),
            "source": ("audit", "control_test", "exercise", "self_assessment", "external", "incident")})
 
@@ -339,28 +343,64 @@ def _action_scope(db, record):
     return units
 
 
+def _external(principal):
+    return principal is not None and getattr(principal, "external", False)
+
+
+def _audit_marks(principal):
+    ids = sorted(principal.audits) or [0]
+    return ",".join("?" * len(ids)), tuple(ids)
+
+
 def evidence_filter(principal, alias=""):
     """Kısıtlı kanıt (ör. sızma testi raporu) bilmesi gereken kişilere açıktır: Yönetici, Denetçi ve yükleyen.
+    Dış denetçi yalnızca kendisine atanmış denetimlere bağlı kanıtı görür (K-026).
     (SQL koşulu, parametreler) döner; ayrıcalıklı rolde koşul yoktur."""
+    p = alias + "." if alias else ""
+    if _external(principal):
+        marks, ids = _audit_marks(principal)
+        return f"{p}id IN (SELECT evidence_id FROM tdr_evidence_audits WHERE audit_id IN ({marks}))", ids
     if principal is None or principal.role in ASSURANCE:
         return "1=1", ()
-    p = alias + "." if alias else ""
     return f"({p}confidentiality <> 'restricted' OR {p}created_by = ?)", (principal.username,)
 
 
-def evidence_visible(principal, evidence):
+def evidence_visible(principal, evidence, db=None):
+    if _external(principal):
+        return False if db is None else bool(one(db, f"SELECT 1 AS x FROM tdr_evidence_audits WHERE evidence_id=? AND "
+                                                     f"audit_id IN ({_audit_marks(principal)[0]})",
+                                                 (evidence["id"], *_audit_marks(principal)[1])))
     return (principal is None or principal.role in ASSURANCE or evidence.get("confidentiality") != "restricted"
             or evidence.get("created_by") == principal.username)
 
 
 def _hidden_evidence_ids(principal):
+    if _external(principal):
+        marks, ids = _audit_marks(principal)
+        return f"evidence_id IN (SELECT evidence_id FROM tdr_evidence_audits WHERE audit_id IN ({marks}))", ids
     if principal is None or principal.role in ASSURANCE:
         return None
     return ("evidence_id NOT IN (SELECT id FROM tdr_evidence WHERE confidentiality='restricted' AND "
             "COALESCE(created_by,'') <> ?)", (principal.username,))
 
 
+def audit_scoped(column="audit_id"):
+    """Dış denetçi için kayıt görünürlüğü: yalnızca atanmış denetimlerin kayıtları (K-026)."""
+    def row_filter(principal):
+        if not _external(principal):
+            return None
+        marks, ids = _audit_marks(principal)
+        return f"{column} IN ({marks})", ids
+
+    def can_read(principal, record, db=None):
+        return not _external(principal) or record.get(column) in principal.audits
+    return row_filter, can_read
+
+
 EVIDENCE.row_filter = lambda principal: evidence_filter(principal)
+AUDITS.row_filter, AUDITS.can_read = audit_scoped("id")
+FINDINGS.row_filter, FINDINGS.can_read = audit_scoped()
+EXECUTIONS.row_filter, EXECUTIONS.can_read = audit_scoped()
 EVIDENCE.can_read = evidence_visible
 FILES.row_filter = _hidden_evidence_ids
 CONTROLS.before_save = _control_rules
@@ -618,7 +658,7 @@ def execution_context(c):
                                     "tdr_execution_evidence x JOIN tdr_evidence e ON e.id=x.evidence_id "
                                     "WHERE x.execution_id=?", (record["id"],))
     for ev in record["evidence"]:                  # kısıtlı kanıtın varlığı ve özeti görünür, içeriği görünmez
-        if not evidence_visible(c.principal, ev):
+        if not evidence_visible(c.principal, ev, c.db):
             ev.update(title="Kısıtlı kanıt", file_name=None, restricted=True)
     record["control"] = one(c.db, "SELECT id, code, name, active FROM tdr_controls WHERE id=?", (record["control_id"],))
     record["finding"] = one(c.db, "SELECT id, code, status FROM tdr_findings WHERE execution_id=?", (record["id"],))
@@ -819,7 +859,7 @@ def upload_evidence(c):
 
 def _visible_evidence(c):
     evidence = crud.get(c.db, EVIDENCE, c.params["id"])
-    if not evidence_visible(c.principal, evidence):
+    if not evidence_visible(c.principal, evidence, c.db):
         raise crud.NotFound("Kanıt bulunamadı")
     return evidence
 
@@ -914,6 +954,13 @@ def _validate_audit(audit_row):
         raise crud.Invalid("Tedarikçi denetiminde tedarikçi seçilmeli")
 
 
+AUDIT_COMPLETION_CHECKS = []   # fn(db, audit_id) -> [engel açıklaması]; ör. gözden geçirilmemiş çalışma kâğıdı
+
+
+def completion_blockers(db, audit_id):
+    return [msg for check in AUDIT_COMPLETION_CHECKS for msg in check(db, audit_id)]
+
+
 def audit_scope(db, audit_id):
     return ({r["standard_id"] for r in rows(db, "SELECT standard_id FROM tdr_audit_standards WHERE audit_id=?", (audit_id,))},
             {r["clause_id"] for r in rows(db, "SELECT clause_id FROM tdr_audit_clauses WHERE audit_id=?", (audit_id,))})
@@ -995,6 +1042,10 @@ def _save_audit(c, audit_id=None):
                 (process_ids is not None and process_ids != old_processes):
             raise crud.Conflict("Sonuçlandırılmış denetimin kapsamı değiştirilemez")
     _validate_audit(merged)
+    if audit_id and merged["status"] in ("completed", "closed") and previous["status"] not in ("completed", "closed"):
+        problems = completion_blockers(c.db, audit_id)
+        if problems:
+            raise crud.Conflict("Denetim tamamlanamaz: " + "; ".join(problems))
     _check_scope(c.db, merged, standards, clauses)
     now = utcnow()
     if previous:
@@ -1083,17 +1134,26 @@ def audit_context_data(db, audit_id, principal=None):
     visible, args = evidence_filter(principal, "e")
     item["evidence"] = rows(db, "SELECT e.* FROM tdr_evidence e JOIN tdr_evidence_audits m ON m.evidence_id=e.id "
                                 f"WHERE m.audit_id=? AND {visible} ORDER BY e.id DESC", (audit_id, *args))
+    item["blockers"] = completion_blockers(db, audit_id) if item["status"] in ("planned", "in_progress") else []
+    for extra in AUDIT_CONTEXT_EXTRAS:
+        extra(db, item, principal)
     return item
+
+
+AUDIT_CONTEXT_EXTRAS = []      # fn(db, denetim, principal): bağlama ek bilgi (kanıt talepleri, çalışma kâğıtları)
 
 
 def audit_context(c):
     authz.check(c.principal, AUDITS, "read")
+    authz.require_audit(c.principal, c.params["id"])
     return audit_context_data(c.db, c.params["id"], c.principal)
 
 
 def finding_context(c):
     authz.check(c.principal, FINDINGS, "read")
     finding = crud.get(c.db, FINDINGS, c.params["id"])
+    if not FINDINGS.can_read(c.principal, finding):
+        raise crud.NotFound("Bulgu bulunamadı")
     finding["actions"] = rows(c.db, "SELECT * FROM tdr_grc_actions WHERE finding_id=? ORDER BY due_date", (finding["id"],))
     finding["control"] = one(c.db, "SELECT id, code, name, owner FROM tdr_controls WHERE id=?", (finding["control_id"],)) \
         if finding["control_id"] else None
@@ -1259,6 +1319,8 @@ def register(app):
     app.route("GET", API + "/findings/{id}/context", finding_context)
     app.route("GET", API + "/grc/compliance", compliance)
     app.route("GET", API + "/grc/overview", overview)
+    _assurance.register(app)
+    _compliance.register(app)
 
 
 DEFAULT_POLICIES = {
@@ -1270,3 +1332,8 @@ def seed(db):
     for code, (value, description) in DEFAULT_POLICIES.items():
         db.execute("INSERT INTO tdr_policies (code, value_json, description) VALUES (?,?,?) ON CONFLICT DO NOTHING",
                    (code, json.dumps(value), description))
+    _assurance.seed(db)
+    _compliance.seed(db)
+
+
+from . import assurance as _assurance, compliance as _compliance  # noqa: E402  (kaynak tanımları bu modülün tablolarına bağlıdır)

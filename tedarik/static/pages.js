@@ -100,6 +100,7 @@ const KRI_TEXT = {green: 'Yeşil', amber: 'Sarı', red: 'Kırmızı'};
 
 // ------------------------------------------------------------------ genel bakış (yönetici özeti)
 PAGES.home = async function overview() {
+  if (S.me.external) { Router.go('r/audits'); return; }       // dış denetçi: yalnızca atanmış denetimler
   setPage('Genel Bakış', 'Risk, uyum, iş sürekliliği, doküman, varlık ve tedarikçi alanlarının tek ekranda özeti. Kartlar ilgili ekranı açar.');
   content(h('div', {class: 'empty', text: 'Yükleniyor…'}));
   const start = today(); const end = today(30);
@@ -183,6 +184,12 @@ const WORK_GROUPS = [
   ['documents_to_review', 'Gözden geçirme zamanı gelen dokümanlarım', 'documents', () => [], 'review_date'],
   ['bias_to_approve', 'Onay bekleyen İş Etki Analizleri', 'bias', r => [h('span', {class: 'chip', text: 'Sahibi: ' + r.owner})], null],
   ['bias_to_review', 'Gözden geçirme zamanı gelen BİA\'larım', 'bias', () => [], 'review_date'],
+  ['evidence_requests', 'Benden istenen kanıtlar', 'evidence_requests', r => [display('evidence_requests', 'status', r.status)], 'due_date'],
+  ['finding_responses', 'Yönetim yanıtı beklenen bulgularım', 'findings', r => [display('findings', 'severity', r.severity)], 'due_date'],
+  ['attestations', 'Okundu beyanı bekleyen politikalar', 'attestations', () => [pill('Beyan bekleniyor', 'warn')], 'due_date'],
+  ['evidence_to_review', 'İncelememi bekleyen kanıtlar', 'evidence_requests', r => [h('span', {class: 'chip', text: 'Teslim eden: ' + r.assignee})], 'due_date'],
+  ['workpapers_to_review', 'Gözden geçirmemi bekleyen çalışma kâğıtları', 'workpapers', r => [h('span', {class: 'chip', text: 'Hazırlayan: ' + (r.preparer || '—')})], null],
+  ['exceptions_to_approve', 'Onayımı bekleyen politika istisnaları', 'policy_exceptions', r => [display('policy_exceptions', 'risk_level', r.risk_level)], 'due_date'],
   ['exercises', 'Yöneteceğim tatbikatlar', 'bc_exercises', () => [], 'planned_date'],
   ['surveys', 'Yanıt bekleyen anketler', 'survey_campaigns', () => [], 'closes_on'],
   ['controls', 'Sahibi olduğum kontroller', 'controls', () => [], null],
@@ -192,14 +199,14 @@ PAGES['my-work'] = async function myWork() {
   const w = await api('my-work'); S.myWork = w.total; navigation();
   const groups = WORK_GROUPS.filter(([key]) => (w[key] || []).length);
   const strip = statStrip([['Açık iş', fmt.num(w.total, 0)], ['Tarihi geçen', fmt.num(w.overdue, 0), w.overdue ? 'bad' : 'good'],
-    ['Onay bekleyen', fmt.num((w.documents_to_approve || []).length + (w.bias_to_approve || []).length + (w.capa_validation || []).length, 0)],
+    ['Onay bekleyen', fmt.num(['documents_to_approve', 'bias_to_approve', 'capa_validation', 'evidence_to_review', 'workpapers_to_review', 'exceptions_to_approve'].reduce((n, k) => n + (w[k] || []).length, 0), 0)],
     ['Gözden geçirme', fmt.num((w.risks || []).length + (w.documents_to_review || []).length + (w.bias_to_review || []).length, 0)]]);
   if (!groups.length) { content(strip, empty('Bekleyen işiniz yok', 'Size atanmış açık bir kayıt bulunmuyor.')); return; }
   content(strip, h('div', {class: 'work'}, groups.map(([key, title, res, chips, dateKey]) => panel(title, h('ul', {class: 'mini'}, w[key].map(r => {
     const d = dateKey ? r[dateKey] : null;
     const li = h('li', {class: 'link', tabindex: '0'}, d ? h('span', {class: 'due' + (late(d) ? ' late' : ''), text: fmt.date(d) + ' · ' + dueText(d)}) : null,
       h('strong', {text: [r.code, r.title || r.name].filter(Boolean).join(' · ')}), h('div', {class: 'chips'}, chips(r)));
-    const go = () => (res === 'survey_campaigns' ? Router.go('my-surveys') : openRecord(res, r.id));
+    const go = () => (res === 'survey_campaigns' ? Router.go('my-surveys') : res === 'attestations' && typeof acknowledgeDialog === 'function' ? acknowledgeDialog(r) : openRecord(res, r.id));
     li.addEventListener('click', go); li.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
     return li;
   })), null, String(w[key].length)))));

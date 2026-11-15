@@ -8,6 +8,7 @@
 import json
 import logging
 import re
+from datetime import date
 from urllib.parse import urlparse
 
 from . import accounts, audit, auth as authz, crud, session
@@ -105,6 +106,8 @@ def login(c):
     account = identity.authenticate(c.db, username, password)
     if not account or not c.db.execute("SELECT 1 FROM tdr_user_roles WHERE user_id=?", (account["id"],)).fetchone():
         return 401, {"error": "Kullanıcı adı veya parola yanlış"}
+    if authz.access_of(c.db, account["id"])["expired"]:
+        return 401, {"error": "Hesabınızın erişim süresi doldu; yöneticinize başvurun"}
     token = identity.new_session(c.db, account["id"])
     c.app.login_limiter.clear(key)
     return 200, Reply({"username": account["username"], "must_change_password": bool(account["must_change_password"])},
@@ -207,7 +210,52 @@ def _user(c, user_id):
     user["org_unit_ids"] = [r["org_unit_id"] for r in c.db.execute(
         "SELECT org_unit_id FROM tdr_user_units WHERE user_id=? ORDER BY org_unit_id", (user_id,)).fetchall()]
     user["kind"] = "entra" if user["username"].startswith("entra:") else "local"
+    access = authz.access_of(c.db, user_id)
+    user["access_expires"], user["external"], user["access_expired"] = access["expires_on"], access["external"], access["expired"]
+    user["audit_ids"] = [r["audit_id"] for r in c.db.execute(
+        "SELECT audit_id FROM tdr_user_audits WHERE user_id=? ORDER BY audit_id", (user_id,)).fetchall()]
     return user
+
+
+def _set_access(c, user_id, body):
+    """Erişim süresi, dış denetçi bayrağı ve denetim kapsamı (K-026)."""
+    current = authz.access_of(c.db, user_id)
+    expires = body.get("access_expires", current["expires_on"])
+    external = body.get("external", int(current["external"]))
+    if expires not in (None, ""):
+        try:
+            if date.fromisoformat(str(expires)).isoformat() != str(expires):
+                raise ValueError
+        except ValueError:
+            raise crud.Invalid("Erişim sonu YYYY-AA-GG olmalı") from None
+    else:
+        expires = None
+    if external not in (0, 1, True, False):
+        raise crud.Invalid("external 0 veya 1 olmalı")
+    if external and not expires:
+        raise crud.Invalid("Dış denetçi hesabı süreli olmalı (erişim sonu tarihi)")
+    if user_id == c.principal.user_id and (external or expires):
+        raise crud.Invalid("Kendi hesabınızı süreli veya dış denetçi yapamazsınız")
+    if c.db.execute("SELECT 1 FROM tdr_user_access WHERE user_id=?", (user_id,)).fetchone():
+        c.db.execute("UPDATE tdr_user_access SET expires_on=?, external=?, updated_by=?, updated_at=? WHERE user_id=?",
+                     (expires, int(bool(external)), c.principal.username, utcnow(), user_id))
+    else:
+        c.db.execute("INSERT INTO tdr_user_access (user_id, expires_on, external, updated_by, updated_at) VALUES (?,?,?,?,?)",
+                     (user_id, expires, int(bool(external)), c.principal.username, utcnow()))
+    if "audit_ids" in body:
+        ids = body["audit_ids"]
+        if not isinstance(ids, list) or any(type(i) is not int for i in ids) or len(ids) > 200:
+            raise crud.Invalid("audit_ids tamsayı listesi olmalı")
+        found = {r["id"] for r in c.db.execute(f"SELECT id FROM tdr_audits WHERE id IN ({','.join('?' * len(ids)) or 'NULL'})",
+                                               tuple(ids)).fetchall()} if ids else set()
+        if found != set(ids):
+            raise crud.Invalid("Bulunamayan denetim seçildi")
+        c.db.execute("DELETE FROM tdr_user_audits WHERE user_id=?", (user_id,))
+        for audit_id in sorted(set(ids)):
+            c.db.execute("INSERT INTO tdr_user_audits (user_id, audit_id, assigned_by, assigned_at) VALUES (?,?,?,?)",
+                         (user_id, audit_id, c.principal.username, utcnow()))
+    if (expires and expires < date.today().isoformat()):
+        c.db.execute("DELETE FROM auth_sessions WHERE user_id=?", (user_id,))
 
 
 def _set_role(c, user_id, role):
@@ -262,7 +310,7 @@ def update_user(c):
     user_id = c.params["id"]
     current = _user(c, user_id)
     body = c.body
-    allowed = {"is_active", "display_name", "email", "role", "org_unit_ids"}
+    allowed = {"is_active", "display_name", "email", "role", "org_unit_ids", "access_expires", "external", "audit_ids"}
     if not body or set(body) - allowed:
         raise crud.Invalid("Güncellenebilir alanlar: " + ", ".join(sorted(allowed)))
     fields = {}
@@ -288,6 +336,8 @@ def update_user(c):
         _set_role(c, user_id, body["role"])
     if "org_unit_ids" in body:
         _set_units(c, user_id, body["org_unit_ids"])
+    if {"access_expires", "external", "audit_ids"} & set(body):
+        _set_access(c, user_id, body)
     audit.log(c.db, c.principal, "UPDATE", "users", user_id, body)
     return _user(c, user_id)
 
