@@ -230,18 +230,24 @@ PAGES.calendar = async function calendarPage(parts, params) {
     btn('Bugün', () => go(today().slice(0, 7)), 'secondary'), btn(view === 'list' ? 'Ay görünümü' : 'Liste görünümü', () => go(month, view === 'list' ? 'month' : 'list'), 'secondary')]);
   const data = await api(`calendar?from=${iso(gridStart)}&to=${iso(gridEnd)}`);
   const title = first.toLocaleDateString(TR, {month: 'long', year: 'numeric'});
-  const chips = h('div', {class: 'chips'}, data.types.map(t => {
-    const n = data.events.filter(e => e.type === t.key).length;
-    const b = h('button', {type: 'button', class: 'chip type-chip' + (S.calHidden.has(t.key) ? '' : ' on'), 'aria-pressed': String(!S.calHidden.has(t.key))},
-      h('i', {class: 'dot t-' + t.key}), `${t.label} (${n})`);
-    b.addEventListener('click', () => { if (S.calHidden.has(t.key)) S.calHidden.delete(t.key); else S.calHidden.add(t.key); draw(); chips.querySelectorAll('.type-chip').forEach((c, i) => {
-      const on = !S.calHidden.has(data.types[i].key); c.classList.toggle('on', on); c.setAttribute('aria-pressed', String(on)); }); });
-    return b;
-  }));
+  // Yalnızca bu dönemde kaydı olan türler etiket olarak görünür; boş türler kalabalık yapmasın.
+  const counts = {}; for (const e of data.events) counts[e.type] = (counts[e.type] || 0) + 1;
+  const present = data.types.filter(t => counts[t.key]);
+  const chips = h('div', {class: 'chips'});
+  const drawChips = () => {
+    const anyHidden = present.some(t => S.calHidden.has(t.key));
+    chips.replaceChildren(...present.map(t => {
+      const on = !S.calHidden.has(t.key);
+      return h('button', {type: 'button', class: 'chip type-chip' + (on ? ' on' : ''), 'aria-pressed': String(on),
+        onclick: () => { if (on) S.calHidden.add(t.key); else S.calHidden.delete(t.key); drawChips(); draw(); }},
+        h('i', {class: 'dot t-' + t.key}), `${t.label} (${counts[t.key]})`);
+    }), anyHidden ? btn('Tümünü göster', () => { present.forEach(t => S.calHidden.delete(t.key)); drawChips(); draw(); }, 'ghost small') : null);
+  };
+  drawChips();
   const host = h('div');
   const head = h('div', {class: 'cal-head'}, h('div', {class: 'filters'}, btn('‹', () => go(shift(-1)), 'secondary small', {'aria-label': 'Önceki ay'}),
     h('h2', {text: title.charAt(0).toLocaleUpperCase(TR) + title.slice(1)}), btn('›', () => go(shift(1)), 'secondary small', {'aria-label': 'Sonraki ay'})),
-    h('span', {class: 'muted small', text: 'Türe göre süzmek için etiketlere tıklayın'}));
+    h('span', {class: 'muted small', text: present.length ? 'Türe göre süzmek için etiketlere tıklayın' : ''}));
   const evButton = (e, suffix = '') => h('button', {type: 'button', class: 'ev t-' + e.type, title: `${e.type_label}: ${e.title}${e.end && e.end !== e.start ? ` (${fmt.date(e.start)} – ${fmt.date(e.end)})` : ''}`,
     onclick: () => openAny(e.resource, e.id)}, e.title + suffix);
   function draw() {

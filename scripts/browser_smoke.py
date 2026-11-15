@@ -228,6 +228,10 @@ def exercise(page, out, base, errors):
     expect(page.locator(".map-box.sel")).to_have_count(1)
     go(page, "calendar", "GRC Takvimi")
     expect(page.locator(".cal .day").first).to_be_visible()
+    if page.locator(".type-chip").count():                       # yalnızca kaydı olan türler; süzgeç geri alınabilir
+        page.locator(".type-chip").first.click()
+        page.get_by_role("button", name="Tümünü göster").click()
+        expect(page.locator(".type-chip.on")).to_have_count(page.locator(".type-chip").count())
     go(page, "health", "GRC Sağlık Kontrolü")
     expect(page.locator(".check").first).to_be_visible()
     page.keyboard.press("Control+k")
