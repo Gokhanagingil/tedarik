@@ -1,0 +1,27 @@
+# Tedarik Portalı TLS ters vekili (yalnızca bu uygulama). Sertifika Let's Encrypt'ten TLS-ALPN-01 ile alınır;
+# 80. port sunucudaki başka uygulamaya ait olduğu için HTTP doğrulaması ve HTTP->HTTPS yönlendirmesi kapalıdır.
+# Erişim günlüğü yazılmaz (sorgu dizgisi, çerez ve kimlik kodu günlüğe girmez; KS GRC ilkesi).
+{
+	admin off
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$TEDARIK_DOMAIN} {
+	tls {
+		issuer acme {
+			disable_http_challenge
+		}
+	}
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy app:8090 {
+		header_up X-Forwarded-Proto https
+		transport http {
+			read_timeout 60s
+		}
+	}
+}

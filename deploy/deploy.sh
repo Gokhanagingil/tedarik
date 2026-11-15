@@ -27,6 +27,25 @@ docker compose version
 
 umask 077
 mkdir -p "$BASE/secrets" "$BASE/backups"
+
+# Kalıcı kurulum ayarları (ör. alan adı) sunucuda tutulur; sonraki kurulumlar aynı ayarla çalışır.
+SETTINGS="$BASE/settings.env"
+if [ -n "${TEDARIK_DOMAIN:-}" ]; then
+  printf 'TEDARIK_DOMAIN=%s\n' "$TEDARIK_DOMAIN" > "$SETTINGS"
+fi
+if [ -f "$SETTINGS" ]; then
+  . "$SETTINGS"
+  export TEDARIK_DOMAIN
+fi
+if [ -n "${TEDARIK_DOMAIN:-}" ]; then
+  case "$TEDARIK_DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı: $TEDARIK_DOMAIN" >&2; exit 1;; esac
+  export COMPOSE_PROFILES=tls TEDARIK_COOKIE_SECURE=1
+  if command -v ss >/dev/null 2>&1 && ss -ltn "sport = :443" | grep -q LISTEN && \
+     ! docker ps --filter label=com.docker.compose.project=$PROJECT --format '{{.Ports}}' 2>/dev/null | grep -q ':443->'; then
+    echo "443. port başka bir uygulama tarafından kullanılıyor; TLS ters vekili başlatılamaz" >&2
+    exit 1
+  fi
+fi
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
 
 others() {   # bu projeye ait olmayan konteynerler: kimlik, ad, başlama zamanı
@@ -93,4 +112,8 @@ if ! cmp -s "$BASE/.others-before" "$BASE/.others-after"; then
   diff "$BASE/.others-before" "$BASE/.others-after" >&2 || true
   exit 1
 fi
-echo "Tedarik Portalı çalışıyor: http://127.0.0.1:$PORT (yalnızca sunucu içinden). Diğer konteynerler değişmedi."
+if [ -n "${TEDARIK_DOMAIN:-}" ]; then
+  echo "Tedarik Portalı çalışıyor: https://$TEDARIK_DOMAIN (sertifika ilk açılışta otomatik alınır). Diğer konteynerler değişmedi."
+else
+  echo "Tedarik Portalı çalışıyor: http://127.0.0.1:$PORT (yalnızca sunucu içinden). Diğer konteynerler değişmedi."
+fi

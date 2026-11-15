@@ -65,3 +65,8 @@ Her karar: bağlam, karar, sonuç. Yeni karar sona eklenir; eskisi değişirse "
 **Bağlam.** `identity.py` öneksiz `users`, `auth_sessions`, `entra_subjects` tablolarını kullanır. Tedarikte her tablo `tdr_` önekli olmalıydı (K-003).
 **Karar.** Bu üç tablo KS GRC şemasıyla aynı adla ve aynı yapıyla açılır; tam birleşmede ortak kullanıcı tablosu olurlar. Tedarik rolleri ve birim kapsamı ayrı `tdr_user_roles` tablosundadır; KS GRC'nin `roles` ve `user_roles` tablolarına yazılmaz.
 **Sonuç.** K-003'ün tek istisnasıdır. Ortak kullanıcı tablosu, iki uygulamanın aynı kişiyi aynı kimlikle görmesini sağlar.
+
+## K-014 Test sunucusunda TLS: sslip.io adı ve Caddy (TLS-ALPN-01)
+**Bağlam.** Gökhan Bey test sunucusunda (204.168.247.101) HTTPS istedi ve adı seçmeyi bize bıraktı. Sunucunun 80. portu ilgisiz bir uygulamanın nginx'ine ait; ona dokunulmamalı. Kurum DNS'i yok.
+**Karar.** Ad `tedarik.204-168-247-101.sslip.io` (sslip.io adındaki IP'ye kendiliğinden çözümlenir). Yalnızca bu projeye ait Caddy konteyneri 443'ü açar, sertifikayı Let's Encrypt'ten TLS-ALPN-01 ile alır ve yeniler; HTTP doğrulaması ve 80→443 yönlendirmesi kapalıdır. Uygulama `TEDARIK_COOKIE_SECURE=1` ile çalışır (Secure çerez, HSTS, köken `https://`). Caddy erişim günlüğü yazmaz.
+**Sonuç.** Kalıcı kurumsal adrese geçişte yalnızca `TEDARIK_DOMAIN` değişir (kurum DNS'i ve gerekirse kurum sertifikası). sslip.io üçüncü taraf bir DNS hizmetidir; üretimde kullanılmamalıdır. Test sunucusu internete açıktır; giriş, hız sınırı ve oturum kuralları KS GRC ile aynıdır, demo verisi sentetiktir.

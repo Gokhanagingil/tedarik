@@ -33,7 +33,11 @@ Hedef: Tedarik Portalı'nı başka uygulamaların da çalıştığı bir Linux s
 
 Elle kurulum: kaynağı `/opt/tedarik/releases/<ad>` altına çıkarın, `current` bağlantısını oraya yöneltin, `cd /opt/tedarik/current && sh deploy/deploy.sh`.
 
-## Erişim
+## Erişim (HTTPS)
+
+Kurulum işinde `domain` verilirse (test sunucusu: `tedarik.204-168-247-101.sslip.io`, K-014) yalnızca bu projeye ait Caddy ters vekili 443'ü açar ve Let's Encrypt sertifikasını 443 üzerinden (TLS-ALPN-01) alır; 80. porttaki başka uygulamaya dokunulmaz. Alan adı sunucuda `/opt/tedarik/settings.env` dosyasında saklanır, sonraki kurulumlar aynı adla çalışır. Kurulum işi sonunda sertifikayı, güvenlik başlıklarını ve anonim erişimin 401 döndüğünü dışarıdan denetler.
+
+## Erişim (SSH ile, TLS olmadan)
 
 Uygulama bilerek yalnızca sunucunun içinden erişilebilir. İlk deneme için SSH port yönlendirmesi yeterlidir; dışarıya hiçbir şey açılmaz:
 

@@ -5,6 +5,14 @@ name: Deploy Tedarik (isolated)
 on:
   workflow_dispatch:
     inputs:
+      domain:
+        description: "HTTPS alan adı (boş: sunucudaki kayıtlı ayar korunur)"
+        type: string
+        default: "tedarik.204-168-247-101.sslip.io"
+      seed_demo:
+        description: "Sentetik demo veriyi yükle (yalnızca boş veya demo içeren veritabanına)"
+        type: boolean
+        default: false
       install_docker:
         description: "Sunucuda Docker yoksa Ubuntu paketlerinden kur (docker.io, docker-compose-v2)"
         type: boolean
@@ -45,8 +53,11 @@ jobs:
           KEY: ${{ secrets.TEDARIK_SSH_KEY }}
           KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
           INSTALL_DOCKER: ${{ inputs.install_docker && '1' || '0' }}
+          DOMAIN: ${{ inputs.domain }}
+          SEED_DEMO: ${{ inputs.seed_demo && '1' || '0' }}
         run: |
           set -eu
+          case "$DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı"; exit 1;; esac
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
@@ -63,7 +74,22 @@ jobs:
             \$S mkdir -p \$R && \$S chmod 0700 /opt/tedarik
             \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
             \$S ln -sfn \$R /opt/tedarik/current
-            \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER sh /opt/tedarik/current/deploy/deploy.sh"
+            \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER TEDARIK_DOMAIN=$DOMAIN TEDARIK_SEED_DEMO=$SEED_DEMO sh /opt/tedarik/current/deploy/deploy.sh"
+      - name: External HTTPS check (certificate, security headers, anonymous access denied)
+        if: inputs.domain != ''
+        env:
+          DOMAIN: ${{ inputs.domain }}
+        run: |
+          set -eu
+          for i in $(seq 1 24); do
+            if curl -fsS -o /dev/null --max-time 10 "https://$DOMAIN/login"; then break; fi
+            echo "Sertifika veya bağlantı bekleniyor ($i/24)"; sleep 10
+          done
+          curl -sS -D headers.txt -o /dev/null --max-time 10 "https://$DOMAIN/login"
+          grep -i '^strict-transport-security' headers.txt
+          grep -i '^content-security-policy' headers.txt
+          test "$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/tdr/suppliers")" = 401
+          echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -issuer -enddate
       - name: Clean up key
         if: always()
         run: rm -f ~/.ssh/id_deploy
