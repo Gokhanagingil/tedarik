@@ -132,6 +132,10 @@ else
   $COMPOSE exec -T app python -m tedarik.entra_check || echo "UYARI: Entra ön denetimi hata verdi; yukarıdaki maddeleri düzeltin" >&2
 fi
 
+# Standart kütüphanesi (K-023): tam metinli paketler her kurulumda kurulur veya güncellenir; kurumun
+# uygulanabilirlik kararları, kapsam seçimi ve eşlemeleri korunur.
+$COMPOSE exec -T app python -m tedarik.standards_cli install || echo "UYARI: standart kütüphanesi kurulamadı" >&2
+
 # Demo verisi (yalnızca istenirse ve veritabanında demo dışı tedarikçi yoksa). Demo kullanıcıların geçici
 # parolaları yalnızca root'un okuyabildiği dosyaya yazılır; CI günlüğüne basılmaz.
 if [ "${TEDARIK_SEED_DEMO:-0}" = 1 ] || [ "${TEDARIK_SEED_DEMO:-}" = true ]; then

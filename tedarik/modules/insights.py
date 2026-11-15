@@ -89,8 +89,8 @@ def clause_context(c):
     authz.check(c.principal, RESOURCES["clauses"], "read")
     item = crud.get(c.db, RESOURCES["clauses"], c.params["id"])
     item["standard"] = one(c.db, "SELECT id, code, name, version FROM tdr_standards WHERE id=?", (item["standard_id"],))
-    item["children"] = rows(c.db, "SELECT id, code, title, applicable FROM tdr_clauses WHERE parent_id=? ORDER BY code",
-                            (item["id"],))
+    item["children"] = rows(c.db, "SELECT id, code, title, applicable FROM tdr_clauses WHERE parent_id=? "
+                                  "ORDER BY COALESCE(position, 0), code", (item["id"],))
     item["controls"] = rows(c.db, """SELECT k.id, k.code, k.name, (SELECT x.status FROM tdr_executions x
         WHERE x.control_id=k.id ORDER BY x.executed_at DESC, x.id DESC LIMIT 1) AS last_status FROM tdr_controls k
         JOIN tdr_control_clauses m ON m.control_id=k.id WHERE m.clause_id=? ORDER BY k.code""", (item["id"],))
@@ -103,6 +103,8 @@ def clause_context(c):
     item["evidence"] = rows(c.db, f"""SELECT e.id, e.code, e.title, e.status FROM tdr_evidence e
         JOIN tdr_evidence_clauses m ON m.evidence_id=e.id WHERE m.clause_id=? AND {visible} ORDER BY e.id DESC""",
                             (item["id"], *args))
+    from .grc_library import clause_relations
+    item["relations"] = clause_relations(c.db, item["id"])
     return item
 
 

@@ -306,3 +306,31 @@ td.over{color:var(--bad);font-weight:700}.health-top{display:grid;grid-template-
 .toolbar>*{max-width:100%;min-width:0}.toolbar .filters{width:100%}.filters select.compact{flex:1 1 100%;min-width:0;width:100%}.tabs{overflow-x:auto;flex-wrap:nowrap}
 .cal .day{min-height:74px}.ev{font-size:10.5px;padding:1px 3px}.agenda li{grid-template-columns:86px 1fr}.agenda li>:last-child{display:none}}
 @media print{#sidebar,#topbar,#topActions,#detail,.toolbar,.no-print{display:none!important}#main{margin:0;padding:0}.panel{box-shadow:none;break-inside:avoid}}
+/* ---------- standart kütüphanesi, madde ağacı, seçici, entegre test planı (grc.js) */
+.group-title{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+.lib-card p{margin:6px 0}.lib-card .toolbar{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+.tree{display:block}.tree .tree-row{display:flex;align-items:flex-start;gap:6px;padding:3px 6px;border-radius:7px}
+.tree .tree-row:hover{background:var(--hover)}.tree .tree-row.head{font-weight:650}
+.tree .tree-row.d1{padding-left:26px}.tree .tree-row.d2{padding-left:46px}.tree .tree-row.d3{padding-left:66px}.tree .tree-row.d4{padding-left:86px}
+.tree-toggle{width:20px;flex-shrink:0;border:0;background:none;color:var(--muted);padding:2px 0;text-align:center;font-size:12px}
+.tree .tree-row label{display:flex;align-items:flex-start;gap:8px;border:0;padding:0;margin:0;font-weight:450;cursor:pointer;flex:1;background:none}
+.tree .tree-row label:hover{background:none}.tree-label b{font-weight:650}.tree-all{border-bottom:1px solid var(--stroke);margin-bottom:4px;padding-bottom:6px}
+.tree-open{border:0;background:none;text-align:left;padding:2px 0;flex:1;color:var(--text);min-width:0}.tree-open:hover{color:var(--accent-dark)}
+.tree-tags{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}.std-tree{max-height:none}
+.picker-bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.picker-bar select{max-width:340px}.picker-bar .searchbar{flex:1;min-width:200px}
+.picker .tree{max-height:42vh;overflow:auto;border:1px solid var(--stroke);border-radius:8px;padding:6px;margin-top:8px}
+.picker-summary{margin-top:8px;align-items:center}
+.ref-search{position:relative}.ref-search input{width:100%}
+.ref-results{position:absolute;left:0;right:0;top:100%;z-index:30;list-style:none;margin:4px 0 0;padding:4px;background:#fff;border:1px solid var(--stroke2);
+border-radius:8px;box-shadow:var(--shadow);max-height:260px;overflow:auto}
+.ref-results li{padding:7px 9px;border-radius:6px;cursor:pointer;font-size:13px}.ref-results li:hover,.ref-results li:focus{background:var(--hover);outline:0}
+.clause-box{border:1px solid var(--stroke);border-radius:8px;padding:8px 12px;margin:10px 0;background:#fff}
+.clause-box summary{cursor:pointer;font-weight:650;font-size:13px}.clause-text{white-space:pre-wrap;font-size:13px;line-height:1.55;margin-top:8px;color:var(--text2)}
+.test-list{display:grid;gap:10px;margin-top:12px}.test-card{border:1px solid var(--stroke);border-radius:10px;padding:12px 14px;background:#fff}
+.test-card.warn{border-color:#f0d9a8;background:#fffbf3}.test-head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+.test-clauses{display:grid;gap:4px;margin:8px 0}.test-clauses .choice-group{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--muted);text-transform:uppercase;margin-right:8px}
+.test-card .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+table.crosswalk td{vertical-align:top}table.crosswalk td:first-child{width:34%}
+.filters select.compact,.picker-bar select{width:auto;min-width:200px}
+.std-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.std-label{font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase;min-width:130px}
+ul.plain{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}.compact-list li{font-size:13px}

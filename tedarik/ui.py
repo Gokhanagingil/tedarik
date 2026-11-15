@@ -8,6 +8,7 @@ from .http import Raw
 
 STATIC = Path(__file__).parent / "static"
 TYPES = {"app.js": "application/javascript; charset=utf-8", "pages.js": "application/javascript; charset=utf-8",
+         "grc.js": "application/javascript; charset=utf-8",
          "app.css": "text/css; charset=utf-8"}
 
 SHELL = """<!doctype html>
@@ -44,6 +45,7 @@ SHELL = """<!doctype html>
 <div id="toast" role="status" aria-live="assertive"></div>
 <script src="/static/app.js" defer></script>
 <script src="/static/pages.js" defer></script>
+<script src="/static/grc.js" defer></script>
 </body></html>"""
 
 

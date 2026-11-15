@@ -36,6 +36,7 @@ from ..db import one, rows, utcnow
 from ..http import API, MAX_UPLOAD_BODY, Raw, guard_readonly
 from ..schema import RESOURCES, Resource, fk
 from .core import PROCESSES, policy, supplier_units
+from .grc_library import link_rules
 
 M = "grc"
 REQUIRES = ("risks", "documents")
@@ -50,14 +51,34 @@ DISCLAIMER = "Kontrol ve kanıta dayalı ön gösterge; sertifikasyon veya stand
 
 STANDARDS = Resource("standards", "Standartlar", {
     "code": "TEXT NOT NULL", "name": "TEXT NOT NULL", "version": "TEXT", "issuer": "TEXT", "description": "TEXT",
-    "active": "INTEGER NOT NULL DEFAULT 1", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, unique=(("code", "version"),), write_roles=LIBRARY)
+    "active": "INTEGER NOT NULL DEFAULT 1", "library_key": "TEXT", "license": "TEXT", "language": "TEXT",
+    "source_url": "TEXT", "source_sha256": "TEXT", "published": "DATE", "installed_at": "TIMESTAMP",
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    module=M, unique=(("code", "version"),), write_roles=LIBRARY,
+    readonly=("library_key", "source_sha256", "installed_at"))
 
+CLAUSE_TYPES = ("family", "control", "enhancement", "function", "category", "subcategory", "clause", "annex",
+                "requirement", "article")
 CLAUSES = Resource("clauses", "Maddeler", {
     "standard_id": fk("standards"), "code": "TEXT NOT NULL", "title": "TEXT NOT NULL",
-    "parent_id": fk("clauses", False), "description": "TEXT", "applicable": "INTEGER NOT NULL DEFAULT 1",
+    "parent_id": fk("clauses", False), "clause_type": "TEXT", "description": "TEXT", "guidance": "TEXT",
+    "assessment": "TEXT", "tags": "TEXT", "position": "INTEGER", "applicable": "INTEGER NOT NULL DEFAULT 1",
     "justification": "TEXT"},
-    module=M, unique=(("standard_id", "code"),), search=("code", "title"), write_roles=LIBRARY)
+    module=M, unique=(("standard_id", "code"),), search=("code", "title"), write_roles=LIBRARY,
+    indexes=(("standard_id", "position"),), enums={"clause_type": CLAUSE_TYPES})
+
+# Standartlar arası madde ilişkisi (çapraz eşleme, K-023). Yön: from → to. Küme ilişkisi NIST IR 8477 anlamında:
+# equivalent (aynı gereksinim), subset (from, to'nun alt kümesi: from ihlali to'yu da ihlal eder), superset,
+# intersects (kısmen örtüşür), related (ilgili, bilgi amaçlı). Silinmez; yanlış ilişki pasifleştirilir.
+CLAUSE_LINKS = Resource("clause_links", "Madde İlişkileri", {
+    "from_clause_id": fk("clauses", cascade=True), "to_clause_id": fk("clauses", cascade=True),
+    "relation": "TEXT NOT NULL DEFAULT 'intersects'", "source": "TEXT NOT NULL DEFAULT 'manual'",
+    "rationale": "TEXT", "active": "INTEGER NOT NULL DEFAULT 1", "created_by": "TEXT",
+    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    module=M, unique=(("from_clause_id", "to_clause_id"),), search=("rationale",), write_roles=LIBRARY,
+    readonly=("created_by",), indexes=(("to_clause_id",),),
+    enums={"relation": ("equivalent", "subset", "superset", "intersects", "related"),
+           "source": ("official", "crosswalk", "manual", "suggested")})
 
 OBJECTIVES = Resource("objectives", "Kontrol Hedefleri", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT",
@@ -344,6 +365,7 @@ EVIDENCE.can_read = evidence_visible
 FILES.row_filter = _hidden_evidence_ids
 CONTROLS.before_save = _control_rules
 CLAUSES.before_save = _clause_rules
+CLAUSE_LINKS.before_save = link_rules
 EVIDENCE.before_save = _evidence_rules
 EVIDENCE.scope = _evidence_scope
 FINDINGS.before_save = _finding_rules
@@ -1082,6 +1104,11 @@ def finding_context(c):
         finding["execution"] = execution
     else:
         finding["execution"] = None
+    finding["clause"] = one(c.db, """SELECT cl.id, cl.code, cl.title, s.code AS standard_code, s.version AS standard_version
+        FROM tdr_clauses cl JOIN tdr_standards s ON s.id=cl.standard_id WHERE cl.id=?""", (finding["clause_id"],)) \
+        if finding["clause_id"] else None
+    from .grc_library import finding_impact_data
+    finding["impact"] = finding_impact_data(c.db, finding)
     return finding
 
 
@@ -1210,7 +1237,8 @@ def overview(c):
 # ------------------------------------------------------------------ kayıt
 
 def register(app):
-    from . import grc_archive
+    from . import grc_archive, grc_library
+    grc_library.register(app)
     app.route("GET", API + "/assurance/search", grc_archive.search)
     app.route("GET", API + "/audits/{id}/history", grc_archive.audit_history)
     app.route("GET", API + "/controls/{id}/context", control_context)

@@ -24,6 +24,13 @@ class Conflict(RuntimeError):
 
 
 RESERVED = {"q", "limit", "offset", "order"}
+
+
+class _IdColumn:
+    name, kind = "id", "INTEGER"
+
+
+_ID = _IdColumn()
 OPERATORS = {"gte": ">=", "lte": "<=", "ne": "<>"}
 
 
@@ -196,6 +203,13 @@ def listing(db, res, query, extra=None):
         if op and name in res.fields and op in OPERATORS:       # ör. end_date__lte=2026-12-31
             where.append(f"{name} {OPERATORS[op]} ?")
             args.append(_query_value(res.columns[name], value))
+            continue
+        if op == "in" and (name in res.fields or name == "id"):   # ör. id__in=3,5,8 (eksik referansları yükleme)
+            values = [v for v in str(value).split(",") if v.strip()][:1000]
+            if not values:
+                raise Invalid(f"{key} boş olamaz")
+            where.append(f"{name} IN ({','.join('?' * len(values))})")
+            args += [_query_value(res.columns.get(name) or _ID, v.strip()) for v in values]
             continue
         if op == "null" and name in res.fields:                  # ör. owner__null=1
             where.append(f"{name} IS {'' if value in ('1', 'true') else 'NOT '}NULL")

@@ -137,9 +137,42 @@ function display(res, name, value) {
   const text = String(value);
   return text.length > 160 ? text.slice(0, 157) + '…' : text;
 }
+// Binlerce kaydı olabilen kaynaklar (ör. standart maddeleri) bütünüyle yüklenmez: formda aranarak seçilir,
+// listede yalnızca görünen kimlikler istenir (ensureRefs).
+const LARGE_REFS = new Set(['clauses']);
 async function loadRefs(res, fields) {
-  const refs = new Set((META.def(res)?.fields || []).filter(f => f.ref && (!fields || fields.includes(f.name))).map(f => f.ref));
+  const refs = new Set((META.def(res)?.fields || []).filter(f => f.ref && !LARGE_REFS.has(f.ref) && (!fields || fields.includes(f.name))).map(f => f.ref));
   await Promise.all([...refs].map(r => list(r).catch(() => [])));
+}
+async function ensureRefs(res, records) {
+  const want = {};
+  for (const f of META.def(res)?.fields || []) {
+    if (!f.ref || !LARGE_REFS.has(f.ref)) continue;
+    for (const r of records) { const v = r[f.name]; if (v && !refRecord(f.ref, v)) (want[f.ref] = want[f.ref] || new Set()).add(v); }
+  }
+  await Promise.all(Object.entries(want).map(async ([ref, ids]) => {
+    const got = await api(`${ref}?id__in=${[...ids].slice(0, 900).join(',')}&limit=1000`).catch(() => []);
+    S.cache[ref] = (S.cache[ref] || []).concat(got.filter(g => !refRecord(ref, g.id)));
+  }));
+}
+function refSearch(f, value, id) {
+  const hidden = h('input', {type: 'hidden', name: f.name, value: value ?? ''});
+  const input = h('input', {id, type: 'search', placeholder: 'Kod veya başlıkla arayın…', autocomplete: 'off', 'aria-autocomplete': 'list'});
+  const results = h('ul', {class: 'ref-results hidden', role: 'listbox'});
+  const label = r => { const st = f.ref === 'clauses' ? (S.cache.standards || []).find(x => x.id === r.standard_id) : null; return (st ? st.code + ' ' : '') + titleOf(r); };
+  if (value) api(`${f.ref}/${value}`).then(r => { input.value = label(r); }).catch(() => {});
+  const choose = r => { hidden.value = r.id; input.value = label(r); results.classList.add('hidden'); };
+  const search = debounce(async () => {
+    const q = input.value.trim(); if (!q) { results.classList.add('hidden'); return; }
+    if (f.ref === 'clauses') await list('standards').catch(() => []);
+    const items = await api(`${f.ref}?q=${encodeURIComponent(q)}&limit=25`).catch(() => []);
+    results.replaceChildren(...items.map(r => { const li = h('li', {tabindex: '0', role: 'option', text: label(r)}); li.addEventListener('click', () => choose(r));
+      li.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); choose(r); } }); return li; }),
+      items.length ? '' : h('li', {class: 'muted small', text: 'Eşleşen kayıt yok'}));
+    results.classList.remove('hidden');
+  }, 200);
+  input.addEventListener('input', () => { hidden.value = ''; search(); });
+  return h('div', {class: 'ref-search'}, input, hidden, results);
 }
 
 // ------------------------------------------------------------------ bildirim, panel, pencere
@@ -268,9 +301,10 @@ function metric(label, value, foot = '', cls = '', onclick = null) {
 function empty(title, text, action) { return h('div', {class: 'empty'}, h('strong', {text: title}), text ? h('div', {text}) : null, action ? h('div', {class: 'no-print'}, h('br'), action) : null); }
 function kv(pairs) { return h('dl', {class: 'kv'}, pairs.filter(Boolean).map(([k, v]) => [h('dt', {text: k}), h('dd', {}, v === null || v === undefined || v === '' ? h('span', {class: 'muted', text: '—'}) : v)])); }
 function section(title, content, action) { return h('div', {class: 'section'}, h('h3', {}, h('span', {text: title}), action || null), content); }
-function tabs(items, initial) {
+function tabs(items, initial, onchange) {
   const bar = h('div', {class: 'tabs', role: 'tablist'}); const body = h('div');
   const show = key => {
+    if (onchange) onchange(key);
     bar.querySelectorAll('.tab').forEach(t => { const on = t.dataset.key === key; t.classList.toggle('active', on); t.setAttribute('aria-selected', on); });
     const item = items.find(i => i.key === key); clear(body); const r = item.render(); if (r instanceof Promise) r.then(n => append(body, [n])); else append(body, [r]);
   };
@@ -287,6 +321,8 @@ function inputFor(res, f, value) {
     control = h('select', {id, name: f.name}, f.required ? null : h('option', {value: '', text: '— Seçin —'}),
       f.options.map(o => h('option', {value: o.value, text: o.label, selected: o.value === value})));
     if (f.required && (value === null || value === undefined)) control.value = f.options[0].value;
+  } else if (f.ref && LARGE_REFS.has(f.ref)) {
+    control = refSearch(f, value, id);
   } else if (f.ref) {
     const records = S.cache[f.ref] || [];
     control = h('select', {id, name: f.name}, h('option', {value: '', text: f.required ? '— Seçin —' : '— Yok —'}),
@@ -397,13 +433,13 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 const MENU = [
   ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
   ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
-  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['archive', 'archive', 'Denetim Arşivi'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
+  ['Uyum ve denetim', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/audits', 'search'], ['archive', 'archive', 'Denetim Arşivi'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip']]],
   ['İş sürekliliği', [['bcm', 'lifebuoy', 'Süreklilik Panosu'], ['r/bias', 'layers'], ['r/bc_plans', 'clipboard'], ['r/bc_exercises', 'zap']]],
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
   ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi']]],
   ['Performans ve anket', [['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
-  ['Mimari ve çerçeve', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/standards', 'book'], ['r/clauses', 'list']]],
+  ['Mimari ve çerçeve', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
   ['Yönetim', [['r/companies', 'building'], ['r/org_units', 'home'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
@@ -465,7 +501,8 @@ const COLUMNS = {
   audit_log: ['occurred_at', 'actor', 'method', 'object_type', 'object_id', 'description'],
   import_batches: ['created_at', 'kind', 'source_system', 'filename', 'status', 'created_by'],
   policies: ['code', 'value_json', 'description'],
-  standards: ['code', 'name', 'version', 'issuer', 'active'], clauses: ['code', 'title', 'standard_id', 'applicable'],
+  standards: ['code', 'name', 'version', 'issuer', 'active'], clauses: ['code', 'title', 'standard_id', 'clause_type', 'applicable'],
+  clause_links: ['from_clause_id', 'relation', 'to_clause_id', 'source', 'active'],
   processes: ['code', 'name', 'process_type', 'parent_id', 'owner', 'org_unit_id', 'active'], objectives: ['code', 'name', 'process_id', 'owner'],
   documents: ['code', 'title', 'category', 'version', 'process_id', 'owner', 'status', 'effective_date', 'review_date'],
   controls: ['code', 'name', 'execution_mode', 'frequency', 'criticality', 'owner', 'active'],
@@ -486,7 +523,7 @@ const FILTERS = {
   risk_actions: ['status', 'priority'], performance_events: ['supplier_id', 'event_type', 'severity'], sla_measurements: ['sla_id', 'met'],
   sla_definitions: ['engagement_id'], performance_reviews: ['supplier_id'], survey_campaigns: ['status', 'subject'],
   survey_templates: ['purpose', 'status'], import_batches: ['kind'],
-  clauses: ['standard_id', 'applicable'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
+  clauses: ['standard_id', 'applicable'], clause_links: ['relation', 'source', 'active'], controls: ['execution_mode', 'frequency', 'criticality', 'active'], audits: ['kind', 'status'],
   findings: ['source', 'severity', 'status'], grc_actions: ['status', 'priority'], evidence: ['status', 'confidentiality', 'source'],
   documents: ['category', 'status', 'process_id'], executions: ['status', 'source'], risk_catalog: ['category'],
 };
@@ -512,6 +549,7 @@ const DESCRIPTIONS = {
   risk_catalog: 'Yeniden kullanılabilir risk senaryoları. Bir senaryodan risk kaydı açabilirsiniz.',
   standards: 'Uyulması gereken standart ve düzenlemeler. Maddeler kontrollerle eşlenir.',
   clauses: 'Standart maddeleri. Kapsam dışı bırakılan madde gerekçe ister (uygulanabilirlik bildirimi).',
+  clause_links: 'Standartlar arası madde ilişkileri (çapraz eşleme). Bir maddedeki bulgu, eşdeğer veya kapsayan maddeleri de etkiler.',
   processes: 'Süreç haritası (ISO 9001 4.4): yönetim, ana ve destek süreçleri; riskler, kontroller, BİA ve dokümanlar sürece bağlanır.',
   objectives: 'Kontrol hedefleri: hangi riski ele aldığı ve hangi kontrollerle karşılandığı izlenir.',
   documents: 'Dokümante edilmiş bilgi (ISO 9001 7.5): taslak → onay → yayın; her yayın değiştirilemez bir revizyon ve dosya bütünlük özeti bırakır.',
@@ -542,7 +580,7 @@ const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
   if (key.startsWith('r/')) return !!META.def(key.slice(2));
-  const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
+  const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
@@ -627,7 +665,7 @@ async function listView(res, {params} = {}) {
     for (const [k, v] of Object.entries(state.values)) if (v) q.set(k, v);
     if (state.q && def.search.length) q.set('q', state.q);
     tableHost.replaceChildren(h('div', {class: 'empty', text: 'Yükleniyor…'}));
-    try { records = await api(`${res}?${q}`); } catch (e) { tableHost.replaceChildren(h('div', {class: 'notice bad', text: e.message})); return; }
+    try { records = await api(`${res}?${q}`); await ensureRefs(res, records); } catch (e) { tableHost.replaceChildren(h('div', {class: 'notice bad', text: e.message})); return; }
     S.cache[res] = Object.keys(preset).length || Object.values(state.values).some(Boolean) || state.q ? S.cache[res] : records;
     draw();
   };
@@ -701,7 +739,7 @@ function refreshList(res) { const {parts} = Router.parse(); if (parts[0] === 'r'
 async function openRecord(res, id) {
   if (DETAILS[res]) return DETAILS[res](id);
   const def = META.def(res); await loadRefs(res);
-  let record; try { record = await api(`${res}/${id}`); } catch (e) { toast(e.message, false); return; }
+  let record; try { record = await api(`${res}/${id}`); await ensureRefs(res, [record]); } catch (e) { toast(e.message, false); return; }
   const fields = def.fields.filter(f => (!f.name.endsWith('_json') || res === 'policies') && f.name !== 'body_hash');
   const body = h('div', {}, section('Bilgiler', kv(fields.map(f => [f.label, display(res, f.name, record[f.name])]))));
   for (const [child, key] of RELATED[res] || []) {
@@ -1537,10 +1575,9 @@ function checklist(items, selected, {label = titleOf, group} = {}) {
 }
 
 async function editControlLinks(control, done) {
-  const [clauses, standards, processes, objectives, risks, documents] = await Promise.all(['clauses', 'standards', 'processes', 'objectives', 'supplier_risks', 'documents'].map(r => list(r)));
-  const std = Object.fromEntries(standards.map(x => [x.id, x.code + ' ' + (x.version || '')]));
+  const [processes, objectives, risks, documents] = await Promise.all(['processes', 'objectives', 'supplier_risks', 'documents'].map(r => list(r)));
   const lists = {
-    clauses: checklist(clauses.slice().sort((a, b) => a.standard_id - b.standard_id), control.clauses.map(x => x.id), {label: c => `${c.code} ${c.title}`, group: c => std[c.standard_id]}),
+    clauses: clausePicker(control.clauses.map(c => ({id: c.id, standard_id: c.standard_id})), {hint: 'Kontrolün karşıladığı maddeler. Aynı kontrolü birden çok standardın maddesine eşleyin: bir kez test edilir, sonucu hepsine sayılır.'}),
     processes: checklist(processes, control.processes.map(x => x.id)), objectives: checklist(objectives, control.objectives.map(x => x.id)),
     risks: checklist(risks, control.risks.map(x => x.id)), documents: checklist(documents, control.documents.map(x => x.id))};
   Modal.open('Eşlemeler: ' + control.code, tabs([
@@ -1725,7 +1762,7 @@ function transition(title, note, field, okText, apply, {required = true} = {}) {
     btn(okText, async () => { if (required && !text.value.trim()) { text.focus(); throw new Error(field + ' gerekli'); } await apply(text.value.trim()); Modal.close(); })]);
 }
 DETAILS.findings = async function findingDetail(id) {
-  await Promise.all(['controls', 'audits', 'suppliers', 'clauses', 'processes', 'supplier_risks', 'companies'].map(r => list(r).catch(() => [])));
+  await Promise.all(['controls', 'audits', 'suppliers', 'processes', 'supplier_risks', 'companies'].map(r => list(r).catch(() => [])));
   let f; try { f = await api(`findings/${id}/context`); } catch (e) { toast(e.message, false); return; }
   const can = META.def('findings').can_write; const reload = () => { refreshList('findings'); DETAILS.findings(id); };
   const open = ['open', 'in_progress'].includes(f.status);
@@ -1738,11 +1775,12 @@ DETAILS.findings = async function findingDetail(id) {
       ['Kontrol', f.control ? h('a', {href: '#/r/controls/' + f.control.id, text: f.control.code + ' · ' + f.control.name}) : null],
       ['Denetim', f.audit_id ? h('a', {href: '#/audit/' + f.audit_id, text: titleOf(refRecord('audits', f.audit_id))}) : null],
       ['Tedarikçi', display('findings', 'supplier_id', f.supplier_id)], ['Kaynak', display('findings', 'source', f.source)],
-      ['Standart maddesi', f.clause_id ? h('a', {href: '#/r/clauses/' + f.clause_id, text: titleOf(refRecord('clauses', f.clause_id)) || '#' + f.clause_id}) : null],
+      ['Standart maddesi', f.clause ? h('a', {href: '#', text: `${f.clause.standard_code} ${f.clause.code} · ${f.clause.title}`, onclick: e => { e.preventDefault(); DETAILS.clauses(f.clause.id); }}) : null],
       ['Süreç', f.process_id ? h('a', {href: '#/r/processes/' + f.process_id, text: titleOf(refRecord('processes', f.process_id)) || '#' + f.process_id}) : null],
       ['İlgili risk', f.risk_id ? h('a', {href: '#/r/supplier_risks/' + f.risk_id, text: titleOf(refRecord('supplier_risks', f.risk_id)) || '#' + f.risk_id}) : null],
       ['Şirket', display('findings', 'company_id', f.company_id)],
       ['Son görülme', fmt.datetime(f.last_seen_at)], ['Kapanış / kabul notu', f.closure_note]])),
+    typeof impactSection === 'function' ? impactSection(f.impact) : null,
     f.execution ? section('Kaynak test sonucu', h('div', {}, h('div', {class: 'chips'}, resultPill(f.execution.status), display('executions', 'source', f.execution.source), h('span', {class: 'chip', text: fmt.datetime(f.execution.executed_at)})),
       btn('Test ayrıntısı', () => showExecution(f.execution.id), 'ghost small'))) : null,
     section(`Düzeltici faaliyetler (${f.actions.length})`, f.actions.length ? h('ul', {class: 'mini'}, f.actions.map(a => h('li', {class: 'link', onclick: () => openRecord('grc_actions', a.id)},
@@ -1797,25 +1835,20 @@ EXTRA_ACTIONS.risk_catalog = r => META.def('supplier_risks')?.can_write ? [btn('
 // denetim
 const AUDIT_FIELDS = ['name', 'kind', 'supplier_id', 'audit_objective', 'scope', 'planned_start', 'planned_end', 'lead_auditor', 'auditors', 'auditees'];
 async function auditForm(audit = null, defaults = {}) {
-  const [standards, clauses, processes] = await Promise.all([list('standards'), list('clauses'), list('processes')]); await loadRefs('audits');
+  const [processes] = await Promise.all([list('processes'), list('standards')]); await loadRefs('audits');
   const form = h('form', {class: 'formgrid', novalidate: true}, h('div', {class: 'notice bad wide form-error hidden', role: 'alert'}));
   const fields = AUDIT_FIELDS.map(n => META.field('audits', n));
   for (const f of fields) form.append(inputFor('audits', f, audit ? audit[f.name] : defaults[f.name]));
-  const chosenStd = new Set(audit ? audit.standards.map(s => s.id) : []);
-  const stdBox = h('div', {class: 'choices'}, standards.map(st => h('label', {}, h('input', {type: 'checkbox', value: st.id, checked: chosenStd.has(st.id),
-    onchange: e => { if (e.target.checked) chosenStd.add(st.id); else chosenStd.delete(st.id); }}), `${st.code} ${st.version || ''} · ${st.name}`)));
-  const std = Object.fromEntries(standards.map(x => [x.id, x.code]));
-  const clauseList = checklist(clauses.slice().sort((a, b) => a.standard_id - b.standard_id), audit ? audit.clauses.map(c => c.id) : [], {label: c => `${c.code} ${c.title}`, group: c => std[c.standard_id]});
+  const clauseList = clausePicker(audit ? audit.clauses.map(c => ({id: c.id, standard_id: c.standard_id})) : [],
+    {hint: 'Birden çok standart seçebilirsiniz (entegre denetim). Ortak kontroller tek kez test edilir; ilgili maddeler test planında birlikte gösterilir.'});
   const processList = checklist(processes.filter(p => p.active !== 0), audit ? (audit.processes || []).map(p => p.id) : [], {label: p => `${p.code} ${p.name}`,
     group: p => ({management: 'Yönetim süreçleri', core: 'Ana süreçler', support: 'Destek süreçleri'}[p.process_type] || '')});
-  form.append(h('div', {class: 'field wide'}, 'Standartlar', stdBox), h('div', {class: 'field wide'}, 'Kapsam maddeleri (seçilen standartlardan; her standart için en az bir madde)', clauseList.node),
+  form.append(h('div', {class: 'field wide'}, 'Kapsam: standart maddeleri', clauseList.node),
     h('div', {class: 'field wide'}, 'Denetlenen süreçler (ISO 9001 9.2 denetim programı)', processList.node));
   const save = async () => {
     const {data, errors} = readForm(form, 'audits', fields);
     if (Object.keys(errors).length) { showErrors(form, errors, 'Eksik veya hatalı alanları düzeltin'); return; }
-    const clauseIds = clauseList.value(); const stdIds = [...chosenStd];
-    const owners = new Set(clauses.filter(c => clauseIds.includes(c.id)).map(c => c.standard_id));
-    for (const sid of owners) if (!chosenStd.has(sid)) stdIds.push(sid);
+    const clauseIds = clauseList.value(); const stdIds = clauseList.standards();
     let body;
     if (audit) { body = {}; for (const [k, v] of Object.entries(data)) if ((audit[k] ?? null) !== v) body[k] = v; body.standard_ids = stdIds; body.clause_ids = clauseIds; body.process_ids = processList.value(); body.expected_revision = audit.revision; }
     else { body = Object.fromEntries(Object.entries(data).filter(([, v]) => v !== null)); body.standard_ids = stdIds; body.clause_ids = clauseIds; body.process_ids = processList.value(); }
@@ -1828,73 +1861,7 @@ async function auditForm(audit = null, defaults = {}) {
 }
 CREATE.audits = defaults => auditForm(null, defaults);
 DETAILS.audits = id => Router.go('audit/' + id);
-async function auditPage(id) {
-  await Promise.all([list('standards'), list('suppliers')]);
-  const a = await api(`audits/${id}/context`);
-  const can = META.def('audits').can_write; const closed = ['completed', 'closed', 'cancelled'].includes(a.status);
-  const reload = () => { invalidate('audits'); auditPage(id); };
-  const patch = body => api(`audits/${id}`, {method: 'PATCH', body}).then(() => { toast('Denetim güncellendi'); reload(); });
-  const finish = () => {
-    const end = h('input', {type: 'date', id: 'auEnd', value: today(), max: today()}); const opinion = h('select', {id: 'auOpinion'}, META.field('audits', 'opinion').options.map(o => h('option', {value: o.value, text: o.label})));
-    const concl = h('textarea', {id: 'auConcl', value: a.conclusion || ''});
-    const untested = a.counts.untested;
-    Modal.open('Denetimi tamamla: ' + a.code, h('div', {},
-      untested ? h('div', {class: 'notice warn', text: `${untested} planlı kontrol test edilmedi. Tamamlanan denetime yeni test eklenemez.`}) : null,
-      h('p', {class: 'intro', text: 'Tamamlanınca kapsam ve planlanan kontrol listesi dondurulur; denetim yeniden açılamaz.'}),
-      h('label', {class: 'field', for: 'auEnd'}, 'Gerçekleşen bitiş', h('div', {class: 'control'}, end)),
-      h('label', {class: 'field', for: 'auOpinion'}, 'Genel görüş', h('div', {class: 'control'}, opinion)),
-      h('label', {class: 'field', for: 'auConcl'}, h('span', {}, 'Denetim sonucu', h('span', {class: 'req', text: ' *'})), h('div', {class: 'control'}, concl))), [
-      btn('Vazgeç', () => Modal.close(), 'secondary'),
-      btn('Tamamla', async () => { if (!concl.value.trim()) { concl.focus(); throw new Error('Denetim sonucu gerekli'); }
-        await patch({status: 'completed', actual_end: end.value, opinion: opinion.value, conclusion: concl.value.trim()}); Modal.close(); })]);
-  };
-  setPage(a.code + ' · ' + a.name, [META.option('audits', 'kind', a.kind), a.supplier_id ? titleOf(refRecord('suppliers', a.supplier_id)) : null,
-    `${fmt.date(a.planned_start)} – ${fmt.date(a.planned_end)}`].filter(Boolean).join(' · '), can ? [
-    !closed ? btn('Düzenle', () => auditForm(a), 'secondary') : null,
-    a.status === 'planned' ? btn('Denetimi başlat', () => patch({status: 'in_progress', actual_start: today()})) : null,
-    a.status === 'in_progress' ? btn('Tamamla', finish) : null,
-    a.status === 'completed' ? btn('Kapat', () => patch({status: 'closed'}), 'secondary') : null,
-    a.status === 'planned' ? btn('İptal et', async () => { if (await confirmDialog('Denetimi iptal et', 'İptal edilen denetim yeniden açılamaz.', 'İptal et', 'danger')) await patch({status: 'cancelled'}); }, 'secondary') : null] : [],
-    [['Denetimler', 'r/audits']]);
-  const p = a.progress;
-  const metrics = h('div', {class: 'cards'},
-    metric('Durum', META.option('audits', 'status', a.status), a.actual_start ? 'Başladı ' + fmt.date(a.actual_start) : 'Başlamadı', closed ? '' : 'warn'),
-    metric('Planlanan kontrol', fmt.num(p.planned, 0), `${a.clauses.length} madde · ${a.standards.length} standart`),
-    metric('Tamamlanma', fmt.pct(p.completion_pct), `${p.completed} test sonuçlandı · ${a.counts.untested} bekliyor`, p.completion_pct === 100 ? 'good' : 'warn'),
-    metric('Başarı oranı', fmt.pct(p.pass_pct), `${a.counts.pass} başarılı · ${a.counts.fail} başarısız`, p.pass_pct === null ? '' : p.pass_pct >= 85 ? 'good' : p.pass_pct >= 60 ? 'warn' : 'bad'));
-  const testable = can && canExecute() && !closed && a.status !== 'planned';
-  const controlRows = a.controls.map(c => h('tr', {}, h('td', {class: 'cell-primary'}, h('a', {href: '#/r/controls/' + c.id, text: c.code})), h('td', {text: c.name}),
-    h('td', {}, display('controls', 'execution_mode', c.execution_mode)), h('td', {}, resultPill(c.result), c.result_at ? h('span', {class: 'cell-sub', text: fmt.datetime(c.result_at)}) : null),
-    h('td', {}, c.planned ? '' : pill('Plan dışı', 'neutral')),
-    h('td', {class: 'no-print'}, c.execution_id ? btn('Ayrıntı', () => showExecution(c.execution_id), 'ghost small') : null,
-      h('button', {type: 'button', class: 'btn ghost small hidden', dataset: {history: c.id}, text: 'Geçmiş', title: 'Önceki denetimlerdeki sonuçlar ve kanıtlar'}),
-      testable && c.active ? (c.automation ? btn('Çalıştır', async () => { await runAutomation(c, reload, a.id); }, 'ghost small') :
-        btn('Test et', async () => { const ctx = await api(`controls/${c.id}/context`); recordResult(ctx, {auditId: a.id, done: reload}); }, 'ghost small')) : null)));
-  const findingList = (list_, more) => list_.length ? h('ul', {class: 'mini'}, list_.slice(0, 12).map(f => h('li', {class: 'link', onclick: () => Router.go('r/findings/' + f.id)},
-    h('strong', {text: f.code + ' · ' + f.title}), h('div', {class: 'chips'}, display('findings', 'severity', f.severity), display('findings', 'status', f.status)))),
-    list_.length > 12 ? h('li', {}, h('a', {href: '#/r/findings?status=open', text: `+${list_.length - 12} bulgu daha → Bulgular listesi`})) : null) : h('div', {class: 'muted small', text: 'Yok'});
-  content(
-    a.status === 'planned' ? h('div', {class: 'notice', text: 'Denetim planlandı. Başlatınca kontrolleri test edebilirsiniz; başlarken her standart için en az bir kapsam maddesi gerekir.'}) : null,
-    closed && a.plan_captured_at ? h('div', {class: 'notice', text: `Plan ${fmt.datetime(a.plan_captured_at)} tarihinde donduruldu. Kontrol eşlemelerindeki sonraki değişiklikler bu denetimi etkilemez.`}) : null,
-    metrics,
-    h('div', {class: 'grid two'},
-      h('div', {class: 'panel'}, h('h3', {text: 'Kapsam'}), kv([['Amaç', a.audit_objective], ['Kapsam açıklaması', a.scope],
-        ['Standartlar', a.standards.length ? h('div', {class: 'chips'}, a.standards.map(s => h('span', {class: 'chip', text: `${s.code} ${s.version || ''}`}))) : null],
-        ['Maddeler', a.clauses.length ? h('div', {class: 'chips'}, a.clauses.slice(0, 40).map(c => h('span', {class: 'chip', title: c.title, text: c.code})), a.clauses.length > 40 ? h('span', {class: 'muted small', text: ` +${a.clauses.length - 40}`}) : null) : null],
-        ['Süreçler', (a.processes || []).length ? h('div', {class: 'chips'}, a.processes.map(p => h('a', {class: 'chip', href: '#/r/processes/' + p.id, text: p.name}))) : null],
-        ['Baş denetçi', a.lead_auditor], ['Denetçiler', a.auditors], ['Denetlenenler', a.auditees]])),
-      h('div', {class: 'panel'}, h('h3', {text: 'Sonuç dağılımı'}), donut(['pass', 'fail', 'inconclusive', 'not_applicable', 'untested'].map((k, i) => ({label: RESULT_LABEL[k], value: a.counts[k], color: [1, 3, 2, 5, 5][i]}))),
-        a.conclusion ? section('Denetim sonucu', kv([['Genel görüş', display('audits', 'opinion', a.opinion)], ['Sonuç', a.conclusion]])) : null)),
-    h('div', {class: 'panel'}, h('h3', {text: `Kontroller (${a.controls.length})`}), a.controls.length ? h('div', {class: 'tablewrap'}, h('table', {},
-      h('thead', {}, h('tr', {}, ['Kod', 'Kontrol', 'Şekil', 'Bu denetimdeki sonuç', '', ''].map(t => h('th', {text: t})))), h('tbody', {}, controlRows))) :
-      empty('Kapsamda kontrol yok', 'Kapsam maddelerine eşli aktif kontrol bulunmuyor. Kontrolleri maddelerle eşleyin veya kapsamı genişletin.')),
-    h('div', {class: 'grid two'},
-      h('div', {class: 'panel'}, h('h3', {text: `Bu denetimin bulguları (${a.findings.length})`}), findingList(a.findings)),
-      h('div', {class: 'panel'}, h('h3', {text: `Kapsamdaki diğer açık bulgular (${a.other_open_findings.length})`}), findingList(a.other_open_findings))),
-    h('div', {class: 'panel'}, h('h3', {text: `Kanıtlar (${a.evidence.length})`}), a.evidence.length ? h('ul', {class: 'mini'}, a.evidence.map(e => h('li', {class: 'link', onclick: () => Router.go('r/evidence/' + e.id)},
-      h('strong', {text: e.code + ' · ' + e.title}), e.current_version ? h('span', {class: 'cell-sub', text: 'Sürüm ' + e.current_version}) : null))) : h('div', {class: 'muted small', text: 'Bu denetime bağlı kanıt yok'})),
-    typeof auditHistoryPanel === 'function' ? await auditHistoryPanel(a) : null);
-}
+// denetim çalışma alanı: grc.js (PAGES.audit)
 
 // uyum panosu
 async function compliancePage(params) {
@@ -1970,7 +1937,6 @@ async function renderPage() {
     else if (key === 'transfer') await transferPage();
     else if (key === 'users') await usersPage();
     else if (key === 'compliance') await compliancePage(params);
-    else if (key === 'audit' && parts[1]) await auditPage(Number(parts[1]));
     else { setPage('Sayfa bulunamadı'); content(empty('Bu adres bulunamadı', '', h('a', {class: 'btn', href: '#/', text: 'Genel bakışa dön'}))); }
   } catch (e) {
     setPage('Bir sorun oluştu'); content(h('div', {class: 'notice bad', text: e.message}), h('a', {class: 'btn secondary', href: '#/', text: 'Genel bakışa dön'}));

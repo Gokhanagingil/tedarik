@@ -20,7 +20,8 @@ from . import audit, crud
 from .auth import Principal
 from .config import Config
 from .db import one, rows
-from .demo_platform import SECTIONS, PlatformSections
+from .demo_assurance import ASSURANCE_SECTIONS, AssuranceSections
+from .demo_platform import SECTIONS as PLATFORM_SECTIONS, PlatformSections
 from .schema import RESOURCES
 
 TAG = "Sentetik demo verisi"
@@ -113,7 +114,10 @@ TYPE_NAMES = {"HW": "Donanım", "SW": "Yazılım ve Lisans", "CLOUD": "Bulut Hiz
               "FACILITY": "Tesis ve Veri Merkezi"}
 
 
-class Seeder(PlatformSections):
+SECTIONS = PLATFORM_SECTIONS + ASSURANCE_SECTIONS
+
+
+class Seeder(PlatformSections, AssuranceSections):
     def __init__(self, db, app):
         self.db, self.app, self.rnd = db, app, random.Random(20261115)
         self.ids = {}

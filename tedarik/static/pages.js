@@ -683,10 +683,7 @@ DETAILS.documents = async function documentDetail(id, tab) {
   const relations = () => h('div', {},
     hasModule('grc') ? section(`Karşıladığı standart maddeleri (${d.clauses.length})`, recordList('clauses', d.clauses.map(c => ({...c, title: `${c.title} (${c.standard})`})), {none: 'Madde eşlemesi yok'}),
       can ? btn('Maddeleri seç', async () => {
-        const [clauses, standards] = await Promise.all([list('clauses', true), list('standards')]);
-        const std = Object.fromEntries(standards.map(x => [x.id, `${x.code} ${x.version || ''}`]));
-        const ids = await pickMany('Dokümanın karşıladığı maddeler', clauses.filter(c => c.applicable).sort((a, b) => a.standard_id - b.standard_id), d.clauses.map(c => c.id),
-          {label: c => `${c.code} ${c.title}`, group: c => std[c.standard_id], intro: 'Bu dokümanın hangi standart maddelerinin gereğini karşıladığını seçin (uygulanabilirlik bildirimi ve denetim hazırlığı için).'});
+        const ids = await pickClauses('Dokümanın karşıladığı maddeler', d.clauses.map(c => ({id: c.id, standard_id: c.standard_id})), {intro: 'Dokümanın karşıladığı standart maddelerini seçin.'});
         if (ids) { await api(`documents/${id}/clauses`, {method: 'POST', body: {clause_ids: ids}}); toast('Madde eşlemesi kaydedildi'); reload('relations'); }
       }, 'ghost small') : null) : null,
     hasModule('grc') ? section(`Bağlı kontroller (${d.controls.length})`, recordList('controls', d.controls, {none: 'Kontrol yok. Kontrol eşlemesi kontrol ekranından yapılır.'})) : null,
@@ -866,20 +863,7 @@ DETAILS.objectives = async function objectiveDetail(id) {
       chips: k => [k.last_status ? resultPill(k.last_status) : pill('Test edilmedi', 'neutral'), k.active ? null : pill('Pasif', 'neutral')], none: 'Kontrol yok'})));
   Drawer.open(o.code + ' · ' + o.name, body, [canWrite('objectives') ? btn('Düzenle', () => recordForm('objectives', o, {onsaved: reload}), 'secondary') : null], 'Kontrol hedefi');
 };
-DETAILS.clauses = async function clauseDetail(id) {
-  let c; try { c = await api(`clauses/${id}/context`); } catch (e) { toast(e.message, false); return; }
-  const reload = () => { refreshList('clauses'); DETAILS.clauses(id); };
-  const body = h('div', {}, h('div', {class: 'chips'}, c.applicable ? pill('Uygulanabilir', 'good') : pill('Kapsam dışı', 'neutral')), h('br'),
-    !c.applicable ? h('div', {class: 'notice', text: 'Kapsam dışı gerekçesi: ' + (c.justification || '—')}) : c.applicable && !c.controls.length && !c.children.length ? h('div', {class: 'notice warn', text: 'Bu maddeyi karşılayan kontrol yok.'}) : null,
-    section('Madde', kv([['Standart', c.standard ? `${c.standard.code} (${c.standard.version || ''})` : null], ['Madde', c.code], ['Başlık', c.title], ['Açıklama', c.description]])),
-    c.children.length ? section(`Alt maddeler (${c.children.length})`, recordList('clauses', c.children.map(x => ({...x, title: x.title})))) : null,
-    section(`Karşılayan kontroller (${c.controls.length})`, recordList('controls', c.controls, {chips: k => [k.last_status ? resultPill(k.last_status) : pill('Test edilmedi', 'neutral')], none: 'Kontrol yok'})),
-    section(`Dokümanlar (${c.documents.length})`, recordList('documents', c.documents, {chips: d => [display('documents', 'status', d.status)], none: 'Doküman yok'})),
-    section(`Bulgular (${c.findings.length})`, recordList('findings', c.findings, {chips: f => [display('findings', 'severity', f.severity), display('findings', 'status', f.status)], none: 'Bulgu yok'})),
-    section(`Kanıtlar (${c.evidence.length})`, recordList('evidence', c.evidence, {none: 'Kanıt yok'})));
-  Drawer.open(`${c.code} · ${c.title}`, body, [btn('Denetim geçmişi ve kanıtlar', () => { Drawer.close(); Router.go('archive?clause_id=' + c.id); }, 'secondary'),
-    canWrite('clauses') ? btn('Düzenle', () => recordForm('clauses', c, {onsaved: reload}), 'secondary') : null], c.standard ? c.standard.code : 'Standart maddesi');
-};
+// madde detayı: grc.js (ilişkiler, etki, değerlendirme yöntemi)
 
 // ------------------------------------------------------------------ ilişki haritası
 PAGES.map = async function relationMap() {

@@ -137,6 +137,13 @@ FIELDS = {
     "last_seen_at": "Son görülme", "finding_id": "Bulgu", "verified_by": "Doğrulayan",
     "verification_note": "Doğrulama notu", "approved_by": "Onaylayan", "approved_on": "Onay tarihi",
     "executions.definition_json": "Kontrol tanımı (dondurulmuş)",
+    # standart kütüphanesi ve madde ilişkileri (K-023)
+    "library_key": "Kütüphane paketi", "license": "Lisans / telif", "language": "Dil", "source_url": "Kaynak adresi",
+    "source_sha256": "Kaynak dosya özeti (SHA-256)", "published": "Yayın tarihi", "installed_at": "Kurulum zamanı",
+    "clause_type": "Madde türü", "clauses.description": "Madde metni", "guidance": "Rehber / uygulama örnekleri",
+    "assessment": "Değerlendirme yöntemi (denetçi için)", "tags": "Etiketler", "clauses.position": "Sıra",
+    "from_clause_id": "Madde (A)", "to_clause_id": "Madde (B)", "relation": "İlişki türü",
+    "clause_links.source": "İlişkinin kaynağı", "clause_links.rationale": "Gerekçe / açıklama",
 }
 
 # Seçim etiketleri: önce kaynağa özgü (kaynak.alan), yoksa alan adına göre ortak.
@@ -253,6 +260,15 @@ CHOICES = {
 }
 
 
+CHOICES.update({
+    "clause_type": {"family": "Kontrol ailesi", "control": "Kontrol", "enhancement": "Kontrol iyileştirmesi",
+                    "function": "İşlev", "category": "Kategori", "subcategory": "Alt kategori", "clause": "Madde",
+                    "annex": "Ek kontrol", "requirement": "Gereksinim", "article": "Mevzuat maddesi"},
+    "relation": {"equivalent": "Eşdeğer", "subset": "Alt küme (A ⊂ B)", "superset": "Üst küme (A ⊃ B)",
+                 "intersects": "Kesişir", "related": "İlgili"},
+    "clause_links.source": {"official": "Resmî kaynak", "crosswalk": "Çapraz eşleme tablosu", "manual": "Elle",
+                            "suggested": "Onaylanmış öneri"},
+})
 CHOICES["risk_category"] = CHOICES["category"]
 
 
