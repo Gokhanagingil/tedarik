@@ -441,7 +441,7 @@ const MENU = [
   ['Performans ve anket', [['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
   ['Mimari ve çerçeve', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
-  ['Yönetim', [['r/companies', 'building'], ['r/org_units', 'home'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
+  ['Yönetim', [['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
 const ICONS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
@@ -459,7 +459,8 @@ const ICONS = {
   star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z', list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   mail: 'M3 5h18v14H3zM3 6l9 7 9-7', flow: 'M3 6h6v4H3zM15 14h6v4h-6zM9 8h3a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2', share: 'M18 3a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM6 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM18 15a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4',
   coin: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9 9h4.5a2 2 0 0 1 0 4H9h5a2 2 0 0 1 0 4H9M11 7v2M11 17v-2', users: 'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21a7 7 0 0 1 14 0M16 3.5a4 4 0 0 1 0 7.5M22 21a7 7 0 0 0-4-6.3',
-  swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
+  swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
+  bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
 function icon(name, cls = '') {
   return s('svg', {viewBox: '0 0 24 24', class: 'icon ' + cls, 'aria-hidden': 'true'}, s('path', {d: ICONS[name] || ICONS.list}));
@@ -1744,7 +1745,8 @@ DETAILS.evidence = async function evidenceDetail(id) {
     section('Denetimler', e.audits.length ? h('div', {class: 'chips'}, e.audits.map(x => h('button', {type: 'button', class: 'chip link', text: x.code + ' ' + x.name, onclick: () => Router.go('audit/' + x.id)}))) : h('div', {class: 'muted small', text: 'Bağlantı yok'})),
     section(`Kullanıldığı test sonuçları (${e.executions.length})`, e.executions.length ? h('ul', {class: 'mini'}, e.executions.map(x => h('li', {class: 'link', onclick: () => showExecution(x.id)},
       h('strong', {text: `${x.control_code} · ${fmt.datetime(x.executed_at)}`}), ' ', resultPill(x.status), x.version ? h('span', {class: 'cell-sub', text: 'Sürüm ' + x.version}) : null))) : h('div', {class: 'muted small', text: 'Henüz bir teste bağlanmadı'})));
-  Drawer.open(e.code + ' · ' + e.title, body, [can ? btn('Düzenle', () => recordForm('evidence', e, {skip: ['code', 'source'], onsaved: reload})) : null], 'Kanıt');
+  Drawer.open(e.code + ' · ' + e.title, body, [typeof evidenceSuggestions === 'function' && can ? btn('Kontrol önerisi', () => evidenceSuggestions(e, reload), 'ghost', {title: 'Bu kanıtın hangi kontrollere uygun olduğunu öner'}) : null,
+    can ? btn('Düzenle', () => recordForm('evidence', e, {skip: ['code', 'source'], onsaved: reload})) : null], 'Kanıt');
 };
 async function editEvidenceLinks(e, done) {
   const [controls, audits] = await Promise.all([list('controls'), list('audits')]);

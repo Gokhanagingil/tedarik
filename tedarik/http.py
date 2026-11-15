@@ -241,6 +241,10 @@ def build(config):
     app = App(config)
     loaded = modules.load(config)
     migrate.sync(app.database, config.modules)
+    if config.auth_mode == "entra" and app.auth.entra is None:        # K-024: Entra ayarları arayüzden tanımlı
+        from .modules.integrations import entra_from_db
+        with app.database.connect() as db:
+            app.auth.entra = entra_from_db(db, config)
     for res in RESOURCES.values():
         if res.module in config.modules:
             resource_routes(app, res)

@@ -80,6 +80,23 @@ if [ -f "$ENTRA_SETTINGS" ]; then
   export TEDARIK_AUTH_MODE=entra TEDARIK_ENTRA_TENANT_ID TEDARIK_ENTRA_CLIENT_ID TEDARIK_ENTRA_AUTH_CONTEXT \
     TEDARIK_ENTRA_REDIRECT_URI TEDARIK_ENTRA_CLIENT_SECRET_FILE=/run/secrets/entra_client_secret
 fi
+# Giriş modu (K-024): kurulum girdisiyle (TEDARIK_AUTH_MODE_SET=local|entra) seçilir ve sunucuda saklanır.
+# entra.env yoksa Entra ayarları uygulamada Yönetim → Entegrasyonlar'da tanımlanır; tanım eksikse uygulama açılmaz
+# ve kurulum sağlık denetiminde durur (yerel moda dönmek için auth_mode=local ile yeniden kurun).
+AUTH_SETTINGS="$BASE/auth.env"
+case "${TEDARIK_AUTH_MODE_SET:-keep}" in
+  local|entra) printf 'TEDARIK_AUTH_MODE=%s\n' "$TEDARIK_AUTH_MODE_SET" > "$AUTH_SETTINGS" ;;
+  keep|"") ;;
+  *) echo "Geçersiz giriş modu: $TEDARIK_AUTH_MODE_SET (local | entra)" >&2; exit 1 ;;
+esac
+if [ ! -f "$ENTRA_SETTINGS" ] && [ -f "$AUTH_SETTINGS" ]; then
+  . "$AUTH_SETTINGS"
+  if [ "${TEDARIK_AUTH_MODE:-local}" = entra ]; then
+    [ -n "${TEDARIK_DOMAIN:-}" ] || { echo "Entra girişi için HTTPS alan adı (TEDARIK_DOMAIN) gerekli" >&2; exit 1; }
+    export TEDARIK_AUTH_MODE=entra
+  fi
+fi
+[ -n "${TEDARIK_DOMAIN:-}" ] && export TEDARIK_PUBLIC_URL="https://$TEDARIK_DOMAIN"
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
 
 others() {   # bu projeye ait olmayan konteynerler: kimlik, ad, başlama zamanı
@@ -101,12 +118,14 @@ fi
 secret() { [ -s "$BASE/secrets/$1" ] || head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$BASE/secrets/$1"; }
 secret db_password
 secret mcp_api_key
+# Arayüzden girilen entegrasyon sırlarının şifreleme anahtarı (K-024, Fernet: 32 bayt, URL güvenli base64)
+[ -s "$BASE/secrets/app_secret_key" ] || head -c 32 /dev/urandom | base64 | tr '+/' '-_' | tr -d '\n' > "$BASE/secrets/app_secret_key"
 printf 'postgresql://tedarik:%s@db:5432/tedarik' "$(cat "$BASE/secrets/db_password")" > "$BASE/secrets/database_url"
 chown 70:70 "$BASE/secrets/db_password"                     # postgres (alpine) kullanıcısı
 for optional in sn_password sn_mcp_token sn_mcp_client_secret entra_client_secret; do   # boş: yapılandırılmadı
   [ -e "$BASE/secrets/$optional" ] || : > "$BASE/secrets/$optional"
 done
-chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key" "$BASE/secrets/sn_password" \
+chown 10001:10001 "$BASE/secrets/database_url" "$BASE/secrets/mcp_api_key" "$BASE/secrets/app_secret_key" "$BASE/secrets/sn_password" \
   "$BASE/secrets/sn_mcp_token" "$BASE/secrets/sn_mcp_client_secret" "$BASE/secrets/entra_client_secret"
 chmod 0400 "$BASE/secrets/"*
 
@@ -169,6 +188,12 @@ if [ "${TEDARIK_BACKUP_CRON:-1}" = 1 ] && [ -d /etc/cron.d ] && [ -e "$BASE/curr
     "23 4 * * * root docker exec tedarik-app-1 python -m tedarik.cmdb_sync >/dev/null 2>&1" \
     > /etc/cron.d/tedarik-cmdb
   chmod 0644 /etc/cron.d/tedarik-cmdb
+  # Bildirimler (K-024): kuyruk 10 dakikada bir gönderilir; günlük iş özeti ve hatırlatmalar her sabah 07:41 (TSİ).
+  printf '%s\n' "# Tedarik Portalı bildirim gönderimi (deploy.sh yazar)" \
+    "*/10 * * * * root docker exec tedarik-app-1 python -m tedarik.notify deliver >/dev/null 2>&1" \
+    "41 4 * * * root docker exec tedarik-app-1 python -m tedarik.notify digest >/dev/null 2>&1" \
+    > /etc/cron.d/tedarik-notify
+  chmod 0644 /etc/cron.d/tedarik-notify
 fi
 
 # Eski sürüm klasörleri (yalnızca bu uygulamanınkiler): son 5 tutulur.

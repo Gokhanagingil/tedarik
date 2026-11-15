@@ -259,8 +259,10 @@ def servicenow_client(config):
     if not config.sn_instance:
         raise crud.Conflict("ServiceNow bağlantısı yapılandırılmadı (TEDARIK_SN_INSTANCE ve kimlik bilgisi dosyası)")
     try:
-        password = Path(config.sn_password_file).read_text(encoding="utf-8").strip() if config.sn_password_file else None
-        token = Path(config.sn_token_file).read_text(encoding="utf-8").strip() if config.sn_token_file else None
+        password = getattr(config, "sn_password", None) or (
+            Path(config.sn_password_file).read_text(encoding="utf-8").strip() if config.sn_password_file else None)
+        token = getattr(config, "sn_token", None) or (
+            Path(config.sn_token_file).read_text(encoding="utf-8").strip() if config.sn_token_file else None)
     except OSError:
         raise crud.Conflict("ServiceNow kimlik bilgisi dosyası okunamadı") from None
     return Client(config.sn_instance, user=config.sn_user, password=password, token=token, ca_file=config.sn_ca_file)
@@ -281,11 +283,13 @@ def mcp_client(config):
     try:
         provider = None
         if config.sn_mcp_token_url:
-            secret = _secret(config.sn_mcp_client_secret_file, "MCP istemci sırrı")
+            secret = getattr(config, "sn_mcp_client_secret", None) or _secret(config.sn_mcp_client_secret_file,
+                                                                             "MCP istemci sırrı")
             if not secret:
                 raise crud.Conflict("MCP OAuth istemci sırrı boş")
             provider = OAuthClientCredentials(config.sn_mcp_token_url, config.sn_mcp_client_id, secret, config.sn_mcp_scope)
-        token = _secret(config.sn_mcp_token_file, "MCP belirteci") if not provider else None
+        token = (getattr(config, "sn_mcp_token", None) or _secret(config.sn_mcp_token_file, "MCP belirteci")) \
+            if not provider else None
         return McpClient(config.sn_mcp_url, token=token, token_provider=provider, ca_file=config.sn_ca_file)
     except McpError as exc:
         raise crud.Conflict(str(exc)) from None
@@ -301,8 +305,8 @@ def sync_servicenow(db, app, principal, full=False, client=None, channel="servic
     mapping = policy(db, "cmdb.servicenow", DEFAULT_MAPPING)
     if client is None and channel == "mcp":
         from ..mcp_client import McpTableSource
-        client = McpTableSource(mcp_client(app.config), mcp_settings(db))
-    client = client or servicenow_client(app.config)
+        client = McpTableSource(mcp_client(effective(db, app)), mcp_settings(db))
+    client = client or servicenow_client(effective(db, app))
     started = utcnow()
     db.lock("cmdb:sync")
     last = one(db, "SELECT watermark FROM tdr_cmdb_sync_runs WHERE source=? AND status='success' "
@@ -379,6 +383,12 @@ def sync_servicenow(db, app, principal, full=False, client=None, channel="servic
     return {"run_id": run_id, "status": status, "mode": mode, **counts, "errors": errors[:10], "rules": evaluation}
 
 
+def effective(db, app):
+    """Ortam değişkeni (kurulum dosyası) veya Yönetim → Entegrasyonlar tanımı (K-024)."""
+    from .integrations import servicenow_config
+    return servicenow_config(db, app.config)
+
+
 def default_channel(config):
     return "servicenow" if config.sn_instance else "mcp" if config.sn_mcp_url else None
 
@@ -386,7 +396,7 @@ def default_channel(config):
 def sync_route(c):
     authz.require_human(c.principal)
     authz.require(c.principal, "admin")
-    channel = c.body.get("channel") or default_channel(c.app.config)
+    channel = c.body.get("channel") or default_channel(effective(c.db, c.app))
     if channel not in ("servicenow", "mcp"):
         raise crud.Conflict("ServiceNow bağlantısı yapılandırılmadı (Table API veya MCP)")
     return {**sync_servicenow(c.db, c.app, c.principal, full=bool(c.body.get("full")), channel=channel), "channel": channel}
@@ -398,9 +408,10 @@ def mcp_test(c):
     authz.require_human(c.principal)
     authz.require(c.principal, "admin")
     from ..mcp_client import McpError, McpTableSource
-    client = mcp_client(c.app.config)
+    cfg = effective(c.db, c.app)
+    client = mcp_client(cfg)
     settings = mcp_settings(c.db)
-    out = {"url_host": urlparse(c.app.config.sn_mcp_url).netloc, "tool": settings["tool"], "steps": [], "tools": []}
+    out = {"url_host": urlparse(cfg.sn_mcp_url).netloc, "tool": settings["tool"], "steps": [], "tools": []}
     try:
         out["server"] = client.initialize()
         out["steps"].append({"step": "initialize", "ok": True, "detail": f"oturum açıldı, protokol {client.protocol}"})
@@ -616,12 +627,13 @@ def risk_cis(db, risk_id):
 
 def status(c):
     authz.check(c.principal, CIS, "read")
-    cfg = c.app.config
+    cfg = effective(c.db, c.app)
     return {
         "servicenow": {"configured": bool(cfg.sn_instance), "instance": cfg.sn_instance or None,
-                       "auth": "token" if cfg.sn_token_file else "basic" if cfg.sn_user else None},
+                       "auth": "token" if cfg.sn_token_file or getattr(cfg, "sn_token", None) else
+                       "basic" if cfg.sn_user else None},
         "mcp": {"configured": bool(cfg.sn_mcp_url), "host": urlparse(cfg.sn_mcp_url).netloc or None,
-                "auth": "oauth" if cfg.sn_mcp_token_url else "token" if cfg.sn_mcp_token_file else None,
+                "auth": "oauth" if cfg.sn_mcp_token_url else "token" if cfg.sn_mcp_url else None,
                 "tool": mcp_settings(c.db)["tool"]},
         "channel": default_channel(cfg),
         "counts": rows(c.db, "SELECT ci_class AS key, COUNT(*) AS count FROM tdr_cmdb_cis WHERE stale=0 GROUP BY ci_class"),

@@ -28,7 +28,8 @@ ENV_MAP = {   # TEDARIK_* -> KS GRC entra_auth.configure() adları
 }
 
 
-def entra_provider(config):
+def entra_provider(config, overrides=None):
+    """overrides: arayüzde tanımlı ayarlar (TEDARIK_ENTRA_* adlarıyla); ortam değişkeni yoksa kullanılır (K-024)."""
     try:
         from .vendor import entra_auth
     except ImportError:
@@ -37,7 +38,8 @@ def entra_provider(config):
     entra_auth.ROLES = tuple(ENTRA_ROLES)          # K-012: tedarik rolleri, öncelik sırasıyla
     entra_auth.FLOW_COOKIE = FLOW_COOKIE
     env = {"CONTROL_AUTH_MODE": "entra", "CONTROL_COOKIE_SECURE": "1" if config.cookie_secure else "0"}
-    env.update({target: config.env[source] for source, target in ENV_MAP.items() if config.env.get(source)})
+    values = {**(overrides or {}), **{k: v for k, v in config.env.items() if k.startswith("TEDARIK_ENTRA_") and v}}
+    env.update({target: values[source] for source, target in ENV_MAP.items() if values.get(source)})
     return entra_auth.configure(env)
 
 

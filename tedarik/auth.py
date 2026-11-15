@@ -60,9 +60,9 @@ class Auth:
         self.entra = None
         if config.dev_role not in ROLES:
             raise ValueError("Geçersiz TEDARIK_DEV_ROLE")
-        if config.auth_mode == "entra":
+        if config.auth_mode == "entra" and config.env.get("TEDARIK_ENTRA_TENANT_ID"):
             from . import session
-            self.entra = session.entra_provider(config)
+            self.entra = session.entra_provider(config)     # yoksa ayarlar açılışta veritabanından okunur (K-024)
 
     @property
     def session_scope(self):

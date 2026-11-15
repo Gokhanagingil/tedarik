@@ -417,6 +417,7 @@ DETAILS.supplier_risks = async function riskDetail(id, tab) {
     r.risk_type === 'opportunity' ? pill('Fırsat', 'good') : null, r.source && r.source !== 'manual' ? pill(META.option('supplier_risks', 'source', r.source), 'purple') : null), h('br'), tabs(items, tab));
   Drawer.open(r.code + ' · ' + r.title, body, can ? (terminal ? [btn('Yeniden aç', () => decision(r, 'open', () => reload()), 'secondary')] : [
     btn('Düzenle', () => recordForm('supplier_risks', r, {only: RISK_FORM, onsaved: () => reload()}), 'secondary'),
+    typeof riskQuality === 'function' ? btn('İfade kalitesi', () => riskQuality(r, () => reload()), 'ghost', {title: 'Neden–olay–etki yapısını denetle; öneriyi onayla'}) : null,
     last ? btn('Kapat', () => decision(r, 'closed', () => reload()), 'secondary') : null, last ? btn('Kabul et', () => decision(r, 'accepted', () => reload()), 'secondary') : null,
     btn('Değerlendir', () => assessRisk(r, () => reload('assess')))]) : [], (r.supplier_id ? 'Tedarikçi riski' : 'Kurumsal risk') + (company ? ' · ' + company.name : ''));
 };

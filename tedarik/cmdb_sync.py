@@ -21,7 +21,7 @@ def main(argv=None):
             print("CMDB_DISABLED")
             return 0
         with app.database.connect() as db:
-            channel = cmdb.default_channel(app.config)       # Table API önceliklidir; yoksa ServiceNow MCP sunucusu
+            channel = cmdb.default_channel(cmdb.effective(db, app))       # Table API önceliklidir; yoksa ServiceNow MCP sunucusu
             if channel:
                 result = cmdb.sync_servicenow(db, app, SYSTEM, full="--full" in argv, channel=channel)
                 print(f"Senkron ({channel}) {result['status']} ({result['mode']}): {result['created']} yeni, "

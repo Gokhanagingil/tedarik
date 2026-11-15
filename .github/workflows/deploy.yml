@@ -17,6 +17,11 @@ on:
         description: "Sunucuda Docker yoksa Ubuntu paketlerinden kur (docker.io, docker-compose-v2)"
         type: boolean
         default: false
+      auth_mode:
+        description: "Giriş modu (keep: sunucudaki ayar korunur; entra: Yönetim → Entegrasyonlar'daki Entra tanımı)"
+        type: choice
+        options: [keep, local, entra]
+        default: keep
       acceptance:
         description: "Kurulumdan sonra canlı kabul testini çalıştır (scripts/acceptance.py; KABUL işaretli kayıt yazar)"
         type: boolean
@@ -40,7 +45,7 @@ jobs:
         run: |
           python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
           python -m unittest discover -s tests
-          node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js
+          node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js && node --check tedarik/static/admin.js
           sh -n deploy/deploy.sh && sh -n deploy/backup.sh
       - name: Verify deployment secrets
         env:
@@ -59,9 +64,11 @@ jobs:
           INSTALL_DOCKER: ${{ inputs.install_docker && '1' || '0' }}
           DOMAIN: ${{ inputs.domain }}
           SEED_DEMO: ${{ inputs.seed_demo && '1' || '0' }}
+          AUTH_MODE: ${{ inputs.auth_mode || 'keep' }}
         run: |
           set -eu
           case "$DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı"; exit 1;; esac
+          case "$AUTH_MODE" in keep|local|entra) ;; *) echo "Geçersiz giriş modu"; exit 1;; esac
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
           printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
@@ -78,7 +85,7 @@ jobs:
             \$S mkdir -p \$R && \$S chmod 0700 /opt/tedarik
             \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
             \$S ln -sfn \$R /opt/tedarik/current
-            \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER TEDARIK_DOMAIN=$DOMAIN TEDARIK_SEED_DEMO=$SEED_DEMO sh /opt/tedarik/current/deploy/deploy.sh"
+            \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER TEDARIK_DOMAIN=$DOMAIN TEDARIK_SEED_DEMO=$SEED_DEMO TEDARIK_AUTH_MODE_SET=$AUTH_MODE sh /opt/tedarik/current/deploy/deploy.sh"
       - name: External HTTPS check (certificate, security headers, anonymous access denied)
         if: inputs.domain != ''
         env:

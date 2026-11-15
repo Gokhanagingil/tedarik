@@ -144,6 +144,13 @@ FIELDS = {
     "assessment": "Değerlendirme yöntemi (denetçi için)", "tags": "Etiketler", "clauses.position": "Sıra",
     "from_clause_id": "Madde (A)", "to_clause_id": "Madde (B)", "relation": "İlişki türü",
     "clause_links.source": "İlişkinin kaynağı", "clause_links.rationale": "Gerekçe / açıklama",
+    # entegrasyonlar ve bildirimler (K-024)
+    "enabled": "Etkin", "settings_json": "Ayarlar", "secrets_json": "Sırlar (şifreli)", "last_test_at": "Son sınama",
+    "last_test_ok": "Son sınama başarılı", "last_test_message": "Son sınama sonucu", "updated_by": "Güncelleyen",
+    "channel": "Kanal", "recipient": "Alıcı", "username": "Kullanıcı", "event": "Olay", "notifications.subject": "Konu",
+    "body": "İleti", "link": "Bağlantı", "object_type": "Kayıt türü", "object_id": "Kayıt no",
+    "dedupe_key": "Tekilleştirme anahtarı", "attempts": "Deneme sayısı", "last_error": "Son hata",
+    "sent_at": "Gönderilme zamanı", "integrations.kind": "Entegrasyon",
 }
 
 # Seçim etiketleri: önce kaynağa özgü (kaynak.alan), yoksa alan adına göre ortak.
@@ -268,6 +275,11 @@ CHOICES.update({
                  "intersects": "Kesişir", "related": "İlgili"},
     "clause_links.source": {"official": "Resmî kaynak", "crosswalk": "Çapraz eşleme tablosu", "manual": "Elle",
                             "suggested": "Onaylanmış öneri"},
+})
+CHOICES.update({
+    "notifications.channel": {"email": "E-posta", "teams": "Microsoft Teams"},
+    "notifications.status": {"queued": "Kuyrukta", "sent": "Gönderildi", "failed": "Gönderilemedi",
+                             "skipped": "Atlandı"},
 })
 CHOICES["risk_category"] = CHOICES["category"]
 

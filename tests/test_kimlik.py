@@ -4,9 +4,11 @@ KS GRC `tests/test_entra.py` yaklaşımıyla: Entra imza anahtarları ve kod de�
 akış (PKCE, durum, nonce, bağlam, rol, oturum) gerçek kopya kodla çalışır.
 """
 import importlib.util
+import io
 import json
 import time
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -235,6 +237,34 @@ HOST = "tedarik.example.test"
 ORIGIN = "https://" + HOST
 
 
+class EntraOpener:
+    """Entra uç noktaları için sahte açıcı (ağa çıkılmaz)."""
+
+    def __init__(self, token_status=200):
+        self.token_status, self.calls = token_status, []
+
+    def open(self, request, timeout=None):
+        url = request.full_url
+        self.calls.append(url)
+        if url.endswith("openid-configuration"):
+            body = {"issuer": f"https://login.microsoftonline.com/{TENANT}/v2.0",
+                    "authorization_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/authorize",
+                    "token_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/token",
+                    "jwks_uri": f"https://login.microsoftonline.com/{TENANT}/discovery/v2.0/keys"}
+        elif url.endswith("/keys"):
+            body = {"keys": [{"kty": "RSA", "kid": "k1"}]}
+        elif self.token_status != 200:
+            raise urllib.error.HTTPError(url, 401, "x", {}, io.BytesIO(json.dumps(
+                {"error": "invalid_client", "error_codes": [7000215]}).encode()))
+        else:
+            self.assertIn(b"grant_type=client_credentials", request.data)
+            body = {"access_token": "sentetik"}
+        return io.BytesIO(json.dumps(body).encode())
+
+    def assertIn(self, a, b):
+        assert a in b
+
+
 @unittest.skipUnless(importlib.util.find_spec("jwt"), "Entra paketleri kurulu değil (requirements.txt)")
 class EntraOturumu(Base):
     @classmethod
@@ -318,40 +348,15 @@ class EntraOturumu(Base):
         import io
         import urllib.error
 
-        class Opener:
-            def __init__(self, token_status=200):
-                self.token_status, self.calls = token_status, []
-
-            def open(self, request, timeout=None):
-                url = request.full_url
-                self.calls.append(url)
-                if url.endswith("openid-configuration"):
-                    body = {"issuer": f"https://login.microsoftonline.com/{TENANT}/v2.0",
-                            "authorization_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/authorize",
-                            "token_endpoint": f"https://login.microsoftonline.com/{TENANT}/oauth2/v2.0/token",
-                            "jwks_uri": f"https://login.microsoftonline.com/{TENANT}/discovery/v2.0/keys"}
-                elif url.endswith("/keys"):
-                    body = {"keys": [{"kty": "RSA", "kid": "k1"}]}
-                elif self.token_status != 200:
-                    raise urllib.error.HTTPError(url, 401, "x", {}, io.BytesIO(json.dumps(
-                        {"error": "invalid_client", "error_codes": [7000215]}).encode()))
-                else:
-                    self.assertIn(b"grant_type=client_credentials", request.data)
-                    body = {"access_token": "sentetik"}
-                return io.BytesIO(json.dumps(body).encode())
-
-            def assertIn(self, a, b):
-                assert a in b
-
         config = Config(self.env(TEDARIK_AUTH_MODE="entra", TEDARIK_COOKIE_SECURE="1", TEDARIK_ENTRA_TENANT_ID=TENANT,
                                  TEDARIK_ENTRA_CLIENT_ID=CLIENT, TEDARIK_ENTRA_CLIENT_SECRET="synthetic-client-secret-only",
                                  TEDARIK_ENTRA_REDIRECT_URI=ORIGIN + "/auth/entra/callback", TEDARIK_ENTRA_AUTH_CONTEXT="c7"))
-        good = check(config, Opener())
+        good = check(config, EntraOpener())
         self.assertFalse([r for r in good if r[0] == "fail"], good)
         self.assertTrue(any("acrs" in r[2] for r in good if r[0] == "info"))
-        bad = check(config, Opener(token_status=401))
+        bad = check(config, EntraOpener(token_status=401))
         self.assertIn(("fail", "İstemci kimlik bilgisi", "istemci sırrı geçersiz"), bad)
-        self.assertEqual(check(Config(self.env(TEDARIK_AUTH_MODE="local")), Opener())[0][0], "fail")
+        self.assertEqual(check(Config(self.env(TEDARIK_AUTH_MODE="local")), EntraOpener())[0][0], "fail")
 
     def test_rol_eslemesi_ve_reddedilen_roller(self):
         manager = self.sign_in()

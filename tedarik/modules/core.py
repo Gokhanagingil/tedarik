@@ -9,6 +9,7 @@ from .. import audit, auth as authz, crud
 from ..db import one, rows
 from ..http import API
 from ..schema import RESOURCES, Resource, fk
+from . import integrations
 
 M = "core"
 ACTIVE = "INTEGER NOT NULL DEFAULT 1"
@@ -225,6 +226,7 @@ def register(app):
     app.route("POST", API + "/engagements/{id}/users", lambda c: _replace_map(
         c, ENGAGEMENTS, "tdr_engagement_users", "engagement_id", "org_unit_id", "org_unit_ids"))
     app.route("GET", API + "/reports/usage", usage_report)
+    integrations.register(app)
 
 
 STARTER_TYPES = ("Donanım", "Yazılım ve Lisans", "Bulut Hizmeti", "Danışmanlık", "Dış Kaynak Personel",

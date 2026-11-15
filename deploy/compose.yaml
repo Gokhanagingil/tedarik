@@ -47,6 +47,8 @@ services:
       TEDARIK_SN_USER: ${TEDARIK_SN_USER:-}
       TEDARIK_SN_PASSWORD_FILE: /run/secrets/sn_password
       TEDARIK_APP_NAME: ${TEDARIK_APP_NAME:-GRC Platformu}
+      TEDARIK_PUBLIC_URL: ${TEDARIK_PUBLIC_URL:-}
+      TEDARIK_SECRET_KEY_FILE: /run/secrets/app_secret_key
       # ServiceNow MCP sunucusu (K-021): adres ayar dosyasından; belirteç veya OAuth istemci sırrı sır dosyasında
       TEDARIK_SN_MCP_URL: ${TEDARIK_SN_MCP_URL:-}
       TEDARIK_SN_MCP_TOKEN_FILE: ${TEDARIK_SN_MCP_TOKEN_FILE:-}
@@ -59,7 +61,7 @@ services:
       TEDARIK_ENTRA_AUTH_CONTEXT: ${TEDARIK_ENTRA_AUTH_CONTEXT:-}
       TEDARIK_ENTRA_REDIRECT_URI: ${TEDARIK_ENTRA_REDIRECT_URI:-}
       TEDARIK_ENTRA_CLIENT_SECRET_FILE: ${TEDARIK_ENTRA_CLIENT_SECRET_FILE:-}
-    secrets: [database_url, mcp_api_key, sn_password, sn_mcp_token, sn_mcp_client_secret, entra_client_secret]
+    secrets: [database_url, mcp_api_key, app_secret_key, sn_password, sn_mcp_token, sn_mcp_client_secret, entra_client_secret]
     ports:
       - "127.0.0.1:${TEDARIK_PORT:-18090}:8090"
     networks: [internal, edge]
@@ -114,6 +116,8 @@ secrets:
     file: ${TEDARIK_SECRETS}/database_url
   mcp_api_key:
     file: ${TEDARIK_SECRETS}/mcp_api_key
+  app_secret_key:
+    file: ${TEDARIK_SECRETS}/app_secret_key
   sn_password:
     file: ${TEDARIK_SECRETS}/sn_password
   sn_mcp_token:

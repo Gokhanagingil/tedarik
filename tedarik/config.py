@@ -29,6 +29,10 @@ class Config:
         self.cookie_secure = env.get("TEDARIK_COOKIE_SECURE", "0") == "1"
         self.trust_proxy = env.get("TEDARIK_TRUST_PROXY", "0") == "1"      # yalnızca kendi TLS vekilimiz önündeyse
         self.app_name = env.get("TEDARIK_APP_NAME", "GRC Platformu")[:60]   # K-016: ad sonra belirlenecek
+        self.public_url = env.get("TEDARIK_PUBLIC_URL", "").strip().rstrip("/")    # bildirim bağlantıları, Entra dönüşü
+        if self.public_url and not self.public_url.startswith(("https://", "http://127.0.0.1", "http://localhost")):
+            raise ValueError("TEDARIK_PUBLIC_URL https:// ile başlamalı")
+        self.secret_key_file = env.get("TEDARIK_SECRET_KEY_FILE", "")      # K-024: arayüzden girilen sırların anahtarı
         # ServiceNow CMDB (K-019): adres ve kimlik bilgisi dosyaları; gizli değer yalnızca senkron sırasında okunur
         self.sn_instance = env.get("TEDARIK_SN_INSTANCE", "").rstrip("/")
         self.sn_user = env.get("TEDARIK_SN_USER", "")

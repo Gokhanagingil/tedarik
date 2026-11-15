@@ -5,6 +5,15 @@ Etkin modüller TEDARIK_MODULES ile seçilir; kapalı modülün tablosu ve uç n
 """
 import importlib
 
+REMINDERS = []   # zamanlanmış hatırlatmalar: fn(db, app) -> kuyruğa yazılan ileti sayısı (notify.reminders)
+
+
+def reminder(fn):
+    """Modül içe aktarılırken bir kez kaydedilir; işlev kendi modülünün açık olduğunu denetler."""
+    if fn not in REMINDERS:
+        REMINDERS.append(fn)
+    return fn
+
 
 def load(config):
     loaded = []
