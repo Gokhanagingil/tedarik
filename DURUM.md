@@ -155,6 +155,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
      olay türü (yalnızca kaydı olan türler etiket olarak görünür); risk ayrıntısında 8 sekme 6'ya indi; sağlık
      kontrolüne 3 yeni kural; etkin kriz ve KVKK süresi için üst uyarı bandı.
   - Testler: 138 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi (89 denetim).
+  - Test sunucusuna dağıtıldı (commit `8cd2880`): standart kütüphanesi kuruldu, demo verisine yeni bölümler eklendi;
+    canlı kabul testi 23/23 geçti, 68 menü ekranı hatasız (GitHub Actions çalıştırması 43750698880, 2026-11-15).
+    İlk denemede kabul betiği eski denetim ekranı metnini arıyordu; sekmeli test planına göre güncellendi.
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
