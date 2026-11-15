@@ -103,6 +103,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   13. *GRC incelemesi:* yukarıdaki ilişki eksikleri tamamlandı; ayrıca denetim kapsamına süreçler eklendi (ISO 9001 9.2; `process_ids`, "Son 12 ayda denetlenmemiş ana süreçler" kontrolü). Sağlık kontrolü 20 ilişki kuralını sürekli denetler.
   - Demo verisi genişledi: 6 şirket (3 grup şirketi, 3 müşteri), 30 süreçlik harita, 10 iştah beyanı, 4 risk dönemi, 10 yeni kurumsal risk (fırsat dahil), 7 KRİ, 39 CI (destek dışı, yama, açık kalma örnekleri), CMDB kural riskleri, 8 BİA, 4 plan, 5 tatbikat, revizyonlu ve dosyalı dokümanlar. Önceki sürümle yüklenmiş demoya bölüm bölüm eklenir (kullanıcılara dokunmaz).
   - Testler: 100 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı smoke testi (yeni ekranlar dahil) ve yerel kabul provası (23/23, 54 ekran).
+  - Test sunucusuna dağıtıldı (commit `124cf98`): mevcut demoya yeni bölümler eklendi, göç 2 ve 3 uygulandı; canlı kabul testi 23/23 geçti, 54 ekran hatasız (GitHub Actions çalıştırması 43725941060, 2026-11-15).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
 - Önceki test sayısı: 61 uçtan uca test; SQLite'ta ve PostgreSQL 16'da tamamı geçiyor. Birim kapsamı ve Entra rol eşlemesi testlerinin hatayı yakaladığı kasıtlı bozmayla doğrulandı.
