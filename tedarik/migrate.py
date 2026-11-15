@@ -65,10 +65,29 @@ def _risk_company_and_scores(db):
         WHERE risk_level IS NULL""")
 
 
+def _document_lifecycle(db):
+    """K-020: doküman durumları ISO 9001 yaşam döngüsüne geçer; yürürlükteki her doküman için ilk revizyon kaydı."""
+    if "current_revision" not in db.columns("tdr_documents"):
+        return
+    for doc in db.execute("SELECT * FROM tdr_documents WHERE status IN ('active','retired')").fetchall():
+        published = doc["status"] == "active"
+        when = doc["approved_on"] or str(doc["created_at"])[:10]
+        if published and not db.execute("SELECT 1 FROM tdr_document_revisions WHERE document_id=?",
+                                         (doc["id"],)).fetchone():
+            db.execute("INSERT INTO tdr_document_revisions (document_id, revision, change_summary, prepared_by, "
+                       "approved_by, approved_at, effective_date) VALUES (?,?,?,?,?,?,?)",
+                       (doc["id"], 1, "İlk yayın (doküman yönetimine geçişte kaydedildi)", doc["owner"] or "bilinmiyor",
+                        doc["approved_by"] or "bilinmiyor", str(when) + "T00:00:00+00:00", when))
+        db.execute("UPDATE tdr_documents SET status=?, current_revision=?, effective_date=?, version=? WHERE id=?",
+                   ("published" if published else "obsolete", 1 if published else 0, when if published else None,
+                    "Rev. 1" if published else doc["version"], doc["id"]))
+
+
 # (sıra, açıklama, işlev(db)). Tablo yapısı bildirimsel eşitlemeden gelir; burada yalnızca dönüşümler.
 MIGRATIONS = [
     (1, "Tek risk kaydı: supplier_risks.supplier_id isteğe bağlı (K-015)", _risk_supplier_optional),
     (2, "Kurumsal risk: şirket bağı ve özet puanlar (K-018)", _risk_company_and_scores),
+    (3, "Doküman yaşam döngüsü ve ilk revizyonlar (K-020)", _document_lifecycle),
 ]
 
 

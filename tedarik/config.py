@@ -5,7 +5,7 @@ from pathlib import Path
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
 KNOWN_MODULES = ("core", "performance", "surveys", "risks", "documents", "grc", "cmdb", "continuity", "transfer", "dashboard",
                  "workflow", "sourcing")
-DEFAULT_MODULES = "core,performance,surveys,risks,grc,cmdb,continuity,transfer,dashboard"
+DEFAULT_MODULES = "core,performance,surveys,risks,documents,grc,cmdb,continuity,transfer,dashboard"
 AUTH_MODES = {"dev", "local", "entra"}
 
 

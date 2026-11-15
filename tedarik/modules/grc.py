@@ -25,25 +25,20 @@ Kavramlar ve KS GRC karşılıkları
   seçiliyse yalnızca o denetimin çalışmaları. Tamamlanma belirsiz/uygulanamaz sonucu saymaz. Sertifikasyon
   kararı değildir.
 """
-import base64
-import binascii
 import hashlib
-import io
 import json
 import mimetypes
 import re
 from datetime import date, datetime, timedelta, timezone
-from pathlib import Path
-from zipfile import BadZipFile, ZipFile
 
-from .. import audit, auth as authz, crud
+from .. import audit, auth as authz, crud, files
 from ..db import one, rows, utcnow
 from ..http import API, MAX_UPLOAD_BODY, Raw, guard_readonly
 from ..schema import RESOURCES, Resource, fk
 from .core import PROCESSES, policy, supplier_units
 
 M = "grc"
-REQUIRES = ("risks",)
+REQUIRES = ("risks", "documents")
 LIBRARY = {"ADMIN"}                                       # çerçeve ve kontrol kütüphanesi
 ASSURANCE = {"ADMIN", "AUDITOR"}                          # denetim, test sonucu, bulgu
 CONTRIBUTORS = {"ADMIN", "AUDITOR", "SUPPLIER_MANAGER", "UNIT_USER"}   # kanıt ve düzeltici faaliyet
@@ -51,10 +46,6 @@ RESULTS = ("pass", "fail", "inconclusive", "not_applicable")
 FREQUENCY_DAYS = {"continuous": 1, "daily": 1, "weekly": 7, "monthly": 31, "quarterly": 92, "semiannual": 183,
                   "yearly": 366, "on_demand": None}
 CLOSED_AUDIT = ("completed", "closed", "cancelled")
-FILE_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".webp", ".txt", ".csv", ".json", ".jsonl", ".log", ".xlsx", ".docx",
-            ".pptx", ".zip", ".eml", ".xml", ".md"}
-MAX_FILE = 12 * 1024 * 1024
-SAFE_NAME = re.compile(r"^[^/\\\x00-\x1f]{1,160}$")
 DISCLAIMER = "Kontrol ve kanıta dayalı ön gösterge; sertifikasyon veya standart uygunluğu kararı değildir."
 
 STANDARDS = Resource("standards", "Standartlar", {
@@ -71,15 +62,6 @@ CLAUSES = Resource("clauses", "Maddeler", {
 OBJECTIVES = Resource("objectives", "Kontrol Hedefleri", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT"},
     module=M, code_prefix="KHD", write_roles=LIBRARY)
-
-DOCUMENTS = Resource("documents", "Dokümanlar", {
-    "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "category": "TEXT NOT NULL DEFAULT 'procedure'",
-    "version": "TEXT", "owner": "TEXT", "status": "TEXT NOT NULL DEFAULT 'draft'", "reference_url": "TEXT",
-    "approved_by": "TEXT", "approved_on": "DATE", "review_date": "DATE", "description": "TEXT",
-    "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
-    module=M, code_prefix="DOK", search=("code", "title"), write_roles=LIBRARY,
-    enums={"category": ("policy", "procedure", "instruction", "standard", "guideline", "contract_clause"),
-           "status": ("draft", "active", "retired")})
 
 CONTROLS = Resource("controls", "Kontroller", {
     "code": "TEXT NOT NULL UNIQUE", "name": "TEXT NOT NULL", "description": "TEXT",
@@ -104,6 +86,10 @@ LINKS = {   # kontrol eşlemeleri: istek anahtarı -> (tablo kaynağı, hedef s�
 for _name, (_table, _col, _target) in LINKS.items():
     Resource(_table, "Kontrol eşlemesi", {"control_id": fk("controls", cascade=True), _col: fk(_target, cascade=True)},
              module=M, unique=(("control_id", _col),), api=(), search=())
+
+Resource("document_clauses", "Dokümanın karşıladığı maddeler", {
+    "document_id": fk("documents", cascade=True), "clause_id": fk("clauses", cascade=True)},
+    module=M, unique=(("document_id", "clause_id"),), api=(), search=())
 
 AUDITS = Resource("audits", "Denetimler", {
     "code": "TEXT UNIQUE", "name": "TEXT NOT NULL", "kind": "TEXT NOT NULL DEFAULT 'internal'",
@@ -219,14 +205,6 @@ def _clause_rules(db, data, current, principal):
         raise crud.Invalid("Uygulanabilir olmayan madde için gerekçe yazın (uygulanabilirlik bildirimi)")
 
 
-def _document_rules(db, data, current, principal):
-    merged = {**(current or {}), **data}
-    for key, label in (("approved_on", "Onay tarihi"), ("review_date", "Gözden geçirme tarihi")):
-        _date(merged.get(key), label)
-    if merged.get("status") == "active" and not (merged.get("approved_by") and merged.get("approved_on")):
-        raise crud.Invalid("Yürürlüğe giren doküman için onaylayan ve onay tarihi gerekli")
-
-
 def _evidence_rules(db, data, current, principal):
     merged = {**(current or {}), **data}
     for key, label in (("period_start", "Dönem başlangıcı"), ("period_end", "Dönem bitişi"),
@@ -331,7 +309,6 @@ def _action_scope(db, record):
 
 CONTROLS.before_save = _control_rules
 CLAUSES.before_save = _clause_rules
-DOCUMENTS.before_save = _document_rules
 EVIDENCE.before_save = _evidence_rules
 EVIDENCE.scope = _evidence_scope
 FINDINGS.before_save = _finding_rules
@@ -726,48 +703,8 @@ def run_all_route(c):
 
 # ------------------------------------------------------------------ kanıt dosyaları
 
-def _valid_file(filename, binary):
-    """KS GRC grc_plus._valid_file kuralları (uzantı, boyut, imza, arşiv bombası)."""
-    if not isinstance(filename, str) or not SAFE_NAME.fullmatch(filename) or filename in {".", ".."}:
-        raise crud.Invalid("Geçersiz dosya adı")
-    extension = Path(filename).suffix.lower()
-    if extension not in FILE_EXT:
-        raise crud.Invalid("Dosya türüne izin verilmiyor. PDF, Office, resim, metin ve ZIP desteklenir")
-    if not 0 < len(binary) <= MAX_FILE:
-        raise crud.Invalid("Dosya boyutu 1 bayt – 12 MB arasında olmalı")
-    signatures = {".pdf": b"%PDF-", ".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
-    if extension in signatures and not binary.startswith(signatures[extension]):
-        raise crud.Invalid(f"{extension[1:].upper()} dosya imzası doğrulanamadı")
-    if extension == ".webp" and (binary[:4] != b"RIFF" or binary[8:12] != b"WEBP"):
-        raise crud.Invalid("WebP dosya imzası doğrulanamadı")
-    if extension in (".zip", ".xlsx", ".docx", ".pptx"):
-        try:
-            with ZipFile(io.BytesIO(binary)) as archive:
-                infos = archive.infolist()
-                if len(infos) > 1200 or sum(i.file_size for i in infos) > 120 * 1024 * 1024:
-                    raise crud.Invalid("Arşiv genişletilmiş boyut sınırını aşıyor")
-                if any(i.compress_size and i.file_size / i.compress_size > 300 for i in infos):
-                    raise crud.Invalid("Şüpheli arşiv sıkıştırma oranı")
-                if extension != ".zip" and "[Content_Types].xml" not in archive.namelist():
-                    raise crud.Invalid("Office dosyası geçersiz")
-        except BadZipFile:
-            raise crud.Invalid("Office/ZIP dosyası imzası geçersiz") from None
-    if extension in (".txt", ".csv", ".log", ".json", ".jsonl", ".md", ".xml", ".eml") and b"\x00" in binary[:2048]:
-        raise crud.Invalid("Metin dosyasının içeriği geçersiz")
-
-
-def _decode(body):
-    encoded = body.get("content_base64")
-    if not isinstance(encoded, str):
-        raise crud.Invalid("content_base64 gerekli")
-    try:
-        return base64.b64decode(encoded, validate=True)
-    except (ValueError, binascii.Error):
-        raise crud.Invalid("Geçersiz dosya kodlaması") from None
-
-
 def store_file(db, evidence_id, filename, binary, username, uploaded_at=None):
-    _valid_file(filename, binary)
+    files.valid_file(filename, binary)
     db.lock(f"evidence:{evidence_id}")
     row = one(db, "SELECT COALESCE(MAX(version), 0) AS v FROM tdr_evidence_files WHERE evidence_id=?", (evidence_id,))
     version = row["v"] + 1
@@ -804,12 +741,12 @@ def upload_evidence(c):
     if c.principal.role != "MACHINE":      # MCP kanıt yükleyebilir (KS GRC), kaynak "mcp" olarak işaretlenir
         authz.check(c.principal, EVIDENCE, "write")
     body = dict(c.body)
-    binary = _decode(body)
+    binary = files.decode(body)
     filename = body.pop("file_name", None) or "kanit.json"
     body.pop("content_base64", None)
     links = {k: body.pop(k) for k in list(body) if k in EVIDENCE_LINKS}
     guard_readonly(EVIDENCE, body)
-    _valid_file(filename, binary)
+    files.valid_file(filename, binary)
     evidence_id = crud.insert(c.db, EVIDENCE, body, c.principal)
     _evidence_links(c.db, evidence_id, links, replace=False)
     result = store_file(c.db, evidence_id, filename, binary, c.principal.username)
@@ -826,7 +763,7 @@ def add_version(c):
     if evidence["status"] == "archived":
         raise crud.Conflict("Arşivlenmiş kanıta yeni sürüm eklenemez")
     filename = c.body.get("file_name") or evidence["file_name"] or "kanit.json"
-    result = store_file(c.db, evidence["id"], filename, _decode(c.body), c.principal.username)
+    result = store_file(c.db, evidence["id"], filename, files.decode(c.body), c.principal.username)
     audit.log(c.db, c.principal, "UPLOAD", EVIDENCE.name, evidence["id"],
               {"version": result["version"], "sha256": result["sha256"], "file_name": filename})
     return 201, result

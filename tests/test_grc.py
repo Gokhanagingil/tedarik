@@ -134,7 +134,7 @@ class IcOtomatik(GrcBase):
         self.assertEqual([r["code"] for r in results], [self.auto_code])
 
     def test_kapali_modul_belirsiz_sonuc_verir(self):
-        app = self.make(modules="core,risks,grc")
+        app = self.make(modules="core,risks,documents,grc")
         ctl = self.ok("POST", "/controls", {"name": "SLA", "execution_mode": "automatic",
                                             "automation": "supplier.sla"}, app=app)["id"]
         result = self.ok("POST", f"/controls/{ctl}/run", {}, app=app)
