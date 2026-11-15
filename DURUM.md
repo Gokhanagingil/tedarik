@@ -152,7 +152,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   3. *Sadeleştirme:* menü Uyum ve Denetim olarak ayrıldı, tedarikçi ve performans tek grupta; denetim çalışma alanı
      sekmeli (Özet, Test planı, Kanıt talepleri, Çalışma kâğıtları, Bulgular, Kanıtlar, Geçmiş); binlerce maddeye göre
      ağaçlı ve aranabilir madde seçici; büyük referanslarda aranarak seçim; İşlerim'e yeni iş türleri; takvime 8 yeni
-     olay türü; sağlık kontrolüne 3 yeni kural; etkin kriz ve KVKK süresi için üst uyarı bandı.
+     olay türü (yalnızca kaydı olan türler etiket olarak görünür); risk ayrıntısında 8 sekme 6'ya indi; sağlık
+     kontrolüne 3 yeni kural; etkin kriz ve KVKK süresi için üst uyarı bandı.
   - Testler: 138 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi (89 denetim).
 - Yönetici geçici parola verebilir (`POST /api/tdr/users/{id}/reset-password`, yalnızca yerel hesap, kendi hesabı hariç).
 - Testler: 78 uçtan uca test (GRC 15, demo 2 dahil); SQLite'ta, PostgreSQL 16'da ve paketsiz Python'da geçiyor. Tarayıcı testi GRC akışını da yürütüyor (kontrol → eşleme → başarısız sonuç → bulgu → DÖF → doğrulama; iç otomatik kontrol; denetim; uyum panosu).
@@ -202,16 +203,13 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - SMTP sunucusu ve gönderici hesabı, Teams bildirim kanalı (Workflows web kancası).
 - Lisanslı standart metinleri (ISO 27001/27017/27701/20000-1/9001/14001/22301/45001/50001/10002, TS EN 50600, PCI DSS,
   CIS) ve varsa resmî çapraz eşleme tabloları; içe aktarım şablonu uygulamada.
-
 - Uygulamanın adı (şimdilik "GRC Platformu"; `TEDARIK_APP_NAME` ile değişir).
 - ServiceNow örnek adresi ve salt okunur hizmet hesabı **veya** ServiceNow MCP sunucusunun adresi, kimlik doğrulama türü (bearer / OAuth istemci kimlik bilgisi) ve CMDB okuyan aracın adı; CMDB'deki destek bitişi, yama ve açılış alanlarının adları.
 - Entra ID için kiracı ve uygulama kaydı (istemci kimliği), MFA'lı Koşullu Erişim ilkesinin bağlamı (c1–c99) ve istemci sırrının sunucuya güvenli aktarımı (`docs/KIMLIK.md`, `docs/DAGITIM.md`).
-- Veri yönetişimi modülünün kapsamı için görüşme.
 
 - SAP, Dynamics ve dış kaynak yönetim sisteminden örnek dışa aktarım (sütun başlıkları yeterli).
 - Tedarikçi tipleri ve iş birimleri listesi.
 - Yeni rollerin (`KS.TDR.*`) KS GRC'nin Entra uygulama kaydına mı, ayrı bir kayda mı ekleneceği.
 - `tedarik` ve `control` repolarının görünürlüğü (şu an ikisi de herkese açık).
 - Kalıcı kurumsal adres (alan adı) ve test sunucusunun internete açık kalıp kalmayacağı.
-- KS GRC'nin ayrı uygulama olarak devam edip etmeyeceği (K-015 sonrası KS GRC kullanıcıları bu portala geçebilir).
 - Üretim PostgreSQL'inin nerede çalışacağı (şimdilik aynı sunucuda yalıtılmış konteyner): kurumun yönetilen PostgreSQL hizmeti mi, aynı sunucuda konteyner mi; sürüm (öneri 16 veya üzeri) ve yedekleme sorumlusu.

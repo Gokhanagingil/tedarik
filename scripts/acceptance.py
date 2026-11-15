@@ -256,8 +256,10 @@ def main():
         expect(page.locator("#content")).to_contain_text("Standartlara göre", timeout=20000)
         page.screenshot(path=str(out / "03-uyum-panosu.png"), full_page=True)
         open_list("r/audits", "Denetimler")
-        page.locator("[data-row]", has_text="20000-1").first.click()
-        expect(page.locator("#content")).to_contain_text("Bu denetimdeki sonuç", timeout=20000)
+        page.locator("[data-row]", has_text="20000-1:2018").first.click()          # sürmekte olan iç denetim
+        expect(page.locator("#content .tab", has_text="Test planı")).to_be_visible(timeout=20000)
+        page.locator("#content .tab", has_text="Test planı").click()             # entegre test planı: kontrol başına tek test
+        expect(page.locator("#content .test-card").first).to_be_visible(timeout=20000)
         page.screenshot(path=str(out / "04-denetim.png"), full_page=True)
         open_list("r/controls", "Kontroller")
         page.locator("[data-row]", has_text="Kritik tedarikçi performans değerlendirmeleri zamanında").click()
