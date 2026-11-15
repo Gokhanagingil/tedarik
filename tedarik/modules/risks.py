@@ -10,8 +10,11 @@
 - Kabul edilmiş veya kapalı risk değiştirilmeden önce yalnızca gerekçeyle yeniden açılır; yeniden açılan
   risk için yeni değerlendirme gerekir. Açık faaliyeti olan risk kapatılamaz.
 
-Bilinçli fark: portalda kontrol kaydı yoktur. Azaltıcı önlemler (mitigations) serbest tanımlıdır; KS GRC
-kontrolüne dayanıyorsa `control_ref` alanına kontrol kodu yazılır.
+Tek risk kaydı (K-015): kurumsal ve tedarikçi riskleri aynı kayıttadır; tedarikçi ve angajman bağı isteğe
+bağlıdır. Tablo ve uç nokta adı (`supplier_risks`) MCP sözleşmesi bozulmasın diye korunur. Risk kataloğu
+(KS GRC `risk_catalog`) yeniden kullanılabilir senaryolardır; katalogdan açılan risk `catalog_id` taşır.
+Azaltıcı önlem bir GRC kontrolüne dayanıyorsa `control_ref` alanına kontrol kodu yazılır; grc modülü açıksa
+riskin bağlı kontrolleri ve son test sonuçları risk bağlamında görünür.
 """
 import json
 from datetime import date
@@ -28,24 +31,33 @@ WEIGHTS = {"low": Decimal("0.2"), "medium": Decimal("0.4"), "high": Decimal("0.6
 TERMINAL = ("accepted", "closed")
 DECISION_INPUT = {"assessment_id", "decision_rationale", "exception_rationale"}
 STATEMENT = ("owner", "cause", "risk_event", "consequence")
-SNAPSHOT = ("code", "title", "supplier_id", "engagement_id", "owner", "cause", "risk_event", "consequence",
+SNAPSHOT = ("code", "title", "supplier_id", "engagement_id", "entity_name", "owner", "cause", "risk_event", "consequence",
             "likelihood", "impact", "review_date", "response_strategy", "treatment")
 COMPARED = ("supplier_id", "engagement_id", "cause", "risk_event", "consequence", "likelihood", "impact", "owner")
 TEXT_LIMIT = 5000
 
-RISKS = Resource("supplier_risks", "Tedarikçi Riskleri", {
-    "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "supplier_id": fk("suppliers"),
+CATALOG = Resource("risk_catalog", "Risk Kataloğu", {
+    "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "category": "TEXT NOT NULL",
+    "cause": "TEXT NOT NULL", "risk_event": "TEXT NOT NULL", "consequence": "TEXT NOT NULL",
+    "likelihood": "INTEGER NOT NULL DEFAULT 3", "impact": "INTEGER NOT NULL DEFAULT 3", "description": "TEXT",
+    "active": "INTEGER NOT NULL DEFAULT 1", "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
+    module=M, write="manage", search=("code", "title"),
+    enums={"category": ("operational", "supplier", "continuity", "security", "compliance", "financial",
+                        "concentration", "performance", "privacy", "reputation", "exit")})
+
+RISKS = Resource("supplier_risks", "Risk Kaydı", {
+    "code": "TEXT NOT NULL UNIQUE", "title": "TEXT NOT NULL", "supplier_id": fk("suppliers", False),
     "engagement_id": fk("engagements", False), "category": "TEXT NOT NULL", "description": "TEXT",
     "cause": "TEXT", "risk_event": "TEXT", "consequence": "TEXT",
     "likelihood": "INTEGER NOT NULL DEFAULT 3", "impact": "INTEGER NOT NULL DEFAULT 3",
     "owner": "TEXT NOT NULL", "appetite": "INTEGER NOT NULL", "status": "TEXT NOT NULL DEFAULT 'open'",
     "response_strategy": "TEXT", "treatment": "TEXT", "review_date": "DATE", "control_risk_ref": "TEXT",
-    "origin_ref": "TEXT",
+    "origin_ref": "TEXT", "catalog_id": fk("risk_catalog", False), "entity_name": "TEXT",
     "created_at": "TIMESTAMP NOT NULL", "updated_at": "TIMESTAMP"},
     module=M, write="write", api=("list", "get", "create"), search=("code", "title"), machine="r",
     readonly=("origin_ref",),
-    enums={"category": ("continuity", "security", "compliance", "financial", "concentration", "performance",
-                        "privacy", "reputation", "exit"),
+    enums={"category": ("operational", "supplier", "continuity", "security", "compliance", "financial",
+                        "concentration", "performance", "privacy", "reputation", "exit"),
            "status": ("open", "in_treatment", "accepted", "closed"),
            "response_strategy": ("mitigate", "avoid", "transfer", "accept")})
 
@@ -97,6 +109,12 @@ def _risk_fields(db, data, current, principal):
                 raise ValueError
         except (TypeError, ValueError):
             raise crud.Invalid("Gözden geçirme tarihi YYYY-AA-GG olmalı") from None
+    if merged.get("engagement_id") and not merged.get("supplier_id"):
+        engagement = one(db, "SELECT supplier_id FROM tdr_engagements WHERE id=?", (merged["engagement_id"],))
+        if engagement:
+            data["supplier_id"] = engagement["supplier_id"]
+    if not merged.get("supplier_id") and not (merged.get("entity_name") or "").strip():
+        raise crud.Invalid("Tedarikçi seçin ya da etkilenen varlık / hizmeti yazın")
     if current is None:
         if merged.get("status", "open") in TERMINAL:
             raise crud.Invalid("Kabul veya kapanış için kayıtlı değerlendirme ve karar gerekli")

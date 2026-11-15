@@ -20,7 +20,7 @@ def describe(res, principal):
         if name in res.enums:
             item["options"] = [{"value": v, "label": choice(res.name, name, v)} for v in res.enums[name]]
         fields.append(item)
-    can_write = principal.role != "MACHINE" and principal.can(res.write)
+    can_write = authz.can_write(principal, res)
     return {"name": res.name, "label": res.label, "module": res.module, "api": list(res.api), "write": res.write,
             "can_write": can_write and ("create" in res.api or "update" in res.api),
             "search": list(res.search), "filters": sorted(res.filters), "unit_scoped": res.scope is not None,

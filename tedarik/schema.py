@@ -14,17 +14,17 @@ import re
 PREFIX = "tdr_"
 RESOURCES = {}
 AUTO = {"created_at", "updated_at"}
-KINDS = ("TEXT", "INTEGER", "REAL", "DECIMAL", "DATE", "TIMESTAMP")
+KINDS = ("TEXT", "INTEGER", "REAL", "DECIMAL", "DATE", "TIMESTAMP", "BLOB")
 _DEFINITION = re.compile(
-    r"^(?P<kind>TEXT|INTEGER|REAL|DECIMAL|DATE|TIMESTAMP)"
+    r"^(?P<kind>TEXT|INTEGER|REAL|DECIMAL|DATE|TIMESTAMP|BLOB)"
     r"(?P<not_null> NOT NULL)?"
     r"(?: DEFAULT (?P<default>'[^']*'|-?\d+(?:\.\d+)?))?"
     r"(?P<unique> UNIQUE)?"
     r"(?: REFERENCES (?P<ref>[a-z_]+)\(id\)(?P<cascade> ON DELETE CASCADE)?)?$")
 PG_TYPES = {"TEXT": "TEXT", "INTEGER": "BIGINT", "REAL": "DOUBLE PRECISION", "DECIMAL": "NUMERIC(18,2)",
-            "DATE": "DATE", "TIMESTAMP": "TIMESTAMPTZ"}
+            "DATE": "DATE", "TIMESTAMP": "TIMESTAMPTZ", "BLOB": "BYTEA"}
 SQLITE_TYPES = {"TEXT": "TEXT", "INTEGER": "INTEGER", "REAL": "REAL", "DECIMAL": "REAL",
-                "DATE": "TEXT", "TIMESTAMP": "TEXT"}
+                "DATE": "TEXT", "TIMESTAMP": "TEXT", "BLOB": "BLOB"}
 
 
 class Field:
@@ -66,7 +66,7 @@ def fk(resource, required=True, cascade=False):
 class Resource:
     def __init__(self, name, label, fields, *, module, enums=None, unique=(), search=("code", "name"),
                  write="manage", api=("list", "get", "create", "update"), readonly=(), filters=None,
-                 read_roles=None, machine="", immutable=False, indexes=()):
+                 read_roles=None, machine="", immutable=False, indexes=(), write_roles=None):
         self.name, self.label, self.fields, self.module = name, label, fields, module
         self.table = PREFIX + name
         self.columns = {f: Field(f, d) for f, d in fields.items()}
@@ -78,6 +78,7 @@ class Resource:
         self.readonly = set(readonly) | AUTO   # yalnızca sunucunun yazdığı alanlar
         self.filters = filters or {}    # ek liste filtreleri: ad -> SQL parçası (tek parametre)
         self.read_roles = read_roles    # None: tüm roller okur
+        self.write_roles = frozenset(write_roles) if write_roles else None   # verilirse seviye yerine bu roller yazar
         self.machine = machine          # MCP anahtarının erişimi: "", "r" veya "rw"
         self.immutable = immutable      # True: satır eklendikten sonra değiştirilemez, silinemez (tetikleyici)
         self.indexes = tuple(indexes)   # ek dizinler: sütun demetleri; yabancı anahtarlar kendiliğinden

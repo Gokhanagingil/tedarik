@@ -3,8 +3,8 @@ import os
 from pathlib import Path
 
 LOOPBACK = {"127.0.0.1", "::1", "localhost"}
-KNOWN_MODULES = ("core", "performance", "surveys", "risks", "transfer", "dashboard", "workflow", "sourcing")
-DEFAULT_MODULES = "core,performance,surveys,risks,transfer,dashboard"
+KNOWN_MODULES = ("core", "performance", "surveys", "risks", "grc", "transfer", "dashboard", "workflow", "sourcing")
+DEFAULT_MODULES = "core,performance,surveys,risks,grc,transfer,dashboard"
 AUTH_MODES = {"dev", "local", "entra"}
 
 

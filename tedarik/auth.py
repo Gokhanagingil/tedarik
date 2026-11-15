@@ -105,8 +105,17 @@ def check(principal, res, action):
         if res.read_roles and principal.role not in res.read_roles:
             raise Forbidden("Bu kaydı görüntüleme yetkiniz yok")
         return
-    if not principal.can(res.write):
+    if not can_write(principal, res):
         raise Forbidden("Bu işlem için yetkiniz yok")
+
+
+def can_write(principal, res):
+    """Rol listesi tanımlı kaynakta (ör. denetim kayıtları: Yönetici ve Denetçi) seviye yerine liste geçerlidir."""
+    if principal.role == "MACHINE":
+        return False
+    if res.write_roles is not None:
+        return principal.role in res.write_roles
+    return principal.can(res.write)
 
 
 def require(principal, need):

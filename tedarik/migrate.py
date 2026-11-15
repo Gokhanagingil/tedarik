@@ -16,8 +16,34 @@ from .schema import RESOURCES
 
 IMMUTABLE_MESSAGE = "Bu kayıt değiştirilemez ve silinemez (denetim kanıtı)"
 
-# (sıra, açıklama, işlev(db)). İlk sürümde veri dönüşümü yok; tablo yapısı bildirimsel eşitlemeden gelir.
-MIGRATIONS = []
+def _risk_supplier_optional(db):
+    """K-015: tek risk kaydı; tedarikçi bağı isteğe bağlı. Yalnızca NOT NULL kısıtı kalkar, veri değişmez.
+
+    SQLite'ta NOT NULL kaldırmak dosya biçimini etkilemez; şema metni yerinde güncellenir (SQLite belgesi,
+    "ALTER TABLE: Making Other Kinds Of Table Schema Changes"). PostgreSQL'de doğrudan ALTER COLUMN."""
+    if "supplier_id" not in db.columns("tdr_supplier_risks"):
+        return
+    if db.dialect == "postgres":
+        db.execute("ALTER TABLE tdr_supplier_risks ALTER COLUMN supplier_id DROP NOT NULL")
+        return
+    row = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tdr_supplier_risks'").fetchone()
+    old = "supplier_id INTEGER NOT NULL REFERENCES tdr_suppliers(id)"
+    if row is None or old not in row["sql"]:
+        return
+    version = db.execute("PRAGMA schema_version").fetchone()[0]
+    db.execute("PRAGMA writable_schema=ON")
+    db.execute("UPDATE sqlite_master SET sql=? WHERE type='table' AND name='tdr_supplier_risks'",
+               (row["sql"].replace(old, "supplier_id INTEGER REFERENCES tdr_suppliers(id)"),))
+    db.execute(f"PRAGMA schema_version={version + 1}")
+    db.execute("PRAGMA writable_schema=OFF")
+    if db.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+        raise RuntimeError("Risk kaydı göçünden sonra bütünlük denetimi başarısız")
+
+
+# (sıra, açıklama, işlev(db)). Tablo yapısı bildirimsel eşitlemeden gelir; burada yalnızca dönüşümler.
+MIGRATIONS = [
+    (1, "Tek risk kaydı: supplier_risks.supplier_id isteğe bağlı (K-015)", _risk_supplier_optional),
+]
 
 
 def _identity_ddl(dialect):
