@@ -63,7 +63,7 @@ jobs:
             \$S mkdir -p \$R && \$S chmod 0700 /opt/tedarik
             \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
             \$S ln -sfn \$R /opt/tedarik/current
-            cd /opt/tedarik/current && \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER sh deploy/deploy.sh"
+            \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER sh /opt/tedarik/current/deploy/deploy.sh"
       - name: Clean up key
         if: always()
         run: rm -f ~/.ssh/id_deploy
