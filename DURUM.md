@@ -259,6 +259,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Demo: KVKK (kapsamda) ve GDPR kurulu, eşleme, 4 kontrol maddelere bağlı, 5 değerlendirme (biri bulgu + DÖF); 6 yapay zekâ sistemi
     (sınırlı, asgari, yüksek risk, sınıflandırılmamış), 11 veri varlığı bağlantısı.
   - Testler: 186 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi mevzuat, yapay zekâ ve rol matrisi akışlarıyla.
+  - Test sunucusuna dağıtıldı (commit `9ec036e`, ardından `725a597`): demo verisine mevzuat ve yapay zekâ bölümleri eklendi; yeni
+    çoklu adres yapılandırmasıyla sertifika ve güvenlik başlıkları doğrulandı; canlı kabul testi 24/24 geçti (yeni senaryo: KVKK
+    skoru 40, 5 uyumsuz madde, 6 yapay zekâ sistemi, matriste 120 kaynak; KVKK boşluk analizi uzaktan 926 ms) — GitHub Actions
+    çalıştırmaları 43816656501 ve 43817393743 (2026-11-16); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
 - **Veri yönetişimi Faz 5 — veri kalitesi ve gözlenebilirlik (2026-11-16, K-032).**
   - *Kurallar:* zorunlu, benzersiz, aralık, desen, izin verilen değerler, referans bütünlüğü, tazelik, satır sayısı, biçim
     (T.C. kimlik, VKN, IBAN, e-posta, telefon, kart, IPv4) ve özel SQL; boyut, eşik, önem, sahip, isteğe bağlı GRC kontrolü.
