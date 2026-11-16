@@ -25,7 +25,7 @@ import urllib.request
 from datetime import date, datetime, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -464,7 +464,7 @@ def main():
         assert len(idx["guides"]) >= 15 and any(g["key"] == "goruntuleyici" and g["recommended"] for g in idx["guides"])
         g = viewer.ok("GET", "help/guide?key=kvkk")
         assert g["sections"] and g["blocks"]
-        hits = viewer.ok("GET", "help/search?q=geçici parola")["results"]
+        hits = viewer.ok("GET", "help/search?q=" + quote("geçici parola"))["results"]
         assert hits
         return f"{len(idx['guides'])} kılavuz, {len(idx['context'])} ekranda bağlama duyarlı yardım; arama {len(hits)} sonuç"
     check("Kullanım kılavuzu (görüntüleyici)", guides)
