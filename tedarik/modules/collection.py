@@ -51,6 +51,7 @@ COLLECTORS = Resource("data_collectors", "Toplayıcılar", {
     "code": "TEXT UNIQUE", "name": "TEXT NOT NULL", "source_id": fk("data_sources"),
     "connector": "TEXT NOT NULL DEFAULT 'postgresql'", "scope": "TEXT NOT NULL DEFAULT 'schemas'",
     "schedule": "TEXT NOT NULL DEFAULT 'daily'", "max_removal_pct": "INTEGER", "sample_rows": "INTEGER NOT NULL DEFAULT 0",
+    "profile_rows": "INTEGER NOT NULL DEFAULT 0",
     "description": "TEXT", "status": "TEXT NOT NULL DEFAULT 'active'", "key_hint": "TEXT", "key_created_at": "TIMESTAMP",
     "last_seen_at": "TIMESTAMP", "last_push_at": "TIMESTAMP", "last_result": "TEXT", "last_message": "TEXT",
     "client_version": "TEXT", "client_host": "TEXT", "overdue_notified_at": "TIMESTAMP", "revoked_at": "TIMESTAMP",
@@ -76,6 +77,8 @@ def _collector_rules(db, data, current, principal):
         raise crud.Invalid("Kaldırma eşiği 0 ile 100 arasında olmalı")
     if data.get("sample_rows") is not None and not 0 <= int(data["sample_rows"]) <= 10000:
         raise crud.Invalid("Örnek satır sayısı 0 ile 10.000 arasında olmalı")
+    if data.get("profile_rows") is not None and not 0 <= int(data["profile_rows"]) <= 100000:
+        raise crud.Invalid("Profil satır sayısı 0 ile 100.000 arasında olmalı")
     if current and current["status"] == "revoked":
         raise crud.Conflict("İptal edilmiş toplayıcı değiştirilemez; yeni toplayıcı ekleyin")
 
@@ -248,8 +251,11 @@ def collector_whoami(c):
     col = _machine(c)
     source = one(c.db, "SELECT id, code, name, platform, status FROM tdr_data_sources WHERE id=?", (col["source_id"],))
     c.db.execute("UPDATE tdr_data_collectors SET last_seen_at=? WHERE id=?", (utcnow(), col["id"]))
+    rules = one(c.db, """SELECT COUNT(*) AS n FROM tdr_dq_rules r JOIN tdr_data_tables t ON t.id=r.table_id WHERE t.source_id=?
+        AND r.status='active'""", (col["source_id"],))["n"]
     return {"collector": {"code": col["code"], "name": col["name"], "connector": col["connector"], "scope": col["scope"],
-                          "schedule": col["schedule"], "sample_rows": col["sample_rows"]},
+                          "schedule": col["schedule"], "sample_rows": col["sample_rows"], "profile_rows": col["profile_rows"]},
+            "quality": {"rules": rules, "profile_rows": col["profile_rows"]},
             "source": source, "format": "tedarik.catalog.v1", "max_upload_bytes": MAX_UPLOAD_BODY,
             "queries": [{"key": q["key"], "title": q["title"], "text": q["text"]} for q in QUERIES.get(source["platform"], [])
                         if q["kind"] == "sql"],
@@ -325,7 +331,7 @@ def collector_create(c):
     if source["status"] != "active":
         raise crud.Conflict("Kullanımdan kalkmış kaynağa toplayıcı eklenemez")
     data = {k: c.body.get(k) for k in ("name", "connector", "scope", "schedule", "max_removal_pct", "sample_rows",
-                                       "description") if c.body.get(k) not in (None, "")}
+                                       "profile_rows", "description") if c.body.get(k) not in (None, "")}
     data.setdefault("name", f"{source['name']} toplayıcısı")
     if data.get("connector") == "openlineage":
         data.setdefault("schedule", "manual")          # olaylar iş çalıştıkça gelir; beklenen sıklık yok
@@ -492,6 +498,7 @@ def download(c):
         z.writestr("__main__.py", "import sys\nfrom tdr_collector import main\nsys.exit(main())\n")
         z.write(base / "collector.py", "tdr_collector.py")
         z.write(base / "pii.py", "tdr_pii.py")
+        z.write(base / "dq_sql.py", "tdr_dq_sql.py")
     audit.log(c.db, c.principal, "DOWNLOAD", "data_collectors", 0, {"file": "tedarik-toplayici.pyz"})
     return 200, Raw(buf.getvalue(), "application/octet-stream", "tedarik-toplayici.pyz")
 

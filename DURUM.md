@@ -33,6 +33,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   tek seferlik gösterilen anahtar; bağlayıcı geliştirme kiti; gecikme/hata ve şema değişikliği bildirimi; toplu kaldırma eşiği (K-030).
 - Veri yönetişimi Faz 4: tablo/kolon düzeyi soy kütüğü (elle, Excel, dbt, OpenLineage), etki analizi ve planlanan değişiklik
   bildirimi, akış şeması, kişisel verinin soy kütüğü boyunca önerilmesi (K-031).
+- Veri yönetişimi Faz 5: kodsuz kalite kuralları toplayıcıyla kurum ağında çalışır (yalnızca sayılar; SQL toplayıcıda kurulur,
+  özel SQL yerel izinle), başarısızlık bulgu/DÖF veya GRC kontrol sonucu, profil, hacim anomalisi, skor kartı (K-032).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -228,6 +230,23 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
   - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
     çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Veri yönetişimi Faz 5 — veri kalitesi ve gözlenebilirlik (2026-11-16, K-032).**
+  - *Kurallar:* zorunlu, benzersiz, aralık, desen, izin verilen değerler, referans bütünlüğü, tazelik, satır sayısı, biçim
+    (T.C. kimlik, VKN, IBAN, e-posta, telefon, kart, IPv4) ve özel SQL; boyut, eşik, önem, sahip, isteğe bağlı GRC kontrolü.
+  - *Çalıştırma:* toplayıcı her gönderimde (veya `kalite` komutuyla) kuralları kurum ağında çalıştırır; SQL'i platformdan almaz,
+    `dq_sql` ile kendisi kurar (8 lehçe); biçim ve regex'siz lehçede desen değerleri yerelde sayılır; CSV klasöründe dosyada
+    değerlendirilir; özel SQL yalnızca yerel `allow_custom_sql` ile. Toplayıcı yoksa SQL ekranda, sonuç elle girilir.
+  - *GRC:* kontrole bağlı kural sistem kaynaklı kontrol sonucu yazar; değilse "veri kalitesi" bulgusu; yeni bulguda DÖF (sahip
+    yoksa kuralı tanımlayana); tekrarda bulgu sayacı artar; sahibe ve veri yöneticisine bildirim.
+  - *Profil ve öneri:* örnekte boş, farklı, uzunluk; hassas olmayan sayısal/tarih kolonda en küçük/en büyük; profil ve katalogdan
+    kural önerisi (tek tıkla ekle). *Hacim anomalisi:* izlenen tablolarda ortancadan sapma veya sıfıra düşme.
+  - *Ekranlar:* Veri Kalitesi panosu (skor kartı, boyutlar, 30 günlük eğilim, kaynak/veri alanı skorları, başarısız ve çalışmayan
+    kurallar, anomaliler), kural ekranı (durum, SQL, sonuç geçmişi, bulgu/DÖF), kural ekleme penceresi, tablo sayfasında kalite
+    bölümü (profil, öneriler, anomali), kolon panelinde profil; toplayıcıda profil ayarı.
+  - Demo: SAP ve veri ambarında 9 kural, 14 günlük sonuç geçmişi, başarısız kurallardan bulgu ve DÖF, mutabakat kontrolüne bağlı
+    kural, kolon profili, iki hacim anomalisi.
+  - Testler: 178 uçtan uca test (SQLite ve PostgreSQL 16; kural SQL'leri gerçek PostgreSQL'de çalıştırılır), tarayıcı duman testi
+    kalite akışıyla (kural → SQL → sonuç → bulgu/DÖF).
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
@@ -275,8 +294,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi Faz 5–6 yok:** veri kalitesi, mevzuat boşluk analizi, yapay zekâ yönetişimi (yol haritası uygulamada:
-  Yönetim → Yol Haritası). Soy kütüğünde SQL'den kolon çıkarımı (sqlglot onayı) ve Power BI rapor soy kütüğü (Scanner API) yok. Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
+- **Veri yönetişimi Faz 6 yok:** mevzuat boşluk analizi, yapay zekâ yönetişimi, GraphQL/olay kuyruğu (yol haritası uygulamada:
+  Yönetim → Yol Haritası). Kalite kuralları gerçek kurum kaynağında henüz çalıştırılmadı (SQLite, PostgreSQL ve CSV ile sınandı). Soy kütüğünde SQL'den kolon çıkarımı (sqlglot onayı) ve Power BI rapor soy kütüğü (Scanner API) yok. Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
   denenmedi (sentetik dosyalar, SQLite ve PostgreSQL ile test edildi). ServiceNow, Dynamics ve Power BI'ya doğrudan API bağlantısı yok.
 
 ## Sıradaki adımlar (sırayla)
@@ -298,8 +317,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 10d. ~~**Veri yönetişimi Faz 2 — KVKK ve sınıflandırma**~~ Tamamlandı (2026-11-15, K-029).
 10e. ~~**Veri yönetişimi Faz 3 — otomatik toplama**~~ Gökhan Bey'den bilgi beklemeyen kısmı tamamlandı (2026-11-15, K-030).
 10f. ~~**Veri yönetişimi Faz 4 — soy kütüğü ve etki analizi**~~ Bilgi/onay beklemeyen kısmı tamamlandı (2026-11-15, K-031).
-     Sıradaki: Faz 5 (profilleme, kalite kural motoru — başarısız kural bulgu/DÖF açar, skor kartları); toplayıcı aynı itme
-     modeliyle yalnızca istatistik gönderebilir.
+10g. ~~**Veri yönetişimi Faz 5 — veri kalitesi**~~ Tamamlandı (2026-11-16, K-032). Sıradaki: Faz 6 (KVKK/GDPR boşluk analizi —
+     kamuya açık tam metinler; yapay zekâ model envanteri ISO/IEC 42001 lisanslı metin, yapay zekâ önerileri anthropic onayı bekliyor).
      Eski not: kişisel veri keşfi (kolon adı sözlüğü, TCKN/VKN/IBAN/kart doğrulayıcıları;
      öneri → veri yöneticisi onayı), VERBİS uyumlu işleme envanteri (amaç, hukuki sebep, kategori, ilgili kişi grubu, alıcılar,
      yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim

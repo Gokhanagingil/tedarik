@@ -730,6 +730,7 @@ def apply_structure(db, source, catalog, *, scope="tables", dry_run=False, princ
     db.execute("UPDATE tdr_data_sources SET last_import_at=?, updated_at=? WHERE id=?", (now, now, sid))
     summary["import_id"] = import_id
     summary["notified"] = collection.notify_changes(db, source, import_id, changes) if changes else 0
+    quality.record_volumes(db, sid)
     return summary
 
 
@@ -1983,6 +1984,7 @@ def my_work_items(db, principal):
         status='approved' AND owner IN ({marks}) AND review_date <= ? ORDER BY review_date""", (*names, soon))
     out.update(privacy.my_work_items(db, principal))
     out.update(collection.my_work_items(db, principal, names))
+    out.update(quality.my_work_items(db, principal, names))
     return out
 
 
@@ -2013,7 +2015,7 @@ def health_checks(db, check, count, readable=lambda name: True):
               OR (pending_json IS NOT NULL AND pending_at < ?) ORDER BY code""", (stale, stale)), "glossary_terms",
               population=count(db, "SELECT COUNT(*) AS n FROM tdr_glossary_terms WHERE status<>'retired'")),
     ] + privacy.health_checks(db, check, count, readable) + collection.health_checks(db, check, count, readable) + \
-        lineage.health_checks(db, check, count, readable)
+        lineage.health_checks(db, check, count, readable) + quality.health_checks(db, check, count, readable)
 
 
 # ------------------------------------------------------------------ kayıt
@@ -2046,15 +2048,18 @@ def register(app):
     privacy.register(app)
     collection.register(app)
     lineage.register(app)
+    quality.register(app)
 
 
 def seed(db):
     privacy.seed(db)
     collection.seed(db)
+    quality.seed(db)
 
 
 # Aynı modülün parçaları; tanımlar yukarıdakilere dayanır. Faz 2: KVKK ve sınıflandırma, Faz 3: otomatik toplama,
-# Faz 4: soy kütüğü ve etki analizi.
+# Faz 4: soy kütüğü ve etki analizi, Faz 5: veri kalitesi.
 from . import privacy  # noqa: E402
 from . import collection  # noqa: E402
 from . import lineage  # noqa: E402
+from . import quality  # noqa: E402

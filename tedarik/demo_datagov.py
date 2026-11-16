@@ -310,7 +310,8 @@ def pbi_columns():
     return "\n".join(lines) + "\n"
 
 
-DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"), ("lineage", "datagov"))
+DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"), ("lineage", "datagov"),
+                    ("quality", "datagov"))
 
 
 class DatagovSections:
@@ -583,6 +584,74 @@ class DatagovSections:
                 db.execute("INSERT INTO tdr_control_processes (control_id, process_id) VALUES (?,?) ON CONFLICT DO NOTHING",
                            (control, process["id"]))
 
+    # -------------------------------------------------------------- veri kalitesi (K-032)
+    def quality(self):
+        """Kurallar, 14 günlük sonuç geçmişi (toplayıcı ve elle), son gün başarısız kurallardan bulgu ve DÖF, kontrole bağlı
+        kural, kolon profili ve bir hacim anomalisi. Sayılar sentetiktir."""
+        import random
+        from datetime import datetime, timedelta, timezone
+        from . import crud
+        from .modules import quality as Q
+        db = self.db
+        if one(db, "SELECT id FROM tdr_dq_rules LIMIT 1"):
+            return
+        Q.seed(db)
+        rnd = random.Random(32)
+        now = datetime.now(timezone.utc)
+        control = one(db, "SELECT id FROM tdr_controls WHERE name=?", ("Satış raporu ile ERP net satış mutabakatı",))
+        sap_col = one(db, "SELECT c.id FROM tdr_data_collectors c JOIN tdr_data_sources s ON s.id=c.source_id WHERE s.name=? "
+                          "AND c.connector<>'openlineage'", ("SAP S/4HANA Üretim",))
+        if sap_col:
+            db.execute("UPDATE tdr_data_collectors SET profile_rows=1000 WHERE id=?", (sap_col["id"],))
+
+        def find(source, table, column=None):
+            t = one(db, """SELECT t.*, s.id AS sid FROM tdr_data_tables t JOIN tdr_data_sources s ON s.id=t.source_id
+                WHERE s.name=? AND t.name=?""", (source, table))
+            c = one(db, "SELECT id FROM tdr_data_columns WHERE table_id=? AND name=?", (t["id"], column)) if t and column else None
+            return t, c
+        for source, table, column, kind, params, threshold, severity, owner, errors, linked in DQ_RULES:
+            t, c = find(source, table, column)
+            if not t or (column and not c):
+                continue
+            data = {"table_id": t["id"], "column_id": c["id"] if c else None, "rule_type": kind, "params_json": json.dumps(params),
+                    "threshold_pct": threshold, "severity": severity, "owner": owner, "status": "active",
+                    "control_id": control["id"] if linked and control else None}
+            if kind == "reference":
+                ref = one(db, """SELECT c.id FROM tdr_data_columns c JOIN tdr_data_tables t ON t.id=c.table_id
+                    WHERE t.source_id=? AND t.name='dim_musteri' AND c.name='musteri_key'""", (t["source_id"],))
+                data["ref_column_id"] = ref["id"] if ref else None
+            rid = crud.insert(db, Q.RULES, data, ADMIN)
+            rule = one(db, "SELECT * FROM tdr_dq_rules WHERE id=?", (rid,))
+            rows_total = int(t["row_count"] or 50000)
+            source_kind = "collector" if source == "SAP S/4HANA Üretim" and sap_col else "manual"
+            for back in range(13, -1, -1):
+                run_at = (now - timedelta(days=back, hours=rnd.randint(1, 5))).isoformat(timespec="seconds")
+                rule = one(db, "SELECT * FROM tdr_dq_rules WHERE id=?", (rid,))
+                if kind == "row_count":
+                    Q.record_result(db, rule, measured=rows_total if back else 640, source=source_kind, principal=ADMIN, run_at=run_at)
+                    continue
+                low, high = errors
+                rate = high if back == 0 else low * rnd.uniform(0.6, 1.2)
+                checked = int(rows_total * rnd.uniform(0.98, 1.0))
+                Q.record_result(db, rule, checked=checked, failed=int(checked * rate), source=source_kind, principal=ADMIN,
+                                collector_id=sap_col["id"] if source_kind == "collector" else None, run_at=run_at)
+        dim, _ = find("Kurumsal Veri Ambarı", "dim_musteri")
+        if dim:
+            stamp = (now - timedelta(hours=6)).isoformat(timespec="seconds")
+            for name, nulls, distinct, lo, hi, mn, mx in (("musteri_key", 0, 1000, 1, 6, "1", "47950"), ("musteri_no", 0, 1000, 10, 10, None, None),
+                                                         ("musteri_adi", 3, 994, 4, 62, None, None), ("sehir", 11, 74, 3, 14, None, None),
+                                                         ("vergi_no", 27, 973, 10, 11, None, None), ("segment", 140, 6, 3, 12, None, None)):
+                col = one(db, "SELECT id FROM tdr_data_columns WHERE table_id=? AND name=?", (dim["id"], name))
+                if col:
+                    db.execute("""INSERT INTO tdr_dq_profiles (table_id, column_id, sample_size, null_count, distinct_count, min_length,
+                        max_length, min_value, max_value, profiled_at) VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                               (dim["id"], col["id"], 1000, nulls, distinct, lo, hi, mn, mx, stamp))
+        fct, _ = find("Kurumsal Veri Ambarı", "fct_satis")
+        if fct:
+            for back in range(9, -1, -1):
+                n = 3100000 + (9 - back) * 4200 if back else 1240000
+                Q.add_volume(db, fct["id"], n, "catalog", (now - timedelta(days=back)).isoformat(timespec="seconds"))
+
     # -------------------------------------------------------------- KVKK ve sınıflandırma (K-029)
     def privacy(self):
         from . import crud
@@ -830,6 +899,21 @@ DWH_PBI = [("dim_musteri.musteri_key", "DimMusteri.MusteriKey"), ("dim_musteri.m
            ("dim_urun.urun_grubu", "DimUrun.UrunGrubu"), ("fct_satis.musteri_key", "FactSatis.MusteriKey"),
            ("fct_satis.urun_key", "FactSatis.UrunKey"), ("fct_satis.tarih", "FactSatis.Tarih"),
            ("fct_satis.net_tutar", "FactSatis.NetTutar"), ("fct_satis.miktar", "FactSatis.Miktar")]
+
+
+DQ_RULES = [  # (kaynak, tablo, kolon, tür, parametreler, eşik, önem, sahip, günlük hatalı oranı (son gün), kontrole bağlı)
+    ("SAP S/4HANA Üretim", "KNA1", "NAME1", "not_null", {"empty_is_null": True}, 100, "high", "deniz.koc", (0.0, 0.0), False),
+    ("SAP S/4HANA Üretim", "KNA1", "KUNNR", "unique", {}, 100, "critical", "deniz.koc", (0.0, 0.0), False),
+    ("SAP S/4HANA Üretim", "KNA1", "STCD1", "format", {"format": "vkn"}, 98, "high", "zeynep.demir", (0.012, 0.031), False),
+    ("SAP S/4HANA Üretim", "KNA1", "LAND1", "allowed_values", {"values": ["TR", "DE", "NL", "GB", "US", "AZ"]}, 99.5, "medium",
+     "deniz.koc", (0.001, 0.002), False),
+    ("Kurumsal Veri Ambarı", "dim_musteri", "vergi_no", "format", {"format": "vkn"}, 98, "high", "deniz.koc", (0.012, 0.031), False),
+    ("Kurumsal Veri Ambarı", "fct_satis", "net_tutar", "range", {"min": 0}, 99.9, "high", "kerem.aksoy", (0.0002, 0.0004), True),
+    ("Kurumsal Veri Ambarı", "fct_satis", "musteri_key", "reference", {}, 100, "critical", "deniz.koc", (0.0, 0.00002), False),
+    ("Kurumsal Veri Ambarı", "satis_ozet_aylik", None, "row_count", {"min_rows": 1000}, 100, "medium", "kerem.aksoy", None, False),
+    ("Pazarlama Dosya Paylaşımı", "kampanya_katilimcilari_2026.xlsx", "e_posta", "format", {"format": "email"}, 97, "medium",
+     None, (0.04, 0.06), False),
+]
 
 
 def RESOURCES_COLUMNS():

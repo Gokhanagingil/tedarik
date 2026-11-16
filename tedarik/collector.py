@@ -57,6 +57,10 @@ try:                                   # depodan çalışırken
     from tedarik import pii as _pii
 except ImportError:                    # .pyz içinden çalışırken
     import tdr_pii as _pii
+try:
+    from tedarik import dq_sql as _dq
+except ImportError:
+    import tdr_dq_sql as _dq
 
 VERSION = "1.0"
 FORMAT = "tedarik.catalog.v1"
@@ -96,6 +100,7 @@ class Connector:
     name = "base"
     description = ""
     options = {}
+    dialect = None                       # veri kalitesi SQL lehçesi (dq_sql); None: kurallar Python'da değerlendirilir
 
     def __init__(self, settings):
         self.settings = dict(settings or {})
@@ -106,6 +111,14 @@ class Connector:
 
     def sample(self, schema, name, limit):
         return None
+
+    def adapt(self, rule):
+        """Kural tanımını bağlayıcıya uyarlar (ör. SQLite'ta şema adı yoktur)."""
+        return rule
+
+    def query(self, sql, max_rows=1):
+        """Veri kalitesi sorgusu: (başlıklar, satırlar). Değerler yalnızca yerelde sayılır, gönderilmez."""
+        raise CollectorError(f"{self.name} bağlayıcısı veri kalitesi sorgusu çalıştıramaz; sonucu platformda elle girin")
 
     def export(self):
         self.tables = list(self.collect())
@@ -232,6 +245,16 @@ class PostgresConnector(Connector):
         self.conn.rollback()
         return headers, out
 
+    dialect = "postgres"
+
+    def query(self, sql, max_rows=1):
+        cur = self.connect().cursor()
+        try:
+            cur.execute(sql.replace("%", "%%"), ())
+            return [d[0] for d in cur.description], cur.fetchmany(int(max_rows))
+        finally:
+            self.conn.rollback()
+
     def close(self):
         if getattr(self, "conn", None) is not None:
             self.conn.close()
@@ -250,6 +273,7 @@ class SqliteConnector(Connector):
             if not path.is_file():
                 raise CollectorError(f"SQLite dosyası bulunamadı: {path}")
             self.conn = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)
+            self.conn.create_function("REGEXP", 2, lambda p, v: v is not None and re.search(p, str(v)) is not None)
         return self.conn
 
     def collect(self):
@@ -268,6 +292,15 @@ class SqliteConnector(Connector):
     def sample(self, schema, name, limit):
         cur = self.connect().execute(f"SELECT * FROM {_quote(name)} LIMIT ?", (int(limit),))   # nosec B608
         return [d[0] for d in cur.description], cur.fetchall()
+
+    dialect = "ansi"
+
+    def adapt(self, rule):
+        return {**rule, "schema": "", "ref_schema": ""}
+
+    def query(self, sql, max_rows=1):
+        cur = self.connect().execute(sql)
+        return [d[0] for d in cur.description], cur.fetchmany(int(max_rows))
 
     def close(self):
         if getattr(self, "conn", None) is not None:
@@ -305,7 +338,7 @@ class SqlConnector(Connector):
                 self.conn = driver.connect(**kwargs)
         return self.conn
 
-    def query(self):
+    def catalog_query(self):
         text = self.settings.get("query")
         if not text and self.settings.get("query_file"):
             text = Path(self.settings["query_file"]).expanduser().read_text(encoding="utf-8")
@@ -324,7 +357,7 @@ class SqlConnector(Connector):
 
     def export(self):
         cur = self.connect().cursor()
-        cur.execute(self.query())
+        cur.execute(self.catalog_query())
         headers = [str(d[0]) for d in cur.description]
         buf = io.StringIO()
         writer = csv.writer(buf, delimiter=";")
@@ -346,6 +379,11 @@ class SqlConnector(Connector):
             raise CollectorError("Katalog sorgusu satır döndürmedi; şema adlarını ve hesabın okuma yetkisini denetleyin")
         self.tables = [table(s, t) for s, t in seen]
         return f"{self.name}-{self.settings.get('preset') or 'sorgu'}.csv", buf.getvalue().encode("utf-8")
+
+    def query(self, sql, max_rows=1):
+        cur = self.connect().cursor()
+        cur.execute(sql)
+        return [str(d[0]) for d in cur.description], cur.fetchmany(int(max_rows))
 
     def sample(self, schema, name, limit):
         char = self.settings.get("quote") or '"'
@@ -434,6 +472,58 @@ class FilesConnector(Connector):
             yield table(schema, path.stem, object_type="file", columns=cols,
                         row_count=total if self.settings.get("row_counts", True) else None,
                         description=f"{path.name}")
+
+    def _all(self, schema, name):
+        path = getattr(self, "paths", {}).get((schema, name))
+        if not path:
+            raise CollectorError(f"Dosya bulunamadı: {schema}/{name}")
+        fh, reader = self._reader(path)
+        with fh:
+            headers = [h.strip() for h in next(reader, None) or []]
+            return headers, [row for row in reader]
+
+    def evaluate(self, rule):
+        """CSV dosyasında kuralı yerelde değerlendirir; yalnızca sayılar döner."""
+        headers, records = self._all(rule["schema"], rule["table"])
+        kind = rule["type"]
+        if kind == "row_count":
+            return {"measured": len(records)}
+        if kind == "custom_sql":
+            raise CollectorError("CSV klasöründe özel SQL kuralı çalışmaz")
+        lower = [h.lower() for h in headers]
+        if str(rule.get("column") or "").lower() not in lower:
+            raise CollectorError(f"Kolon dosyada yok: {rule.get('column')}")
+        i = lower.index(rule["column"].lower())
+        values = [(r[i].strip() if i < len(r) else "") for r in records]
+        filled = [v for v in values if v]
+        p = rule.get("params") or {}
+        if kind == "not_null":
+            return {"checked": len(values), "failed": len(values) - len(filled)}
+        if kind == "unique":
+            return {"checked": len(filled), "failed": len(filled) - len(set(filled))}
+        if kind == "freshness":
+            stamps = [v for v in filled if DATE.match(v[:10])]
+            return {"measured": max(stamps) if stamps else None}
+        if kind == "range":
+            def bad(v):
+                try:
+                    n = float(v.replace(",", "."))
+                except ValueError:
+                    return True
+                return (p.get("min") not in (None, "") and n < float(p["min"])) or (p.get("max") not in (None, "") and n > float(p["max"]))
+            return {"checked": len(filled), "failed": sum(1 for v in filled if bad(v))}
+        if kind == "allowed_values":
+            allowed = {str(v) for v in p.get("values") or []}
+            return {"checked": len(filled), "failed": sum(1 for v in filled if v not in allowed)}
+        if kind in ("pattern", "format"):
+            checked, failed = _dq.python_check(rule, filled, _pii)
+            return {"checked": checked, "failed": failed}
+        if kind == "reference":
+            ref_headers, ref_rows = self._all(rule.get("ref_schema") or rule["schema"], rule["ref_table"])
+            j = [h.lower() for h in ref_headers].index(str(rule["ref_column"]).lower())
+            known = {(r[j].strip() if j < len(r) else "") for r in ref_rows}
+            return {"checked": len(filled), "failed": sum(1 for v in filled if v not in known)}
+        raise CollectorError("Bilinmeyen kural türü")
 
     def sample(self, schema, name, limit):
         path = getattr(self, "paths", {}).get((schema, name))
@@ -596,6 +686,117 @@ def describe(result):
     return text
 
 
+def _plain(value):
+    """Ölçüm değerini JSON'a uygun düz metne/sayıya çevirir."""
+    if value is None or isinstance(value, (int, float, str)):
+        return value
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+NUMBER = re.compile(r"^-?\d+([.,]\d+)?$")
+
+
+def profile_columns(headers, records, sensitive):
+    """Örnekten kolon istatistiği: boş, farklı değer, uzunluk; hassas olmayan sayısal/tarih kolonda en küçük/en büyük."""
+    out = {}
+    for i, h in enumerate(headers):
+        name = str(h)
+        nulls, seen, lengths, nums, dates, numeric, datelike = 0, set(), [], [], [], True, True
+        for row in records:
+            v = row[i] if i < len(row) else None
+            if v is None or (isinstance(v, str) and not v.strip()):
+                nulls += 1
+                continue
+            text = str(v).strip() if not hasattr(v, "isoformat") else v.isoformat()
+            seen.add(text[:200])
+            lengths.append(len(text))
+            if isinstance(v, bool):
+                numeric = datelike = False
+            elif isinstance(v, (int, float)) or (not isinstance(v, str) and type(v).__name__ == "Decimal"):
+                nums.append(float(v))
+                datelike = False
+            elif hasattr(v, "isoformat"):
+                dates.append(text)
+                numeric = False
+            elif NUMBER.match(text):
+                nums.append(float(text.replace(",", ".")))
+                datelike = False
+            elif DATE.match(text[:10]) and text[:4].isdigit():
+                dates.append(text)
+                numeric = False
+            else:
+                numeric = datelike = False
+        stat = {"nulls": nulls, "distinct": len(seen), "min_len": min(lengths) if lengths else None,
+                "max_len": max(lengths) if lengths else None}
+        if name.lower() not in sensitive:
+            if numeric and nums:
+                stat.update(min=min(nums), max=max(nums))
+            elif datelike and dates:
+                stat.update(min=min(dates), max=max(dates))
+        out[name] = stat
+    return out
+
+
+def run_quality(cfg, client, conn, info=None, out=print):
+    """Platformdaki kuralları kurum ağında çalıştırır; yalnızca sayıları ve profil istatistiklerini gönderir."""
+    plan = client.get("quality")
+    dialect = getattr(conn, "dialect", None)
+    if isinstance(conn, SqlConnector):
+        dialect = conn.settings.get("dialect") or plan.get("dialect") or "ansi"
+    results = []
+    for rule in plan.get("rules") or []:
+        item = {"rule": rule["code"]}
+        try:
+            rule = conn.adapt(rule)
+            if rule["type"] == "custom_sql" and not cfg.get("allow_custom_sql"):
+                raise CollectorError("Özel SQL kuralı bu toplayıcıda kapalı; ayar dosyasına \"allow_custom_sql\": true ekleyin")
+            if dialect is None:
+                item.update(conn.evaluate(rule))
+            else:
+                sql, mode = _dq.build(rule, dialect)
+                if mode == "python":
+                    limit = int((rule.get("params") or {}).get("max_rows") or 200000)
+                    headers, records = conn.query(sql, limit)
+                    checked, failed = _dq.python_check(rule, (r[0] for r in records), _pii)
+                    item.update(checked=checked, failed=failed)
+                else:
+                    headers, records = conn.query(sql, 1)
+                    row = dict(zip([str(h).lower() for h in headers], records[0] if records else []))
+                    if mode == "measured":
+                        item["measured"] = _plain(row.get("measured"))
+                    else:
+                        item.update(checked=int(row.get("checked") or 0), failed=int(row.get("failed") or 0))
+            if "measured" in item:
+                item["measured"] = _plain(item["measured"])
+        except Exception as exc:   # noqa: BLE001 - tek kuralın hatası diğerlerini durdurmaz; platformda "çalışmadı" olur
+            item = {"rule": rule["code"], "error": str(exc)[:400] if isinstance(exc, (CollectorError, _dq.RuleError))
+                    else f"{type(exc).__name__}: {str(exc)[:300]}"}
+        results.append(item)
+    profiles = []
+    rows_n = int((plan.get("profile") or {}).get("rows") or 0)
+    sensitive_all = set(plan.get("sensitive") or [])
+    for t in (plan.get("profile") or {}).get("tables") or [] if rows_n else []:
+        try:
+            got = conn.sample(t["schema"], t["table"], rows_n)
+        except Exception:   # noqa: BLE001 - okunamayan tablo atlanır
+            continue
+        if not got:
+            continue
+        headers, records = got
+        prefix = f"{(t['schema'] or '').lower()}.{t['table'].lower()}."
+        sensitive = {k[len(prefix):] for k in sensitive_all if k.startswith(prefix)}
+        profiles.append({"schema": t["schema"], "table": t["table"], "sample_size": len(records),
+                         "columns": profile_columns([str(h) for h in headers], records, sensitive)})
+    if not results and not profiles:
+        return None
+    r = client.post("quality", {"results": results, "profiles": profiles, "client": client_info(conn.name)})
+    out(f"Kalite: {len(results)} kural (geçti {r.get('pass', 0)}, başarısız {r.get('fail', 0)}, çalışmadı {r.get('error', 0)}); "
+        f"{r.get('profiles', 0)} tablo profillendi")
+    return r
+
+
 def report(client, exc, name):
     """Yerel hatayı platforma bildirir (teknik sorumluya iletilir); bildirilemezse sessizce geçer."""
     try:
@@ -613,29 +814,33 @@ def push(cfg, client, preview=False, out=print):
         report(client, exc, name)
         raise
     try:
-        filename, raw = conn.export()
-        limit = int(cfg["sample_rows"] if cfg.get("sample_rows") is not None else info["collector"].get("sample_rows") or 0)
-        stats, skipped = sample_stats(conn, limit) if limit and not preview else ([], 0)
-    except CollectorError as exc:
-        report(client, exc, name)
-        raise
-    except Exception as exc:   # noqa: BLE001 - kaynak sürücüsünün hatası platforma da bildirilir
-        error = CollectorError(f"Kaynaktan okunamadı: {type(exc).__name__}: {str(exc)[:300]}")
-        report(client, error, name)
-        raise error from None
+        try:
+            filename, raw = conn.export()
+            limit = int(cfg["sample_rows"] if cfg.get("sample_rows") is not None else info["collector"].get("sample_rows") or 0)
+            stats, skipped = sample_stats(conn, limit) if limit and not preview else ([], 0)
+        except CollectorError as exc:
+            report(client, exc, name)
+            raise
+        except Exception as exc:   # noqa: BLE001 - kaynak sürücüsünün hatası platforma da bildirilir
+            error = CollectorError(f"Kaynaktan okunamadı: {type(exc).__name__}: {str(exc)[:300]}")
+            report(client, error, name)
+            raise error from None
+        body = {**encode(filename, raw), "dry_run": bool(preview), "client": client_info(conn.name), "sample_stats": stats}
+        if cfg.get("scope"):
+            body["scope"] = cfg["scope"]
+        if cfg.get("default_schema"):
+            body["default_schema"] = cfg["default_schema"]
+        result = client.post("catalog", body)
+        head = "Ön izleme (veri yazılmadı)" if preview else "Gönderildi"
+        out(f"{head}: {info['source']['name']} — {describe(result)}")
+        if skipped:
+            out(f"Uyarı: {skipped} tablonun örneği okunamadı (yetki veya tip); yapı yine de gönderildi.")
+        quality = info.get("quality") or {}
+        if not preview and (quality.get("rules") or quality.get("profile_rows")):
+            run_quality(cfg, client, conn, info, out)
+        return result
     finally:
         conn.close()
-    body = {**encode(filename, raw), "dry_run": bool(preview), "client": client_info(conn.name), "sample_stats": stats}
-    if cfg.get("scope"):
-        body["scope"] = cfg["scope"]
-    if cfg.get("default_schema"):
-        body["default_schema"] = cfg["default_schema"]
-    result = client.post("catalog", body)
-    head = "Ön izleme (veri yazılmadı)" if preview else "Gönderildi"
-    out(f"{head}: {info['source']['name']} — {describe(result)}")
-    if skipped:
-        out(f"Uyarı: {skipped} tablonun örneği okunamadı (yetki veya tip); yapı yine de gönderildi.")
-    return result
 
 
 def push_file(cfg, client, path, preview=False, out=print):
@@ -683,7 +888,8 @@ def main(argv=None, client=None, out=print):
     for name, aliases, text in (("dene", ["check"], "Platform ve kaynak bağlantısını sınar"),
                                 ("topla", ["collect"], "Meta veriyi toplar, dosyaya yazar; göndermez"),
                                 ("gonder", ["push"], "Toplar ve platforma gönderir"),
-                                ("dosya-gonder", ["push-file"], "Hazır dışa aktarım dosyasını gönderir")):
+                                ("dosya-gonder", ["push-file"], "Hazır dışa aktarım dosyasını gönderir"),
+                                ("kalite", ["quality"], "Veri kalitesi kurallarını ve profili çalıştırır (yalnızca sayılar gider)")):
         p = sub.add_parser(name, aliases=aliases, help=text)
         p.add_argument("--ayar", "--config", dest="config", required=True, help="Ayar dosyası (JSON)")
         p.add_argument("--eklenti", "--plugin", dest="plugins", action="append", default=[], help="Bağlayıcı eklentisi (.py)")
@@ -742,6 +948,16 @@ def main(argv=None, client=None, out=print):
             return 0
         if args.command in ("dosya-gonder", "push-file"):
             push_file(cfg, client, args.dosya, args.preview, out)
+            return 0
+        if args.command in ("kalite", "quality"):
+            info = client.get("whoami")
+            conn = make_connector(cfg, info)
+            try:
+                conn.export()                    # dosya yolları ve tablo listesi
+                if run_quality(cfg, client, conn, info, out) is None:
+                    out("Bu kaynak için etkin kalite kuralı veya profil ayarı yok.")
+            finally:
+                conn.close()
             return 0
     except CollectorError as exc:
         print(f"Hata: {exc}", file=_STDERR)

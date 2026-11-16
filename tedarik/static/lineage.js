@@ -7,6 +7,8 @@ const LIN = {
   kindTone: {direct: 'neutral', transform: 'purple', aggregate: 'warn', indirect: 'neutral', other: 'neutral'},
   stateTone: {COMPLETE: 'good', RUNNING: 'neutral', START: 'neutral', FAIL: 'bad', ABORT: 'warn', OTHER: 'neutral'},
 };
+/** replaceChildren boş (null) çocukları metin olarak yazar; bu yardımcı onları atlar. */
+function fillEl(el, ...kids) { el.replaceChildren(...kids.flat().filter(k => k !== null && k !== undefined && k !== false)); }
 const linKind = k => pill(META.option('lineage_edges', 'kind', k), LIN.kindTone[k] || 'neutral');
 const linEnd = (table, schema, column, system) => [system, dgPath(schema, table) + (column ? '.' + column : '')].filter(Boolean).join(' / ');
 
@@ -218,7 +220,7 @@ PAGES.flow = async function flowPage(parts, params) {
     const x1 = a.x + FLOW.w, y1 = a.y + FLOW.h / 2, x2 = b.x, y2 = b.y + FLOW.h / 2, mx = (x1 + x2) / 2;
     const path = s('path', {d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`, class: 'flow-link' + (l.kinds.every(k => k === 'indirect') ? ' indirect' : '') + (l.table_level ? '' : ' column'), tabindex: '0'},
       s('title', {}, `${nodeOf[l.from].name} → ${nodeOf[l.to].name}: ${l.columns.length ? l.columns.length + ' kolon eşlemesi' : 'tablo düzeyi'}${l.jobs.length ? ' · ' + l.jobs.join(', ') : ''}`));
-    const showLink = () => detail.replaceChildren(h('h3', {text: `${nodeOf[l.from].name} → ${nodeOf[l.to].name}`}),
+    const showLink = () => fillEl(detail, h('h3', {text: `${nodeOf[l.from].name} → ${nodeOf[l.to].name}`}),
       h('div', {class: 'chips'}, l.kinds.map(linKind), l.table_level ? pill('Tablo düzeyi', 'neutral') : null),
       l.jobs.length ? h('p', {class: 'small', text: 'Veri akış işi: ' + l.jobs.join(', ')}) : null,
       l.columns.length ? h('ul', {class: 'mini plain'}, l.columns.map(c => h('li', {class: 'small', text: `${c.from} → ${c.to} (${META.option('lineage_edges', 'kind', c.kind)})`}))) : null);
@@ -238,7 +240,7 @@ PAGES.flow = async function flowPage(parts, params) {
       s('text', {x: 12, y: 36, class: 'fn-sub'}, sub.length > 31 ? sub.slice(0, 30) + '…' : sub),
       cols ? s('text', {x: 12, y: 50, class: 'fn-cols'}, cols.length > 33 ? cols.slice(0, 32) + '…' : cols) : null,
       n.personal ? s('circle', {cx: FLOW.w - 14, cy: 14, r: 5, class: 'fn-dot'}) : null);
-    const showNode = () => detail.replaceChildren(h('h3', {text: n.business_name ? `${n.name} — ${n.business_name}` : n.name}),
+    const showNode = () => fillEl(detail, h('h3', {text: n.business_name ? `${n.name} — ${n.business_name}` : n.name}),
       kv([['Sistem', n.source], ['Tür', META.option('data_tables', 'object_type', n.object_type)], ['Konum', n.level < 0 ? `${-n.level} adım yukarı akışta` : n.level > 0 ? `${n.level} adım aşağı akışta` : 'Odak'],
         ['Veri sahibi', n.owner || '—'], n.columns ? ['Etkilenen kolonlar', n.columns.join(', ')] : null, n.personal ? ['Kişisel veri', `${n.personal} kolon${n.special ? `, ${n.special} özel nitelikli` : ''}`] : null]),
       h('div', {class: 'toolbar'}, btn('Tabloya git', () => Router.go('catalog/table/' + n.id), 'secondary small'), n.id !== tid ? btn('Bu tabloya odaklan', () => Router.go(`flow/${n.id}?d=${depth}`), 'ghost small') : null,

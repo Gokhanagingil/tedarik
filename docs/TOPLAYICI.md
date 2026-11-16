@@ -34,6 +34,7 @@ gönderir. Platform kaynağa bağlanmaz; kaynağın parolası platformda tutulma
 | `topla --ayar A --cikti katalog.json` | Gönderilecek dosyayı yalnızca yerelde yazar (gözden geçirme) |
 | `gonder --ayar A [--on-izleme]` | Toplar ve gönderir; ön izleme veri yazmaz |
 | `dosya-gonder --ayar A dosya` | Kaynağın kendi dışa aktarımını (CSV, Excel, JSON) gönderir |
+| `kalite --ayar A` | Veri kalitesi kurallarını ve profili çalıştırır; yalnızca sayılar gider (`gonder` de etkin kural varsa çalıştırır) |
 | `baglayicilar` | Bağlayıcıları ve ayarlarını listeler |
 | `ornek-ayar [bağlayıcı]` | Örnek ayar dosyası yazar |
 
@@ -61,6 +62,7 @@ gönderir. Platform kaynağa bağlanmaz; kaynağın parolası platformda tutulma
 | `plugins` | Kurumun bağlayıcı dosyaları (`--eklenti` ile de verilir) |
 | `ca_file` | Kurum içi sertifika otoritesi kullanılıyorsa CA dosyası |
 | `scope`, `sample_rows`, `default_schema` | İsteğe bağlı yerel geçersiz kılma; normalde platformdaki toplayıcı kaydından gelir |
+| `allow_custom_sql` | `true` ise platformda tanımlı özel SQL kalite kuralları çalışır (varsayılan kapalı) |
 
 ### Yerleşik bağlayıcılar
 
@@ -164,6 +166,15 @@ python3 tedarik-toplayici.pyz gonder --ayar toplayici.json --eklenti envanter.py
 `object_type`: `table`, `view`, `entity`, `semantic_model`, `report`, `file`, `collection`, `other`. Aynı sözleşme
 kaynağın ekranından dosya olarak da yüklenebilir.
 
+## Veri kalitesi (K-032)
+
+Platformda tanımlı kalite kuralları her `gonder` çalışmasında (veya `kalite` komutuyla) kurum ağında çalışır. Toplayıcı
+sorguyu platformdan almaz; kural tanımından (tür, tablo, kolon, parametre) kendisi kurar ve platforma yalnızca kontrol
+edilen ve hatalı satır sayısını veya tek bir ölçümü (en yeni kayıt zamanı, satır sayısı) gönderir. Biçim (T.C. kimlik, IBAN,
+e-posta …) ve düzenli ifadesi olmayan lehçelerde desen denetimi değerleri yerelde sayar. Özel SQL kuralı yalnızca ayar
+dosyasında `"allow_custom_sql": true` varsa çalışır. Profil açıksa (toplayıcı kaydında "profil satırı") tablo başına sınırlı
+örnekte boş, farklı değer ve uzunluk sayılır; değer listesi gönderilmez.
+
 ## OpenLineage alıcısı (K-031)
 
 Soy kütüğü olayları için program kurulmaz: toplayıcı eklerken "OpenLineage alıcısı" seçilir, anahtar Airflow, Spark, dbt
@@ -189,6 +200,8 @@ yalnızca veri seti adları ve kolon eşlemesi (`columnLineage`) saklanır.
 | `GET /api/tdr/collector/whoami` | Toplayıcı, kaynak, merkezî ayarlar ve kaynağın hazır sorguları |
 | `POST /api/tdr/collector/catalog` | `{filename, content_base64, compressed: "gzip", scope?, dry_run?, sample_stats?, client}` |
 | `POST /api/tdr/collector/status` | `{result: "error", message, client}`: yerel hatayı bildirir |
+| `GET /api/tdr/collector/quality` | Kaynağın etkin kalite kuralları (tanım), profil planı ve hassas kolonlar |
+| `POST /api/tdr/collector/quality` | `{results: [{rule, checked, failed, measured, error}], profiles: [...]}` |
 | `POST /api/tdr/collector/openlineage` | OpenLineage RunEvent (veya `{events: [...]}`); yalnızca OpenLineage alıcısı türündeki toplayıcı |
 
 Gövde en çok 18 MB'tır (sıkıştırılmış katalog ~13 MB). Daha büyük kaynakları şemalara bölüp birden çok toplayıcı tanımlayın.

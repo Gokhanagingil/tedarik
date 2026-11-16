@@ -461,3 +461,7 @@ ul.mini li strong,ul.mini li a{overflow-wrap:anywhere}
 .flow-detail{min-height:60px}
 .lin-panel .choice-group{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;margin:4px 0 8px}
 .flow-detail .toolbar,.lin-panel .panel-title .toolbar{justify-content:flex-start;margin:10px 0 0}
+/* Veri kalitesi (K-032) */
+.dq-spark{display:block;margin-top:6px}.dq-line{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}.dq-dot{fill:var(--accent)}
+.dq-trend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--stroke)}
+.dq-params{display:grid;gap:4px}.dq-panel .panel-title .toolbar{justify-content:flex-start;margin:0}

@@ -90,12 +90,12 @@
     {"key": "dg.4.privacy", "module": "datagov", "phase": 4, "status": "done", "decision": "K-031", "completed_on": "2026-11-15",
      "title": "Kişisel verinin soy kütüğü boyunca izlenmesi", "description": "Kategorisi belli kolondan doğrudan veya dönüşümle beslenen kolon, keşifte aynı kategoride önerilir (veri yöneticisi onaylar)."},
 
-    {"key": "dg.5.profiling", "module": "datagov", "phase": 5, "status": "planned",
-     "title": "Profilleme", "description": "Boş oranı, eşsizlik, en küçük/en büyük, dağılım; yalnızca istatistik platforma gelir."},
-    {"key": "dg.5.rules", "module": "datagov", "phase": 5, "status": "planned",
-     "title": "Kalite kural motoru", "description": "Kodsuz şablonlar (zorunlu, benzersiz, aralık, desen, referans bütünlüğü, tazelik) ve SQL kuralı; kural otomatik kontroldür, başarısızlık bulgu ve DÖF açar."},
-    {"key": "dg.5.scorecards", "module": "datagov", "phase": 5, "status": "planned",
-     "title": "Kalite skor kartları ve anomali", "description": "Tamlık, geçerlilik, tutarlılık, güncellik ve benzersizlik boyutları; hacim ve tazelik anomalisi."},
+    {"key": "dg.5.profiling", "module": "datagov", "phase": 5, "status": "done", "decision": "K-032", "completed_on": "2026-11-16",
+     "title": "Profilleme", "description": "Toplayıcı tablo başına sınırlı örnekte boş, farklı değer ve uzunluk istatistiği hesaplar; kişisel veya gizli olmayan sayısal/tarih kolonlarda en küçük ve en büyük değer de gider. Değer listesi ve dağılım gönderilmez. Profilden kural önerilir (tek tıkla eklenir)."},
+    {"key": "dg.5.rules", "module": "datagov", "phase": 5, "status": "done", "decision": "K-032", "completed_on": "2026-11-16",
+     "title": "Kalite kural motoru", "description": "Kodsuz şablonlar (zorunlu, benzersiz, aralık, desen, izin verilen değerler, referans bütünlüğü, tazelik, satır sayısı, biçim: T.C. kimlik/VKN/IBAN/e-posta/telefon/kart/IPv4) ve özel SQL; kurallar toplayıcıyla kurum ağında çalışır, yalnızca sayılar gelir; toplayıcı yoksa SQL gösterilir, sonuç elle girilir. Başarısız kural bulgu ve DÖF açar, tekrarda bulgu sayacı artar; GRC kontrolüne bağlı kural kontrol sonucu yazar."},
+    {"key": "dg.5.scorecards", "module": "datagov", "phase": 5, "status": "done", "decision": "K-032", "completed_on": "2026-11-16",
+     "title": "Kalite skor kartları ve anomali", "description": "Tamlık, geçerlilik, benzersizlik, tutarlılık ve güncellik boyutlarında önem ağırlıklı skor; kaynak, veri alanı ve tablo bazında; 30 günlük eğilim. Hacim anomalisi (satır sayısı geçmiş ortancadan sapma veya sıfıra düşme) ve tazelik kuralı."},
 
     {"key": "dg.6.gap", "module": "datagov", "phase": 6, "status": "planned",
      "title": "KVKK ve GDPR boşluk analizi", "description": "Kamuya açık tam metinler kütüphanede; maddeler veri varlıklarına ve kontrollere bağlanır."},

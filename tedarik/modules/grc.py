@@ -196,7 +196,7 @@ FINDINGS = Resource("findings", "Bulgular", {
     enums={"severity": ("low", "medium", "high", "critical"),
            "response_status": ("pending", "agreed", "partially_agreed", "disagreed"),
            "status": ("open", "in_progress", "closed", "accepted"),
-           "source": ("audit", "control_test", "exercise", "self_assessment", "external", "incident")})
+           "source": ("audit", "control_test", "exercise", "self_assessment", "external", "incident", "data_quality")})
 
 ACTIONS = Resource("grc_actions", "Düzeltici Faaliyetler", {
     "code": "TEXT UNIQUE", "title": "TEXT NOT NULL", "finding_id": fk("findings", False),

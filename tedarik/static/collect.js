@@ -41,12 +41,13 @@ function collectorDialog(s) {
   const scope = h('select', {id: 'tplScope'}, [['schemas', 'Gönderilen şemaların tamamı (önerilen)'], ['full', 'Kaynağın tamamı'], ['tables', 'Yalnızca gönderilen tablolar']]
     .map(([v, t]) => h('option', {value: v, text: t})));
   const sample = h('input', {type: 'number', id: 'tplSample', min: 0, max: 10000, step: 100, value: 0});
+  const profile = h('input', {type: 'number', id: 'tplProfile', min: 0, max: 100000, step: 100, value: 1000});
   const error = h('div', {class: 'notice bad hidden', role: 'alert'});
   const save = async () => {
     const connector = (document.querySelector('input[name=tplConnector]:checked') || {}).value;
     try {
       const r = await api(`data_sources/${s.id}/collectors`, {method: 'POST', body: {name: name.value.trim(), connector, schedule: connector === 'openlineage' ? 'manual' : schedule.value, scope: scope.value,
-        sample_rows: Number(sample.value || 0)}});
+        sample_rows: Number(sample.value || 0), profile_rows: Number(profile.value || 0)}});
       // Ekran değişince açık pencere kapanır: anahtar, toplayıcı ekranı çizildikten sonra gösterilir.
       COLLECT.pending = {id: r.collector.id, col: r.collector, key: r.key, title: 'Toplayıcı oluşturuldu'};
       Modal.close(); invalidate('data_collectors'); Router.go('collector/' + r.collector.id);
@@ -62,7 +63,9 @@ function collectorDialog(s) {
       h('label', {class: 'field', for: 'tplScope'}, h('span', {text: 'Kapsam'}), h('div', {class: 'control'}, scope))),
     h('p', {class: 'small muted', text: 'Sıklık, toplayıcının kurum tarafında zamanlanacağı aralıktır; platform bu sürede gönderim gelmezse teknik sorumluya bildirir. Kapsamdaki tablo gönderimde yoksa "kaynakta kaldırıldı" olur (silinmez); gönderim etkin tabloların %30\'undan fazlasını kaldıracaksa reddedilir.'}),
     h('label', {class: 'field', for: 'tplSample'}, h('span', {text: 'Örnek doğrulama (tablo başına satır, 0: kapalı)'}), h('div', {class: 'control'}, sample)),
-    h('p', {class: 'small muted', text: 'Açıksa toplayıcı her tablodan bu kadar satırı yerelde okur; T.C. kimlik, IBAN, kart, e-posta, telefon ve IP doğrulayıcılarını çalıştırır ve platforma yalnızca sayıları gönderir. Değerler ağdan çıkmaz.'})),
+    h('p', {class: 'small muted', text: 'Açıksa toplayıcı her tablodan bu kadar satırı yerelde okur; T.C. kimlik, IBAN, kart, e-posta, telefon ve IP doğrulayıcılarını çalıştırır ve platforma yalnızca sayıları gönderir. Değerler ağdan çıkmaz.'}),
+    h('label', {class: 'field', for: 'tplProfile'}, h('span', {text: 'Veri kalitesi profili (tablo başına satır, 0: kapalı)'}), h('div', {class: 'control'}, profile)),
+    h('p', {class: 'small muted', text: 'Profil boş oranı, farklı değer sayısı ve uzunluğu gönderir; kişisel veya gizli olmayan sayısal/tarih kolonlarda en küçük ve en büyük değer de gider. Veri kalitesi kuralları her çalışmada ayrıca çalışır.'})),
   [btn('Vazgeç', () => Modal.close(), 'secondary'), btn('Oluştur ve anahtarı göster', save)], true);
 }
 function keyDialog(col, key, title) {
@@ -106,7 +109,7 @@ PAGES.collector = async function collectorPage(parts) {
   };
   setPage(c.name, `${c.code} · ${c.source.name} · ${META.option('data_collectors', 'connector', c.connector)}`, [
     c.connector !== 'openlineage' ? btn('Toplayıcıyı indir (.pyz)', downloadCollector, 'secondary') : null,
-    c.can_manage && active ? btn('Düzenle', () => recordForm('data_collectors', c, {only: ['name', 'schedule', 'scope', 'sample_rows', 'max_removal_pct', 'connector', 'description'], onsaved: reload}), 'ghost') : null,
+    c.can_manage && active ? btn('Düzenle', () => recordForm('data_collectors', c, {only: ['name', 'schedule', 'scope', 'sample_rows', 'profile_rows', 'max_removal_pct', 'connector', 'description'], onsaved: reload}), 'ghost') : null,
     c.can_manage && active ? btn('Anahtarı yenile', rotate, 'ghost') : null,
     c.can_manage && active ? btn('İptal et', revoke, 'ghost') : null], [['Veri Yönetişimi', 'datagov'], ['Toplayıcılar', 'collectors'], [c.source.name, 'datasource/' + c.source.id]]);
   const st = c.state;
@@ -121,6 +124,7 @@ PAGES.collector = async function collectorPage(parts) {
     ['Bağlayıcı', META.option('data_collectors', 'connector', c.connector)], ['Beklenen sıklık', META.option('data_collectors', 'schedule', c.schedule)],
     ['Kapsam', META.option('data_collectors', 'scope', c.scope)],
     ['Örnek doğrulama', c.sample_rows ? `Tablo başına ${fmt.num(c.sample_rows)} satır yerelde; yalnızca sayılar gönderilir` : 'Kapalı'],
+    ['Kalite profili', c.profile_rows ? `Tablo başına ${fmt.num(c.profile_rows)} satırlık örnek; yalnızca istatistik` : 'Kapalı'],
     ['Kaldırma eşiği', c.max_removal_pct === null || c.max_removal_pct === undefined ? `%${c.removal_default} (politika)` : `%${c.max_removal_pct}`],
     ['Anahtar', `${c.key_hint || '—'} · ${fmt.datetime(c.key_created_at)}`], ['Teknik sorumlu', personText(c.source.custodian)]]);
   const su = c.setup;

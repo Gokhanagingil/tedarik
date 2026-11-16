@@ -297,7 +297,7 @@ CHOICES = {
     "bc_exercises.status": {"planned": "Planlandı", "completed": "Tamamlandı", "cancelled": "İptal"},
     "findings.source": {"audit": "Denetim", "control_test": "Kontrol testi", "exercise": "Tatbikat",
                         "self_assessment": "Öz değerlendirme", "external": "Dış denetim / düzenleyici",
-                        "incident": "Olay"},
+                        "incident": "Olay", "data_quality": "Veri kalitesi kuralı"},
     "outcome": {"successful": "Başarılı", "partially_successful": "Kısmen başarılı", "failed": "Başarısız"},
     "kris.direction": {"higher_worse": "Yüksek değer kötü", "lower_worse": "Düşük değer kötü"},
     "last_status": {"green": "Yeşil", "amber": "Sarı", "red": "Kırmızı"},
@@ -553,6 +553,40 @@ CHOICES.update({
                        "ABORT": "Durduruldu", "OTHER": "Diğer"},
 })
 CHOICES["connector"]["openlineage"] = "OpenLineage alıcısı (Airflow, Spark, dbt)"
+# Veri kalitesi (K-032)
+FIELDS.update({
+    "rule_type": "Kural türü", "dq_rules.dimension": "Kalite boyutu", "params_json": "Kural parametreleri", "ref_column_id": "Referans kolon",
+    "threshold_pct": "Eşik (en düşük geçme %)", "dq_rules.severity": "Önem", "dq_rules.owner": "Kural sahibi",
+    "dq_rules.control_id": "Bağlı GRC kontrolü", "auto_finding": "Başarısızlıkta bulgu ve DÖF aç", "dq_rules.status": "Durum",
+    "dq_rules.name": "Kural", "dq_rules.description": "Açıklama", "last_run_at": "Son çalışma", "last_result": "Son sonuç",
+    "last_pass_rate": "Son geçme oranı (%)", "finding_id": "Bulgu", "rule_id": "Kural", "checked": "Kontrol edilen satır",
+    "failed": "Hatalı satır", "measured": "Ölçüm", "pass_rate": "Geçme oranı (%)", "dq_results.result": "Sonuç",
+    "dq_results.message": "Açıklama", "dq_results.source": "Kaynağı", "execution_id": "Kontrol sonucu", "run_at": "Çalışma zamanı",
+    "sample_size": "Örnek büyüklüğü", "null_count": "Boş değer", "distinct_count": "Farklı değer", "min_length": "En kısa uzunluk",
+    "max_length": "En uzun uzunluk", "min_value": "En küçük değer", "max_value": "En büyük değer", "profiled_at": "Profil zamanı",
+    "dq_table_stats.source": "Ölçüm kaynağı", "measured_at": "Ölçüm zamanı", "dq_anomalies.kind": "Anomali türü",
+    "expected": "Beklenen", "deviation_pct": "Sapma (%)", "dq_anomalies.status": "Durum", "detected_at": "Tespit zamanı",
+    "acknowledged_by": "Değerlendiren", "acknowledged_at": "Değerlendirme zamanı", "dq_anomalies.note": "Değerlendirme notu",
+    "profile_rows": "Profil satırı (tablo başına)",
+})
+CHOICES.update({
+    "rule_type": {"not_null": "Zorunlu (boş olamaz)", "unique": "Benzersiz", "range": "Sayısal aralık", "pattern": "Desen (düzenli ifade)",
+                  "allowed_values": "İzin verilen değerler", "reference": "Referans bütünlüğü", "freshness": "Tazelik",
+                  "row_count": "Satır sayısı", "format": "Biçim doğrulama", "custom_sql": "Özel SQL"},
+    "dq_rules.dimension": {"completeness": "Tamlık", "validity": "Geçerlilik", "uniqueness": "Benzersizlik", "consistency": "Tutarlılık",
+                  "timeliness": "Güncellik"},
+    "dq_rules.severity": {"low": "Düşük", "medium": "Orta", "high": "Yüksek", "critical": "Kritik"},
+    "dq_rules.status": {"draft": "Taslak", "active": "Etkin", "retired": "Kullanım dışı"},
+    "dq_rules.last_result": {"pass": "Geçti", "fail": "Başarısız", "error": "Çalışmadı"},
+    "dq_results.result": {"pass": "Geçti", "fail": "Başarısız", "error": "Çalışmadı"},
+    "dq_results.source": {"collector": "Toplayıcı", "manual": "Elle girildi"},
+    "dq_table_stats.source": {"catalog": "Katalog içe aktarımı", "rule": "Satır sayısı kuralı"},
+    "dq_anomalies.kind": {"volume": "Hacim (satır sayısı)"},
+    "dq_anomalies.status": {"open": "Açık", "acknowledged": "Değerlendirildi"},
+    "dq_format": {"tckn": "T.C. kimlik numarası", "vkn": "Vergi kimlik numarası", "iban": "IBAN", "email": "e-posta",
+                  "phone": "telefon", "card": "kart numarası", "ipv4": "IPv4 adresi"},
+})
+CHOICES["risk_category"] = CHOICES["category"]
 CHOICES["risk_category"] = CHOICES["category"]
 
 

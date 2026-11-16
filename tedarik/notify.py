@@ -46,6 +46,8 @@ EVENTS = {   # olay: (Türkçe ad, varsayılan e-posta, varsayılan Teams)
     "collector.overdue": ("Toplayıcı beklenen sürede veri göndermedi", True, True),
     "collector.failed": ("Toplayıcı hata bildirdi veya gönderimi reddedildi", True, True),
     "catalog.impact": ("Planlanan veri değişikliği: aşağı akıştaki sahiplere etki bildirimi", True, False),
+    "dq.failed": ("Veri kalitesi kuralı başarısız / çalışmadı", True, False),
+    "dq.anomaly": ("Veri hacmi anomalisi", True, False),
 }
 
 

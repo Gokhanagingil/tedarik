@@ -459,7 +459,7 @@ const MENU = [
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
   ['Veri yönetişimi', [['datagov', 'database', 'Veri Yönetişimi Paneli'], ['glossary', 'book', 'İş Sözlüğü'], ['catalog', 'layers', 'Veri Kataloğu'],
-    ['r/data_sources', 'server'], ['collectors', 'plug', 'Toplayıcılar'], ['lineage', 'flow', 'Soy Kütüğü'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
+    ['r/data_sources', 'server'], ['collectors', 'plug', 'Toplayıcılar'], ['lineage', 'flow', 'Soy Kütüğü'], ['quality', 'check', 'Veri Kalitesi'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
   ['Kişisel veri (KVKK)', [['privacy', 'shield', 'KVKK Panosu'], ['discovery', 'search', 'Kişisel Veri Keşfi'], ['r/processing_activities', 'clipboard'],
     ['r/subject_requests', 'mail'], ['r/data_requests', 'inbox'], ['r/privacy_breaches', 'alert'], ['r/dpias', 'scale'], ['r/retention_rules', 'clock'],
     ['r/disposal_runs', 'archive']]],
@@ -670,7 +670,7 @@ function navVisible([key, , , need]) {
   if (S.me && S.me.external && !EXTERNAL_NAV.has(key)) return false;
   const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', obligations: 'grc', 'audit-plan': 'grc', crisis: 'continuity', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights',
-    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov', privacy: 'datagov', discovery: 'datagov', collectors: 'datagov', lineage: 'datagov'}[key];
+    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov', privacy: 'datagov', discovery: 'datagov', collectors: 'datagov', lineage: 'datagov', quality: 'datagov'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
 /** Menü bir kez kurulur; sonraki gezinmelerde yalnızca etkin öğe değişir (kaydırma konumu korunur). */

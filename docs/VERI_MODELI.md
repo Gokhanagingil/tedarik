@@ -213,6 +213,18 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `data_sources.lineage_namespace` | OpenLineage ad alanları (virgülle) | Veri seti eşlemesi |
 | `data_collectors.connector = openlineage` | OpenLineage alıcısı (toplayıcı anahtarı, `Authorization: Bearer`) | Yalnızca `/api/tdr/collector/openlineage` |
 
+## Veri kalitesi (K-032)
+
+| Tablo | Amaç | Kural |
+| --- | --- | --- |
+| `dq_rules` | Kalite kuralı: tablo[.kolon], tür, parametreler (JSON), boyut, eşik, önem, sahip, isteğe bağlı GRC kontrolü | Kod sunucuda (VKK-); tanım `dq_sql` ile doğrulanır; referans aynı kaynakta; özel SQL yalnızca yönetici; kapsam tablonun biriminden |
+| `dq_results` | Kural sonuçları: kontrol edilen, hatalı, ölçüm, geçme oranı, kaynak (toplayıcı/elle) | Değiştirilemez; değerlendirme platformda |
+| `dq_profiles` | Kolon profili: örnek büyüklüğü, boş, farklı değer, uzunluk, (hassas olmayan) en küçük/en büyük | Değiştirilemez; değer listesi yok |
+| `dq_table_stats` | Tablo satır sayısı ölçümleri (katalog, satır sayısı kuralı) | Değiştirilemez; hacim anomalisi tabanı |
+| `dq_anomalies` | Hacim anomalisi | Değerlendirme notuyla kapanır |
+| `data_collectors.profile_rows` | Toplayıcının profil örnek büyüklüğü | 0: kapalı |
+| `findings.source = data_quality` | Kontrole bağlı olmayan kuralın bulgusu | Tekrar eden başarısızlık sayacı artırır |
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |
