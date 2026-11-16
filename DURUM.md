@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-15 · Aşama: uygulama tedarikçi portalından **GRC platformuna** dönüştü (K-016 – K-020; adı sonra belirlenecek, `TEDARIK_APP_NAME`). Test sunucusu: https://tedarik.204-168-247-101.sslip.io (sentetik demo verisi). KS GRC artık kullanılmıyor (K-016).
+Son güncelleme: 2026-11-16 · Aşama: uygulama tedarikçi portalından **GRC platformuna** dönüştü (K-016 – K-020; adı sonra belirlenecek, `TEDARIK_APP_NAME`). Test sunucusu: https://tedarik.204-168-247-101.sslip.io (sentetik demo verisi). KS GRC artık kullanılmıyor (K-016).
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -35,6 +35,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   bildirimi, akış şeması, kişisel verinin soy kütüğü boyunca önerilmesi (K-031).
 - Veri yönetişimi Faz 5: kodsuz kalite kuralları toplayıcıyla kurum ağında çalışır (yalnızca sayılar; SQL toplayıcıda kurulur,
   özel SQL yerel izinle), başarısızlık bulgu/DÖF veya GRC kontrol sonucu, profil, hacim anomalisi, skor kartı (K-032).
+- Veri yönetişimi Faz 6: KVKK ve GDPR tam metni resmî kaynaktan; madde başına boşluk analizi (göstergeler, kontroller,
+  değerlendirme, bulgu/DÖF), KVKK–GDPR eşlemesi (K-033). Yapay zekâ sistemleri envanteri ve AB Yapay Zekâ Tüzüğü risk
+  sınıflandırma sihirbazı (sınıf elle girilmez), veriye ve KVKK envanterine bağlı açıklar (K-034).
+- Rol ve yetki matrisi koddan hesaplanır (Yönetim → Kullanıcılar); kurulum birden çok alan adını birlikte sunar (K-035).
 
 ## Varsayımlar (Gökhan Bey'in onayıyla)
 
@@ -230,6 +234,31 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
   - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
     çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Veri yönetişimi Faz 6 — mevzuat boşluk analizi, yapay zekâ envanteri; rol ve yetki matrisi (2026-11-16, K-033 – K-035).**
+  Gökhan Bey'in isteği: Faz 6'nın kendisinden bilgi beklemeyen kısımları ve Kullanıcılar altında rol/yetki matrisi.
+  - *Mevzuat metinleri:* KVKK 6698 (7499 değişiklikleriyle; mevzuat.gov.tr) ve GDPR 2016/679 (EUR-Lex, İngilizce; 99 madde,
+    173 gerekçe) `scripts/build_standards.py kvkk|gdpr` ile resmî HTML'den üretildi; tüm maddeler doğrulanır, eksikse paket
+    üretilmez; kaynak adresi ve SHA-256 kayıtlı. Kurum yükümlülüğü doğurmayan maddeler gerekçesiyle kapsam dışı.
+  - *Boşluk analizi (KVKK Panosu → KVKK / GDPR Boşluk Analizi):* tek tıkla kurulum; madde başına durum = KVKK kayıtlarından 13
+    gösterge (her biri etkilenen kayıtları bağlantılı listeler) + eşlenen kontrollerin son testi + uyum sorumlusunun değerlendirmesi;
+    uyum göstergesi, bölüm bazında madde listesi, filtre ve arama, madde çekmecesinde tam metin; değerlendirme (kısmen/uyumsuzda açık
+    zorunlu) ve bulgu + DÖF; KVKK–GDPR madde eşlemesi (26 ilişki, platform önerisi).
+  - *Yapay zekâ envanteri (Veri yönetişimi → Yapay Zekâ Envanteri):* sistem kaydı (rol, kaynak, tedarikçi, model, yaşam döngüsü,
+    sahip, birim, kişisel veri, otomatik karar, insan gözetimi, bildirim, log süresi, işleme faaliyeti, VKED, FRIA); yedi adımlı
+    risk sınıflandırma sihirbazı (md. 5, md. 6/Ek I, Ek III ve md. 6(3), FRIA koşulları, md. 50, genel amaçlı model) ve role göre
+    yükümlülük listesi; veri varlığı bağlantısı (tablo sayfasında ve soy kütüğü etki analizinde görünür); kural tabanlı açıklar,
+    sağlık kontrolü (4 yeni madde), İşlerim, tedarikçi 360'ta "Yapay zekâ" sekmesi, CSV dışa aktarma.
+  - *Rol ve yetki matrisi (Yönetim → Rol ve Yetki Matrisi; Kullanıcılar ekranından da):* rol kartları (açıklama, seviye, kullanıcı
+    sayısı, Entra rolü), 120 kaynakta rol başına okuma/yazma (birimine yazar, ekler, okur, erişemez), yazma yolu, MCP erişimi;
+    modül filtresi, arama, rol vurgulama; görevler ayrılığı kuralları, özel kimlikler, rollere göre kullanıcılar, CSV. Yönetici ve
+    Denetçi görür.
+  - *Kurum ağı erişimi:* şirket ağındaki FortiGuard filtresi sınıflandırılmamış ("Unrated") adresleri engelliyor; kurulum artık
+    virgülle birden çok alan adını birlikte sunuyor (ilki ana adres). Kurum alan adı (A kaydı 204.168.247.101) veya BT izin listesi
+    bekleniyor.
+  - İşlerim'de önceki fazlardan sayılıp gösterilmeyen bölümler (başarısız kalite kuralları, toplayıcılar) eklendi.
+  - Demo: KVKK (kapsamda) ve GDPR kurulu, eşleme, 4 kontrol maddelere bağlı, 5 değerlendirme (biri bulgu + DÖF); 6 yapay zekâ sistemi
+    (sınırlı, asgari, yüksek risk, sınıflandırılmamış), 11 veri varlığı bağlantısı.
+  - Testler: 186 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi mevzuat, yapay zekâ ve rol matrisi akışlarıyla.
 - **Veri yönetişimi Faz 5 — veri kalitesi ve gözlenebilirlik (2026-11-16, K-032).**
   - *Kurallar:* zorunlu, benzersiz, aralık, desen, izin verilen değerler, referans bütünlüğü, tazelik, satır sayısı, biçim
     (T.C. kimlik, VKN, IBAN, e-posta, telefon, kart, IPv4) ve özel SQL; boyut, eşik, önem, sahip, isteğe bağlı GRC kontrolü.
@@ -286,7 +315,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 
 - **SAP ve Dynamics başlıkları hâlâ tahmin** (`transfer.py` `ALIASES`); gerçek dışa aktarım bekleniyor. Portalın kendi şablonu bu tahmine bağlı değildir.
 - **Entra akışı gerçek kiracıda denenmedi.** Testler sentetik token ve anahtarla; kurumsal kabul testleri KS GRC `docs/ENTRA_ID.md` tablosundaki gibi kiracıda yapılmalı.
-- **Test adresi sslip.io üzerinde** (üçüncü taraf DNS); kurumsal kullanım için kurum alan adı gerekir (K-014).
+- **Test adresi sslip.io üzerinde** (üçüncü taraf DNS); kurum ağındaki FortiGuard filtresi sınıflandırılmamış adres olarak
+  engelliyor. Kurum alan adı gerekir (K-014, K-035); kurulum iki adresi birlikte sunmaya hazır.
 - **KS GRC verisinin taşınması yapılmadı:** iş modeli taşındı; KS GRC'deki gerçek kayıtları (standart eşlemeleri, kontroller, denetimler, kanıt dosyaları) aktaracak içe aktarım henüz yok.
 - **Konteyner imajı taraması (trivy) yok;** bandit, pip-audit ve sır taraması CI'da.
 - **ServiceNow bağlantısı gerçek kurumda denenmedi:** bağlayıcı sahte sunucuyla test edildi; özel alan adları (`u_os_end_of_support` vb.) kurumun CMDB'sine göre eşlenmeli. Test sunucusundaki CI'lar sentetik MCP itmesidir.
@@ -296,8 +326,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   çapraz eşleme tabloları (ör. NIST OLIR, ISO 27001 ↔ 27701) da kurum kopyasından içe aktarılmalı.
 - **Claude SDK paketi kurulu değil:** yapay zekâ önerileri kural tabanlı çalışıyor; `anthropic` paketinin
   requirements.txt'e (sürüm ve hash ile) eklenmesi onay bekliyor.
-- **Veri yönetişimi Faz 6 yok:** mevzuat boşluk analizi, yapay zekâ yönetişimi, GraphQL/olay kuyruğu (yol haritası uygulamada:
-  Yönetim → Yol Haritası). Kalite kuralları gerçek kurum kaynağında henüz çalıştırılmadı (SQLite, PostgreSQL ve CSV ile sınandı). Soy kütüğünde SQL'den kolon çıkarımı (sqlglot onayı) ve Power BI rapor soy kütüğü (Scanner API) yok. Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
+- **Veri yönetişimi Faz 6'nın bilgi bekleyen kısımları:** ISO/IEC 42001 eşlemesi (lisanslı metin), yapay zekâ önerileri
+  (anthropic onayı), GraphQL/olay kuyruğu (kullanacak dış sistem ve bağımlılık onayı). Yapay zekâ sınıflandırması ve mevzuat
+  boşluk analizi ön göstergedir, hukuki görüş değildir. Kalite kuralları gerçek kurum kaynağında henüz çalıştırılmadı (SQLite, PostgreSQL ve CSV ile sınandı). Soy kütüğünde SQL'den kolon çıkarımı (sqlglot onayı) ve Power BI rapor soy kütüğü (Scanner API) yok. Hazır sorgular ve toplayıcının SQL sürücüsü yolu gerçek SAP, ServiceNow, Dynamics ve Power BI ortamında henüz
   denenmedi (sentetik dosyalar, SQLite ve PostgreSQL ile test edildi). ServiceNow, Dynamics ve Power BI'ya doğrudan API bağlantısı yok.
 
 ## Sıradaki adımlar (sırayla)
@@ -326,6 +357,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
      yurt dışı aktarım, saklama süresi) kolonlara bağlı, saklama ve imha takvimi, veri varlığı risk puanı, maskeleme ve erişim
      talebi akışları, KVKK ihlal kaydında etkilenen veri varlıkları. Ardından Faz 3: SAP HANA, ServiceNow, Dynamics 365, Power BI
      bağlayıcıları (gerekenler aşağıda).
+10h. ~~**Veri yönetişimi Faz 6**~~ Bilgi/onay beklemeyen kısmı tamamlandı (2026-11-16, K-033, K-034); rol ve yetki matrisi
+     (K-035). Kalan: ISO/IEC 42001 eşlemesi, yapay zekâ önerileri, GraphQL/olay kuyruğu (aşağıdaki beklenenler).
+10i. **Kurum alan adına geçiş:** Gökhan Bey alan adını (A kaydı 204.168.247.101) bildirince kurulumu
+     `domain=<yeni adres>,tedarik.204-168-247-101.sslip.io` ile çalıştır; gerekirse FortiGuard'a sınıflandırma isteği.
 10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
 11. ~~**Yol haritası Faz 1–4** (`docs/YOL_HARITASI.md`).~~ Büyük ölçüde tamamlandı (2026-11-15, K-023 – K-027); kalanlar yol haritası belgesinde. Ayrıca konteyner imajı taraması (trivy).
 12. **Kaynak bulma.** Süreç tasarımı onaylanınca `workflow,sourcing` modüllerini aç, ekranlarını yap.
@@ -352,5 +387,7 @@ Ayrıntı `docs/KARARLAR.md` içinde.
 - Tedarikçi tipleri ve iş birimleri listesi.
 - Yeni rollerin (`KS.TDR.*`) KS GRC'nin Entra uygulama kaydına mı, ayrı bir kayda mı ekleneceği.
 - `tedarik` ve `control` repolarının görünürlüğü (şu an ikisi de herkese açık).
-- Kalıcı kurumsal adres (alan adı) ve test sunucusunun internete açık kalıp kalmayacağı.
+- Kalıcı kurumsal adres (alan adı) ve test sunucusunun internete açık kalıp kalmayacağı. **Acil:** şirket ağı (FortiGuard)
+  sslip.io adresini "Unrated" olarak engelliyor; kurum alan adı altında bir alt adres (A kaydı 204.168.247.101) veya BT'den izin.
+- ISO/IEC 42001 lisanslı metni (yapay zekâ yönetim sistemi eşlemesi için).
 - Üretim PostgreSQL'inin nerede çalışacağı (şimdilik aynı sunucuda yalıtılmış konteyner): kurumun yönetilen PostgreSQL hizmeti mi, aynı sunucuda konteyner mi; sürüm (öneri 16 veya üzeri) ve yedekleme sorumlusu.

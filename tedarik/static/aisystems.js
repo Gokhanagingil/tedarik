@@ -177,7 +177,7 @@ TABLE_EXTRAS.push(t => {
   return host;
 });
 SUPPLIER_TABS.push({key: 'ai', label: 'Yapay zekâ', visible: () => hasModule('datagov'), render: async id => {
-  const items = (await api(`ai_systems?supplier_id=${id}&limit=200`)).items || [];
+  const r = await api(`ai_systems?supplier_id=${id}&limit=200`); const items = Array.isArray(r) ? r : (r.items || []);
   return items.length ? h('ul', {class: 'mini'}, items.map(s => h('li', {class: 'link', onclick: () => { Drawer.close(); Router.go('aisystem/' + s.id); }},
     h('div', {class: 'chips'}, h('strong', {text: `${s.code} · ${s.name}`}), aiClassPill(s.risk_class)), h('span', {class: 'cell-sub', text: s.purpose})))) :
     h('div', {class: 'muted small', text: 'Bu tedarikçiden sağlanan kayıtlı yapay zekâ sistemi yok.'});

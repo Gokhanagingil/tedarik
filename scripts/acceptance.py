@@ -440,6 +440,25 @@ def main():
                 f"ISO 27001 madde kapsaması %{detail['framework_coverage_pct']}")
     check("Uyum göstergesi", compliance)
 
+    def regulation_ai_roles():
+        kvkk = admin.ok("GET", "datagov/regulation?code=KVKK", timed="KVKK boşluk analizi")
+        assert kvkk["installed"] and kvkk["applicable"] == 12 and len(kvkk["articles"]) == 36
+        assert sum(1 for a in kvkk["articles"] if a["indicators"]) >= 8
+        gdpr = admin.ok("GET", "datagov/regulation?code=GDPR")
+        assert gdpr["installed"] and gdpr["crosswalk"]["links"] >= 26
+        ai = admin.ok("GET", "datagov/ai", timed="yapay zekâ envanteri")
+        assert ai["active"] >= 6 and ai["by_class"]["high"] >= 1
+        sid = next(s["id"] for s in ai["systems"] if s["risk_class"] == "unassessed")
+        expect_status(viewer, "POST", f"ai_systems/{sid}/classify", 403, {"answers": {}})
+        expect_status(viewer, "GET", "roles/matrix", 403)
+        matrix = admin.ok("GET", "roles/matrix", timed="rol ve yetki matrisi")
+        roles = {r["code"]: r for r in matrix["roles"]}
+        assert roles["ADMIN"]["writable"] > roles["AUDITOR"]["writable"] > 0 and roles["VIEWER"]["writable"] == 0
+        assert auditor.ok("GET", "roles/matrix")["resources"]
+        return (f"KVKK skoru {kvkk['score']}, {kvkk['counts'].get('non_compliant', 0)} uyumsuz madde; {ai['active']} yapay zekâ sistemi; "
+                f"matriste {len(matrix['resources'])} kaynak")
+    check("KVKK/GDPR boşluk analizi, yapay zekâ envanteri, rol matrisi", regulation_ai_roles)
+
     def risk():
         units = admin.ok("GET", "risk_catalog?limit=50")
         template = units[0]
