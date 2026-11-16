@@ -75,6 +75,7 @@ services:
     pids_limit: 120
     logging: {driver: json-file, options: {max-size: "10m", max-file: "3"}}
   # TLS ters vekili: yalnızca TEDARIK_DOMAIN verildiğinde ("tls" profili) çalışır; yalnızca 443'ü açar.
+  # TEDARIK_SITES: virgülle verilen adreslerin Caddy biçimi ("a.ornek.com, b.ornek.com"); her biri için sertifika alınır.
   proxy:
     profiles: [tls]
     image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
@@ -83,7 +84,7 @@ services:
       app:
         condition: service_healthy
     environment:
-      TEDARIK_DOMAIN: ${TEDARIK_DOMAIN:-localhost}
+      TEDARIK_SITES: ${TEDARIK_SITES:-localhost}
     ports:
       - "0.0.0.0:443:443"
     volumes:

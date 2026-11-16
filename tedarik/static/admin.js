@@ -179,3 +179,70 @@ PAGES.roadmap = async function roadmapPage(parts, params) {
   };
   content(mods, needs, h('div', {class: 'rm-phases'}, phases.length ? phases.map(phaseCard) : empty('Bu modülde madde yok', '')));
 };
+
+// ------------------------------------------------------------------ rol ve yetki matrisi (K-035)
+const RM_CELL = {full: ['Yazar', 'rx-full'], unit: ['Birimine yazar', 'rx-unit'], append: ['Ekler', 'rx-append'], none: ['Okur', 'rx-read']};
+const RM_PATH = {form: ['Kayıt formu', 'neutral'], workflow: ['İş akışı', 'purple'], immutable: ['Değiştirilemez', 'warn'], system: ['Sistem kaydı', 'neutral']};
+const RM_MCP = {r: 'Okur', rw: 'Okur, yazar'};
+PAGES.roles = async function rolesPage(parts, params) {
+  const d = await api('roles/matrix');
+  const roleCodes = d.roles.map(r => r.code);
+  const state = {module: params.get('m') || '', q: '', role: params.get('rol') || '', writable: false};
+  setPage('Rol ve Yetki Matrisi', 'Kodda tanımlı yetkilerden hesaplanır; her sürümde gerçeği gösterir. Matris yetki vermez: erişimi değiştirmek için kullanıcının rolünü veya birimini değiştirin.', [
+    btn('CSV indir', () => download('roles/matrix?format=csv', 'rol-yetki-matrisi.csv'), 'secondary'), META.can('admin') ? btn('Kullanıcılar', () => Router.go('users'), 'ghost') : null],
+  META.can('admin') ? [['Kullanıcılar', 'users']] : []);
+  const roleCard = r => h('button', {type: 'button', class: 'rx-role' + (state.role === r.code ? ' on' : ''), 'aria-pressed': String(state.role === r.code), onclick: () => { state.role = state.role === r.code ? '' : r.code; draw(); }},
+    h('div', {class: 'chips'}, h('strong', {text: r.label}), h('span', {class: 'chip', text: `Seviye ${r.level}`})),
+    h('p', {class: 'small muted', text: r.description}),
+    h('div', {class: 'rx-stats'}, h('span', {}, h('b', {text: fmt.num(r.users)}), ' kullanıcı', r.external ? ` (${r.external} dış denetçi)` : ''),
+      h('span', {}, h('b', {text: fmt.num(r.writable)}), ` / ${d.resources.length} kaynakta yazar`)),
+    r.entra_role ? h('span', {class: 'cell-sub', text: 'Entra uygulama rolü: ' + r.entra_role}) : null);
+  const cards = h('div', {class: 'rx-roles'});
+  const legend = h('div', {class: 'rx-legend small'}, Object.values(RM_CELL).map(([label, cls]) => h('span', {}, h('span', {class: 'rx-cell ' + cls, text: label}))),
+    h('span', {}, h('span', {class: 'rx-cell rx-none', text: '—'}), ' erişemez'), h('span', {class: 'muted', text: '"Birimine yazar": yalnızca atandığı birimin kaydı. "Ekler": kayıt eklenir, sonra değiştirilemez.'}));
+  const moduleSel = h('select', {id: 'rxModule', 'aria-label': 'Modül'}, h('option', {value: '', text: 'Tüm modüller'}), d.modules.map(m => h('option', {value: m.code, text: m.label, selected: m.code === state.module})));
+  const search = h('input', {id: 'rxSearch', type: 'search', placeholder: 'Kaynak ara (ör. bulgu, sözleşme, KVKK)', 'aria-label': 'Kaynak ara'});
+  const onlyWrite = h('input', {type: 'checkbox', id: 'rxWrite'});
+  moduleSel.addEventListener('change', () => { state.module = moduleSel.value; draw(); });
+  search.addEventListener('input', () => { state.q = search.value.trim().toLocaleLowerCase(TR); draw(); });
+  onlyWrite.addEventListener('change', () => { state.writable = onlyWrite.checked; draw(); });
+  const tools = h('div', {class: 'toolbar rx-tools'}, moduleSel, search, h('label', {class: 'toggle', for: 'rxWrite'}, onlyWrite, 'Yalnızca seçili rolün yazdıkları'));
+  const tableBox = h('div');
+  const cell = c => !c.read ? h('span', {class: 'rx-cell rx-none', title: 'Erişemez', text: '—'}) : h('span', {class: 'rx-cell ' + RM_CELL[c.write][1], text: RM_CELL[c.write][0]});
+  const draw = () => {
+    fillEl(cards, ...d.roles.map(roleCard));
+    const rowsShown = d.resources.filter(r => (!state.module || r.module === state.module) &&
+      (!state.q || r.label.toLocaleLowerCase(TR).includes(state.q) || r.name.includes(state.q)) &&
+      (!state.writable || !state.role || r.roles[state.role].write !== 'none'));
+    const body = h('tbody');
+    let current = null;
+    for (const r of rowsShown) {
+      if (r.module !== current) { current = r.module; body.append(h('tr', {class: 'rx-group'}, h('th', {colspan: String(roleCodes.length + 3), text: r.module_label}))); }
+      const how = r.role_list ? 'Yalnızca listelenen roller' : (d.levels[r.level] || '');
+      body.append(h('tr', {class: state.role && r.roles[state.role].write !== 'none' ? 'rx-hit' : ''},
+        h('td', {class: 'cell-primary'}, r.label, h('span', {class: 'cell-sub', text: [how, r.unit_scoped ? 'birim kapsamlı' : '', r.restricted_read ? 'kısıtlı okuma' : ''].filter(Boolean).join(' · ')})),
+        h('td', {}, pill(...RM_PATH[r.path])),
+        roleCodes.map(code => h('td', {class: 'rx-td' + (state.role === code ? ' rx-col' : '')}, cell(r.roles[code]))),
+        h('td', {class: 'small', text: RM_MCP[r.machine] || '—'})));
+    }
+    fillEl(tableBox, rowsShown.length ? h('div', {class: 'tablewrap'}, h('table', {class: 'rx-table'},
+      h('thead', {}, h('tr', {}, h('th', {text: 'Kaynak'}), h('th', {text: 'Yazma yolu'}), d.roles.map(r => h('th', {class: state.role === r.code ? 'rx-col' : '', text: r.label})), h('th', {text: 'MCP anahtarı'}))), body)) :
+      empty('Eşleşen kaynak yok', 'Filtreyi değiştirin.'));
+  };
+  const usersTab = () => {
+    const by = {}; for (const u of d.users) (by[u.role || ''] = by[u.role || ''] || []).push(u);
+    return h('div', {class: 'grid two'}, d.roles.map(r => panel(r.label, (by[r.code] || []).length ? h('ul', {class: 'mini'}, by[r.code].map(u => h('li', {},
+      h('strong', {text: u.display_name}), h('span', {class: 'cell-sub', text: [u.username, u.external ? 'dış denetçi' : '', u.units ? `${u.units} birim` : ''].filter(Boolean).join(' · ')})))) :
+      h('div', {class: 'muted small', text: 'Bu rolde kullanıcı yok.'}), null, `${(by[r.code] || []).length} kullanıcı`)),
+    d.unassigned ? panel('Rolü atanmamış', h('ul', {class: 'mini'}, (by[''] || []).concat(...Object.entries(by).filter(([k]) => k && !roleCodes.includes(k)).map(([, v]) => v)).map(u => h('li', {}, h('strong', {text: u.display_name}), h('span', {class: 'cell-sub', text: u.username})))),
+      null, 'oturum açamaz') : null);
+  };
+  draw();
+  content(cards, tabs([
+    {key: 'matrix', label: 'Kaynak matrisi', count: d.resources.length, render: () => h('div', {class: 'panel'}, tools, legend, tableBox)},
+    {key: 'sod', label: 'Görevler ayrılığı', count: d.segregation.length, render: () => panel('Kodda zorunlu dört göz ve görev ayrılığı kuralları',
+      h('div', {class: 'tablewrap plain'}, h('table', {}, h('thead', {}, h('tr', {}, ['Modül', 'Kural', 'Dayanak'].map(x => h('th', {text: x})))),
+        h('tbody', {}, d.segregation.map(s => h('tr', {}, h('td', {class: 'small', text: s.module_label}), h('td', {text: s.rule}), h('td', {class: 'small muted', text: s.basis})))))))},
+    {key: 'special', label: 'Özel kimlikler', count: d.special.length, render: () => h('div', {class: 'grid three'}, d.special.map(s => panel(s.identity, h('p', {class: 'small', text: s.text}))))},
+    {key: 'users', label: 'Rollere göre kullanıcılar', count: d.users.length, render: usersTab}]));
+};

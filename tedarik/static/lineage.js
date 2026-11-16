@@ -306,7 +306,10 @@ PAGES.impact = async function impactPage(parts, params) {
     h('div', {class: 'grid two'},
       panel('İşleme faaliyetleri (KVKK)', simple(r.activities, a => h('li', {class: 'link', onclick: () => Router.go('activity/' + a.id)}, h('strong', {text: `${a.code} ${a.name}`})), 'Bağlı işleme faaliyeti yok.')),
       panel('Sözlük terimleri ve riskler', h('div', {}, simple(r.terms, g => h('li', {class: 'link', onclick: () => Router.go('glossary/' + g.id)}, h('strong', {text: g.name}), h('span', {class: 'cell-sub', text: [g.code, g.owner].filter(Boolean).join(' · ')})), 'Bağlı terim yok.'),
-        r.risks.length ? section('Açık riskler', simple(r.risks, x => h('li', {class: 'link', onclick: () => openRecord('supplier_risks', x.id)}, h('strong', {text: `${x.code} ${x.title}`})), '')) : null))));
+        r.risks.length ? section('Açık riskler', simple(r.risks, x => h('li', {class: 'link', onclick: () => openRecord('supplier_risks', x.id)}, h('strong', {text: `${x.code} ${x.title}`})), '')) : null))),
+    (r.ai_systems || []).length ? panel('Yapay zekâ sistemleri', simple(r.ai_systems, x => h('li', {class: 'link', onclick: () => Router.go('aisystem/' + x.id)},
+      h('div', {class: 'chips'}, h('strong', {text: `${x.code} ${x.name}`}), pill(META.option('ai_systems', 'risk_class', x.risk_class), x.risk_class === 'high' || x.risk_class === 'prohibited' ? 'bad' : 'neutral')),
+      h('span', {class: 'cell-sub', text: x.owner ? 'Sahip: ' + x.owner : 'Sahip atanmamış'})), ''), null, 'Etkilenen veriyle eğitilen veya çalışan modeller') : null);
 };
 
 // ------------------------------------------------------------------ tablo sayfası ve kolon paneli

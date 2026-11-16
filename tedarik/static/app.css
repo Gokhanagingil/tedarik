@@ -465,3 +465,45 @@ ul.mini li strong,ul.mini li a{overflow-wrap:anywhere}
 .dq-spark{display:block;margin-top:6px}.dq-line{fill:none;stroke:var(--ink);stroke-width:2;stroke-linejoin:round}.dq-dot{fill:var(--accent)}
 .dq-trend{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--stroke)}
 .dq-params{display:grid;gap:4px}.dq-panel .panel-title .toolbar{justify-content:flex-start;margin:0}
+/* Rol ve yetki matrisi (K-035) */
+.rx-roles{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.rx-role{display:flex;flex-direction:column;gap:6px;text-align:left;background:var(--surface);border:1px solid var(--stroke);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.rx-role:hover{border-color:var(--stroke2)}.rx-role.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.rx-role p{margin:0}.rx-stats{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--text2)}
+.rx-tools{flex-wrap:wrap;align-items:center;gap:10px;justify-content:flex-start}.rx-tools select{width:auto;min-width:220px}.rx-tools input[type=search]{width:320px}
+.rx-legend{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin:10px 0 12px}
+.rx-cell{display:inline-block;min-width:74px;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:600;text-align:center;white-space:nowrap}
+.rx-full{background:var(--good-soft);color:var(--good)}.rx-unit{background:var(--info-soft);color:var(--info)}
+.rx-append{background:var(--violet-soft);color:var(--violet)}.rx-read{background:#f1f2f4;color:var(--text2)}.rx-none{background:none;color:var(--muted)}
+.rx-table td.rx-td{text-align:center}.rx-table th{white-space:nowrap}.rx-table .rx-col{background:var(--accent-soft)}
+.rx-table tr.rx-group th{background:var(--hover);text-transform:none;letter-spacing:0;font-size:12.5px;color:var(--ink);text-align:left}
+.rx-table tr.rx-hit .cell-primary{font-weight:700}
+/* Mevzuat boşluk analizi (K-033) */
+.reg-switch{margin-bottom:8px}.reg-switch .chip{font-size:13px;padding:6px 14px}.reg-source{margin:0 0 12px}.reg-cross{margin-bottom:12px}
+.reg-cross .btn{margin-left:8px}.reg-gauge{display:flex;align-items:center;justify-content:center}
+.reg-inds{display:grid;gap:8px}.reg-ind{border:1px solid var(--stroke);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.reg-ind summary{cursor:pointer;list-style:none}.reg-ind summary::-webkit-details-marker{display:none}.reg-ind[open] summary{margin-bottom:6px}
+.reg-group h4{margin:16px 0 6px;font-size:12.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.reg-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.reg-item{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start;padding:10px 12px;border:1px solid var(--stroke);border-left:4px solid var(--stroke2);border-radius:8px;cursor:pointer;background:var(--surface)}
+.reg-item:hover{background:var(--hover)}.reg-item.non_compliant{border-left-color:var(--bad)}.reg-item.partial{border-left-color:var(--warn)}
+.reg-item.compliant{border-left-color:var(--good)}.reg-item.not_applicable{opacity:.7}.reg-item .chips{margin-top:4px}
+.reg-code{font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.reg-text{white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--text2);max-height:420px;overflow:auto;padding:10px;border:1px solid var(--stroke);border-radius:8px;background:var(--hover)}
+.reg-article>*+*{margin-top:12px}
+@media (max-width:640px){.reg-item{grid-template-columns:1fr;gap:4px}}
+/* Yapay zekâ envanteri (K-034) */
+.ai-dist{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:4px 0 14px}
+.ai-dist-item{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:10px 12px;border:1px solid var(--stroke);border-top:3px solid var(--stroke2);border-radius:8px;background:var(--surface);text-align:left}
+.ai-dist-item:hover{background:var(--hover)}.ai-dist-item.on{box-shadow:0 0 0 2px var(--accent-soft);border-color:var(--accent)}
+.ai-dist-item.prohibited{border-top-color:var(--bad)}.ai-dist-item.high{border-top-color:#e0603a}.ai-dist-item.limited{border-top-color:var(--warn)}
+.ai-dist-item.minimal{border-top-color:var(--good)}.ai-dist-n{font-size:20px;font-weight:700;color:var(--ink)}
+.ai-timeline li{padding:6px 0;border-bottom:1px dashed var(--stroke)}.ai-timeline li.past strong{color:var(--good)}
+.ai-wizard{display:grid;gap:14px}.ai-step{border:1px solid var(--stroke);border-radius:8px;padding:12px}
+.ai-step-head{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px}
+.ai-choices{display:grid;gap:6px}.ai-choices label{display:flex;gap:8px;align-items:flex-start;font-size:13px}.ai-choices input{margin-top:3px}
+.ai-notice{margin-bottom:12px}
+@media (max-width:720px){.ai-dist{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.panel-title .toolbar.pt-tools{flex-wrap:nowrap;margin:0}.pt-tools input[type=search]{width:300px}.pt-tools .toggle{white-space:nowrap}
+.grid .reg-gauge{margin-bottom:0;height:100%}
+@media (max-width:900px){.panel-title:has(.pt-tools){flex-wrap:wrap}.panel-title .toolbar.pt-tools{flex-wrap:wrap}.pt-tools input[type=search],.rx-tools input[type=search]{width:100%}}

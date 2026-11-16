@@ -14,7 +14,7 @@ class Kutuphane(Base):
     def test_nist_paketleri_tam_kurulur_ve_guncelleme_sas_korur(self):
         lib = self.ok("GET", "/standards/library")
         keys = {p["key"]: p for p in lib["packages"]}
-        self.assertEqual(set(keys), {"nist-sp800-53", "nist-csf-2"})
+        self.assertEqual(set(keys), {"nist-sp800-53", "nist-csf-2", "kvkk-6698", "gdpr-2016-679"})
         self.assertEqual(keys["nist-sp800-53"]["clauses"], 1034)            # 20 aile + 1014 kontrol/iyileştirme
         self.assertEqual(keys["nist-csf-2"]["clauses"], 134)                # 6 işlev + 22 kategori + 106 alt kategori
         self.assertTrue(any("ISO" in u["name"] for u in lib["unavailable"]))

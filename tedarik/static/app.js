@@ -99,9 +99,10 @@ const META = {
   can: need => !!S.meta.permissions[need],
 };
 const FLAGS = new Set(['active', 'required', 'is_primary', 'anonymous', 'met', 'selected', 'disabled', 'certified', 'is_critical', 'is_primary_key', 'nullable',
-  'special', 'foreign_transfer', 'profiling', 'large_scale', 'new_technology', 'identity_verified', 'dpa_signed']);
+  'special', 'foreign_transfer', 'profiling', 'large_scale', 'new_technology', 'identity_verified', 'dpa_signed',
+  'gpai_based', 'uses_personal_data', 'uses_special_data', 'automated_decision', 'transparency_notice']);
 // Kişi alanları: formda kullanıcı dizininden öneri (serbest metin de girilebilir; sahip alanları kullanıcı adı veya görünen adla eşleşir)
-const PERSON = new Set(['owner', 'steward', 'custodian', 'approver', 'assignee', 'reviewer', 'facilitator', 'preparer', 'respondent', 'business_owner', 'responsible']);
+const PERSON = new Set(['owner', 'steward', 'custodian', 'approver', 'assignee', 'reviewer', 'facilitator', 'preparer', 'respondent', 'business_owner', 'responsible', 'technical_owner']);
 async function ensurePeople() {
   if (document.getElementById('peopleList') || !META.can('write')) return;
   const people = await api('directory').catch(() => []);
@@ -112,7 +113,7 @@ const LONG = new Set(['value_json', 'description', 'cause', 'risk_event', 'conse
   'help', 'rationale', 'resolution', 'decision_rationale', 'exception_rationale', 'text', 'details', 'method', 'expected_result',
   'audit_objective', 'scope', 'conclusion', 'root_cause', 'closure_note', 'verification_note', 'justification', 'definition', 'calculation',
   'technical_description', 'needs', 'purpose', 'security_measures', 'necessity', 'risks', 'measures', 'response_summary', 'keywords', 'weak_keywords',
-  'legal_basis_note', 'summary', 'fulfillment_note']);
+  'legal_basis_note', 'summary', 'fulfillment_note', 'human_oversight', 'evaluation_summary', 'monitoring', 'affected_persons']);
 const GOOD = new Set(['active', 'completed', 'published', 'answered', 'submitted', 'done', 'met', 'pass', 'current', 'effective', 'approved', 'production',
   'successful', 'green', 'resolved', 'operational', 'success']);
 const BAD = new Set(['critical', 'terminated', 'expired', 'suspended', 'sla_breach', 'incident', 'high', 'cancelled', 'fail', 'ineffective',
@@ -459,14 +460,14 @@ const MENU = [
   ['Dokümanlar', [['r/documents', 'file']]],
   ['Varlıklar (CMDB)', [['cmdb', 'server', 'CMDB Panosu'], ['r/cmdb_cis', 'box'], ['r/ci_exposures', 'alert']]],
   ['Veri yönetişimi', [['datagov', 'database', 'Veri Yönetişimi Paneli'], ['glossary', 'book', 'İş Sözlüğü'], ['catalog', 'layers', 'Veri Kataloğu'],
-    ['r/data_sources', 'server'], ['collectors', 'plug', 'Toplayıcılar'], ['lineage', 'flow', 'Soy Kütüğü'], ['quality', 'check', 'Veri Kalitesi'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
-  ['Kişisel veri (KVKK)', [['privacy', 'shield', 'KVKK Panosu'], ['discovery', 'search', 'Kişisel Veri Keşfi'], ['r/processing_activities', 'clipboard'],
+    ['r/data_sources', 'server'], ['collectors', 'plug', 'Toplayıcılar'], ['lineage', 'flow', 'Soy Kütüğü'], ['quality', 'check', 'Veri Kalitesi'], ['ai', 'cpu', 'Yapay Zekâ Envanteri'], ['r/data_domains', 'grid'], ['stewardship', 'users', 'Sahiplik Matrisi']]],
+  ['Kişisel veri (KVKK)', [['privacy', 'shield', 'KVKK Panosu'], ['regulation', 'target', 'KVKK / GDPR Boşluk Analizi'], ['discovery', 'search', 'Kişisel Veri Keşfi'], ['r/processing_activities', 'clipboard'],
     ['r/subject_requests', 'mail'], ['r/data_requests', 'inbox'], ['r/privacy_breaches', 'alert'], ['r/dpias', 'scale'], ['r/retention_rules', 'clock'],
     ['r/disposal_runs', 'archive']]],
   ['Tedarikçi yönetimi', [['r/suppliers', 'building'], ['r/engagements', 'link'], ['r/contracts', 'file'], ['r/catalog_items', 'grid'], ['schedule', 'clock', 'Değerlendirme takvimi'], ['r/sla_definitions', 'clock'], ['r/sla_measurements', 'check'], ['r/performance_events', 'flag'], ['r/performance_reviews', 'star'], ['r/survey_templates', 'list'], ['r/survey_campaigns', 'mail']]],
   ['Mimari', [['process-map', 'flow', 'Süreç Haritası'], ['map', 'share', 'İlişki Haritası'], ['r/processes', 'flow'], ['r/audit_universe', 'grid']]],
   ['Kaynak bulma', [['r/needs', 'search'], ['r/quotes', 'coin']]],
-  ['Yönetim', [['roadmap', 'route', 'Yol Haritası'], ['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/personal_data_categories', 'list'], ['r/data_subject_groups', 'users'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
+  ['Yönetim', [['roadmap', 'route', 'Yol Haritası'], ['integrations', 'plug', 'Entegrasyonlar', 'admin'], ['notifications', 'bell', 'Bildirimler', 'admin'], ['users', 'users', 'Kullanıcılar', 'admin'], ['roles', 'key', 'Rol ve Yetki Matrisi'], ['r/companies', 'building'], ['r/org_units', 'home'], ['r/policies', 'sliders'], ['transfer', 'swap', 'Aktarım', 'manage'], ['r/import_batches', 'list'], ['r/cmdb_sync_runs', 'repeat'], ['r/personal_data_categories', 'list'], ['r/data_subject_groups', 'users'], ['r/supplier_types', 'grid'], ['r/review_criteria', 'star'], ['r/audit_log', 'list']]],
 ];
 const ICONS = {
   home: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z', inbox: 'M3 13l3-8h12l3 8v6H3zM3 13h5l1 3h6l1-3h5',
@@ -487,6 +488,7 @@ const ICONS = {
   swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', scale: 'M12 3v18M5 21h14M4 7h16M7 7l-3 7h6zM17 7l-3 7h6z', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
   database: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  key: 'M15 3a6 6 0 0 0-5.6 8.2L3 18.6V21h3v-2h2v-2h2l1.8-1.8A6 6 0 1 0 15 3zM16.5 6.5h.01', cpu: 'M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
   route: 'M6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 17V9a4 4 0 0 1 4-4h6M18 7v8a4 4 0 0 1-4 4H8', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
 function icon(name, cls = '') {
@@ -666,11 +668,12 @@ DETAILS.bc_incidents = id => Router.go('crisis/' + id);
 const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications']);   // dış denetçi
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
+  if (key === 'roles') return !!S.me && ['ADMIN', 'AUDITOR'].includes(S.me.role) && !S.me.external;
   if (key.startsWith('r/')) return !!META.def(key.slice(2));
   if (S.me && S.me.external && !EXTERNAL_NAV.has(key)) return false;
   const modules = {'my-surveys': 'surveys', compliance: 'grc', archive: 'grc', library: 'grc', obligations: 'grc', 'audit-plan': 'grc', crisis: 'continuity', risk: 'risks', bcm: 'continuity', cmdb: 'cmdb', schedule: 'dashboard',
     calendar: 'insights', 'my-work': 'insights', health: 'insights', map: 'insights', 'process-map': 'insights',
-    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov', privacy: 'datagov', discovery: 'datagov', collectors: 'datagov', lineage: 'datagov', quality: 'datagov'}[key];
+    datagov: 'datagov', glossary: 'datagov', catalog: 'datagov', stewardship: 'datagov', privacy: 'datagov', discovery: 'datagov', collectors: 'datagov', lineage: 'datagov', quality: 'datagov', regulation: 'datagov', ai: 'datagov'}[key];
   return !modules || S.meta.modules.includes(modules);
 }
 /** Menü bir kez kurulur; sonraki gezinmelerde yalnızca etkin öğe değişir (kaydırma konumu korunur). */
@@ -1498,7 +1501,7 @@ async function usersPage() {
   const local = S.meta.auth_mode !== 'entra';
   setPage('Kullanıcılar', local ? 'Yerel hesaplar, roller ve birim atamaları. Geçici parola yalnızca bir kez gösterilir.' :
     'Kurumsal hesaplar ilk girişte açılır; rol Entra uygulama rolünden gelir. Burada birim ataması yapılır ve hesap devre dışı bırakılır.',
-  [local ? btn('+ Kullanıcı', () => userForm()) : null]);
+  [local ? btn('+ Kullanıcı', () => userForm()) : null, btn('Rol ve yetki matrisi', () => Router.go('roles'), 'secondary')]);
   const [users] = await Promise.all([api('users'), list('org_units')]);
   const units = id => (S.cache.org_units || []).find(u => u.id === id)?.name || '#' + id;
   content(h('div', {class: 'panel'}, users.length ? h('div', {class: 'tablewrap'}, h('table', {}, h('thead', {}, h('tr', {}, ['Kullanıcı', 'Tür', 'Rol', 'Birimler', 'Durum', 'Erişim', 'Son giriş'].map(t => h('th', {text: t})))),

@@ -1985,6 +1985,7 @@ def my_work_items(db, principal):
     out.update(privacy.my_work_items(db, principal))
     out.update(collection.my_work_items(db, principal, names))
     out.update(quality.my_work_items(db, principal, names))
+    out.update(ai_inventory.my_work_items(db, principal, names))
     return out
 
 
@@ -2015,7 +2016,8 @@ def health_checks(db, check, count, readable=lambda name: True):
               OR (pending_json IS NOT NULL AND pending_at < ?) ORDER BY code""", (stale, stale)), "glossary_terms",
               population=count(db, "SELECT COUNT(*) AS n FROM tdr_glossary_terms WHERE status<>'retired'")),
     ] + privacy.health_checks(db, check, count, readable) + collection.health_checks(db, check, count, readable) + \
-        lineage.health_checks(db, check, count, readable) + quality.health_checks(db, check, count, readable)
+        lineage.health_checks(db, check, count, readable) + quality.health_checks(db, check, count, readable) + \
+        ai_inventory.health_checks(db, check, count, readable)
 
 
 # ------------------------------------------------------------------ kayıt
@@ -2049,6 +2051,8 @@ def register(app):
     collection.register(app)
     lineage.register(app)
     quality.register(app)
+    regulation.register(app)
+    ai_inventory.register(app)
 
 
 def seed(db):
@@ -2058,8 +2062,10 @@ def seed(db):
 
 
 # Aynı modülün parçaları; tanımlar yukarıdakilere dayanır. Faz 2: KVKK ve sınıflandırma, Faz 3: otomatik toplama,
-# Faz 4: soy kütüğü ve etki analizi, Faz 5: veri kalitesi.
+# Faz 4: soy kütüğü ve etki analizi, Faz 5: veri kalitesi, Faz 6: mevzuat boşluk analizi ve yapay zekâ envanteri.
 from . import privacy  # noqa: E402
 from . import collection  # noqa: E402
 from . import lineage  # noqa: E402
 from . import quality  # noqa: E402
+from . import regulation  # noqa: E402
+from . import ai_inventory  # noqa: E402

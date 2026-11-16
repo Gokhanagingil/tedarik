@@ -38,7 +38,12 @@ if [ -f "$SETTINGS" ]; then
   export TEDARIK_DOMAIN
 fi
 if [ -n "${TEDARIK_DOMAIN:-}" ]; then
-  case "$TEDARIK_DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı: $TEDARIK_DOMAIN" >&2; exit 1;; esac
+  # Birden çok adres virgülle verilebilir (ör. kurum alan adı ve eski adres); ilki ana adrestir (bildirim bağlantıları,
+  # Entra dönüşü). Her adres için sertifika ayrı alınır.
+  case "$TEDARIK_DOMAIN" in *[!a-z0-9.,-]*|,*|*,|*,,*) echo "Geçersiz alan adı: $TEDARIK_DOMAIN" >&2; exit 1;; esac
+  TEDARIK_PRIMARY_DOMAIN=${TEDARIK_DOMAIN%%,*}
+  TEDARIK_SITES=$(printf '%s' "$TEDARIK_DOMAIN" | sed 's/,/, /g')
+  export TEDARIK_SITES
   export COMPOSE_PROFILES=tls TEDARIK_COOKIE_SECURE=1 TEDARIK_TRUST_PROXY=1
   if command -v ss >/dev/null 2>&1 && ss -ltn "sport = :443" | grep -q LISTEN && \
      ! docker ps --filter label=com.docker.compose.project=$PROJECT --format '{{.Ports}}' 2>/dev/null | grep -q ':443->'; then
@@ -76,7 +81,7 @@ if [ -f "$ENTRA_SETTINGS" ]; then
   . "$ENTRA_SETTINGS"
   [ -n "${TEDARIK_DOMAIN:-}" ] || { echo "Entra girişi için HTTPS alan adı (TEDARIK_DOMAIN) gerekli" >&2; exit 1; }
   [ -s "$BASE/secrets/entra_client_secret" ] || { echo "Entra istemci sırrı yok: $BASE/secrets/entra_client_secret" >&2; exit 1; }
-  TEDARIK_ENTRA_REDIRECT_URI="${TEDARIK_ENTRA_REDIRECT_URI:-https://$TEDARIK_DOMAIN/auth/entra/callback}"
+  TEDARIK_ENTRA_REDIRECT_URI="${TEDARIK_ENTRA_REDIRECT_URI:-https://$TEDARIK_PRIMARY_DOMAIN/auth/entra/callback}"
   export TEDARIK_AUTH_MODE=entra TEDARIK_ENTRA_TENANT_ID TEDARIK_ENTRA_CLIENT_ID TEDARIK_ENTRA_AUTH_CONTEXT \
     TEDARIK_ENTRA_REDIRECT_URI TEDARIK_ENTRA_CLIENT_SECRET_FILE=/run/secrets/entra_client_secret
 fi
@@ -96,7 +101,7 @@ if [ ! -f "$ENTRA_SETTINGS" ] && [ -f "$AUTH_SETTINGS" ]; then
     export TEDARIK_AUTH_MODE=entra
   fi
 fi
-[ -n "${TEDARIK_DOMAIN:-}" ] && export TEDARIK_PUBLIC_URL="https://$TEDARIK_DOMAIN"
+[ -n "${TEDARIK_DOMAIN:-}" ] && export TEDARIK_PUBLIC_URL="https://$TEDARIK_PRIMARY_DOMAIN"
 chmod 0700 "$BASE" "$BASE/secrets" "$BASE/backups"
 
 others() {   # bu projeye ait olmayan konteynerler: kimlik, ad, başlama zamanı
@@ -208,7 +213,7 @@ if ! cmp -s "$BASE/.others-before" "$BASE/.others-after"; then
   exit 1
 fi
 if [ -n "${TEDARIK_DOMAIN:-}" ]; then
-  echo "Tedarik Portalı çalışıyor: https://$TEDARIK_DOMAIN (sertifika ilk açılışta otomatik alınır). Diğer konteynerler değişmedi."
+  echo "Tedarik Portalı çalışıyor: $(printf '%s' "$TEDARIK_DOMAIN" | sed 's/^/https:\/\//; s/,/ ve https:\/\//g') (sertifika ilk açılışta otomatik alınır). Diğer konteynerler değişmedi."
 else
   echo "Tedarik Portalı çalışıyor: http://127.0.0.1:$PORT (yalnızca sunucu içinden). Diğer konteynerler değişmedi."
 fi

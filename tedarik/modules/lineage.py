@@ -736,6 +736,8 @@ def _impact(db, app, table, column_id):
          JOIN tdr_data_columns dc ON dc.id=m.column_id WHERE dc.table_id IN ({marks}))) ORDER BY g.name""", (*all_ids, *all_ids))
     risks = rows(db, f"""SELECT DISTINCT r.id, r.code, r.title, r.status FROM tdr_risk_data_tables m JOIN tdr_supplier_risks r
         ON r.id=m.risk_id WHERE m.table_id IN ({marks}) AND r.status IN ('open','in_treatment') ORDER BY r.code""", all_ids)
+    from .ai_inventory import impact_systems
+    ai_systems = impact_systems(db, all_ids)
     people = {}
     for a in affected:
         for role, label in (("owner", "Veri sahibi"), ("steward", "Veri yöneticisi"), ("custodian", "Teknik sorumlu")):
@@ -746,6 +748,9 @@ def _impact(db, app, table, column_id):
     for k in controls.values():
         if k["owner"]:
             people.setdefault(k["owner"], {"person": k["owner"], "roles": set(), "tables": 0})["roles"].add("Kontrol sahibi")
+    for x in ai_systems:
+        if x["owner"]:
+            people.setdefault(x["owner"], {"person": x["owner"], "roles": set(), "tables": 0})["roles"].add("Yapay zekâ sistemi sahibi")
     return {
         "focus": {"id": table["id"], "name": table["name"], "schema": table["schema_name"], "source": focus["source_name"],
                   "column_id": column_id, "column": _column_names(db, [column_id]).get(column_id) if column_id else None,
@@ -753,6 +758,7 @@ def _impact(db, app, table, column_id):
         "affected": affected, "reports": [a for a in affected if a["report"]], "systems": sorted(systems.values(), key=lambda s: s["name"]),
         "processes": sorted(processes.values(), key=lambda p: p["name"]), "activities": activities,
         "controls": sorted(controls.values(), key=lambda k: k["code"] or ""), "terms": terms, "risks": risks,
+        "ai_systems": ai_systems,
         "people": sorted(({**p, "roles": sorted(p["roles"])} for p in people.values()), key=lambda p: (-p["tables"], p["person"])),
         "upstream": len(upstream) - 1,
         "summary": {"tables": len(affected), "reports": sum(1 for a in affected if a["report"]),

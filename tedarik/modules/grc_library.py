@@ -1,9 +1,10 @@
 """Standart kütüphanesi, standartlar arası madde ilişkileri ve entegre denetim (grc modülünün parçası). K-023.
 
 Kütüphane
-- `tedarik/data/standards/*.json.gz`: tam metniyle dağıtılabilen standartlar (bugün NIST SP 800-53 Rev. 5.2.0 ve
-  NIST CSF 2.0; ABD federal hükümeti eseri). Dosyalar `scripts/build_standards.py` ile NIST OSCAL kaynaklarından
-  üretilir; kaynak adresi ve SHA-256 özeti pakette ve standart kaydında saklanır.
+- `tedarik/data/standards/*.json.gz`: tam metniyle dağıtılabilen standartlar ve mevzuat: NIST SP 800-53 Rev. 5.2.0 ve
+  NIST CSF 2.0 (ABD federal hükümeti eseri; NIST OSCAL kaynaklarından), KVKK 6698 (mevzuat.gov.tr resmî metni; FSEK md. 31)
+  ve GDPR (AB) 2016/679 (EUR-Lex; 2011/833/AB). Dosyalar `scripts/build_standards.py` ile üretilir; kaynak adresi ve
+  SHA-256 özeti pakette ve standart kaydında saklanır.
 - Kurulum ve güncelleme aynı işlemdir: madde metni, rehber ve değerlendirme alanları güncellenir; kurumun girdiği
   uygulanabilirlik bildirimi (uygulanabilir, gerekçe) ve eşlemeler korunur. Paketten çıkan madde silinmez.
 - Telifli standartlar (ISO, TS EN, PCI DSS, CIS) pakete konmaz; kurum lisanslı kopyasını Excel/CSV veya aynı JSON

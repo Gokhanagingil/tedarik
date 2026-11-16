@@ -225,6 +225,16 @@ documents ── document_revisions (değişmez), document_files + document_blob
 | `data_collectors.profile_rows` | Toplayıcının profil örnek büyüklüğü | 0: kapalı |
 | `findings.source = data_quality` | Kontrole bağlı olmayan kuralın bulgusu | Tekrar eden başarısızlık sayacı artırır |
 
+## Mevzuat boşluk analizi ve yapay zekâ envanteri (K-033, K-034)
+
+| Tablo | Amaç | Notlar |
+|---|---|---|
+| `regulation_assessments` | KVKK/GDPR maddesinin uyum değerlendirmesi | Madde başına tek kayıt (`clause_id` benzersiz); durum uyumlu, kısmen, uyumsuz, değerlendirilmedi; kısmen/uyumsuzda açık zorunlu; değerlendiren ve zaman sunucuda; yalnızca `POST /datagov/regulation/assess` ile yazılır |
+| `ai_systems` | Yapay zekâ sistemleri (YZS-) | Rol, kaynak, tedarikçi, model, yaşam döngüsü, sahip, birim (birim kapsamı), kişisel veri, otomatik karar, insan gözetimi, bildirim, log süresi, işleme faaliyeti, VKED, FRIA; `risk_class`, `risk_basis`, `classification_json` yalnızca sihirbazla (`POST /ai_systems/{id}/classify`) yazılır |
+| `ai_system_tables` | Sistemin veri varlıkları | Kullanım: eğitim, ince ayar, girdi, çıktı, referans; `POST /ai_systems/{id}/tables` listeyle eşitler |
+
+Uç noktalar: `GET /datagov/regulation?code=KVKK|GDPR` (madde, gösterge, kontrol, değerlendirme, özet), `POST /datagov/regulation/finding`, `POST /datagov/regulation/crosswalk`, `GET /datagov/ai`, `GET /datagov/ai/export`, `GET /ai_systems/{id}/context`, `GET /data_tables/{id}/ai-systems`, `GET /roles/matrix[?format=csv]` (K-035). Mevzuat metinleri `tdr_standards`/`tdr_clauses` içindedir (kütüphane anahtarları `kvkk-6698`, `gdpr-2016-679`).
+
 ## İş akışı ve kaynak bulma (kapalı modüller)
 
 | Kaynak | Amaç |

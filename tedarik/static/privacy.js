@@ -86,6 +86,7 @@ PAGES.privacy = async function privacyPage() {
   setPage('KVKK Panosu', 'Kişisel verinin nerede olduğu, hangi amaç ve hukuki sebeple işlendiği, ne kadar saklandığı; envanter açıkları ve süreli işler.', [
     manage ? btn('Keşfi çalıştır', async () => { const r = await api('datagov/discovery/run', {method: 'POST', body: {}}); toast(`${r.scanned_columns} kolon tarandı · ${r.new} yeni öneri`); render(); }, 'secondary') : null,
     btn('VERBİS envanteri (Excel)', () => download('datagov/verbis-export?format=xlsx', 'kisisel-veri-envanteri.xlsx'), 'secondary'),
+    btn('KVKK / GDPR boşluk analizi', () => Router.go('regulation'), 'secondary'),
     canWrite('processing_activities') ? btn('+ İşleme faaliyeti', () => createRecord('processing_activities')) : null], [['Veri Yönetişimi', 'datagov']]);
   const cols = d.columns; const disp = d.disposal;
   const subj = d.subject_requests; const nearest = subj.length ? subj[0] : null;

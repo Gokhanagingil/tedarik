@@ -311,7 +311,55 @@ def pbi_columns():
 
 
 DATAGOV_SECTIONS = (("datagov", "datagov"), ("privacy", "datagov"), ("collection", "datagov"), ("lineage", "datagov"),
-                    ("quality", "datagov"))
+                    ("quality", "datagov"), ("regulation", "datagov"), ("ai_inventory", "datagov"))
+
+# Faz 6 — yapay zekâ sistemleri (sentetik): ad, amaç, rol, kaynak, tedarikçi, model, genel amaçlı, kurulum, yaşam döngüsü,
+# sahip, teknik sorumlu, birim, kişisel veri, otomatik karar, insan gözetimi, bildirim, log ayı, faaliyet adı, VKED başlığı,
+# sınıflandırma yanıtları (None: sınıflandırılmadı), veri varlıkları [(kaynak, tablo, kullanım)]
+AI_SYSTEMS = [
+    ("Müşteri hizmetleri sohbet asistanı", "Web ve mobil uygulamada sipariş, fatura ve arıza sorularını yanıtlamak; çözülemeyen talebi temsilciye aktarmak",
+     "deployer", "vendor", "Süphan Yazılım A.Ş.", "llm", 1, "saas", "production", "deniz.koc", "can.ozturk", "Müşteri Hizmetleri",
+     1, 0, "Temsilciye aktarma her konuşmada açık; yanıtlar haftalık örneklemle kalite ekibince incelenir", 1, 12,
+     "Müşteri ilişkileri yönetimi (CRM)", None, {"transparency": ["interacts", "synthetic"]},
+     [("Dynamics 365 CRM", "contact", "input"), ("ServiceNow ITSM", "incident", "reference")]),
+    ("Müşteri kaybı (churn) tahmini ve kampanya hedefleme", "Ayrılma olasılığı yüksek müşterileri tahmin edip sadakat kampanyası segmentine atamak",
+     "deployer", "in_house", None, "classical_ml", 0, "on_prem", "production", "elif.sahin", "okan.yildiz", "Müşteri Hizmetleri",
+     1, 0, "Segment listesi kampanya öncesi pazarlama yöneticisince onaylanır", 0, 24,
+     "Pazarlama kampanyaları ve e-bülten", "VKED: kampanya hedefleme ve profilleme", {},
+     [("Kurumsal Veri Ambarı", "dim_musteri", "training"), ("Kurumsal Veri Ambarı", "fct_satis", "training"), ("SAP S/4HANA Üretim", "ZMUS_SADAKAT", "input")]),
+    ("Aday ön eleme asistanı", "İş başvurularındaki özgeçmişleri ilan kriterlerine göre puanlayıp ön eleme listesi hazırlamak",
+     "deployer", "vendor", "Uludağ İnsan Kaynakları ve Dış Kaynak A.Ş.", "llm", 1, "saas", "pilot", "zeynep.demir", None, "İnsan Kaynakları",
+     1, 1, None, 0, None, None, None, {"annex_iii": ["employment"], "profiling": True},
+     [("SAP S/4HANA Üretim", "PA0002", "reference")]),
+    ("Tedarikçi faturası okuma ve hesap sınıflandırma", "Gelen e-fatura ve PDF faturaları okuyup muhasebe hesabı ve masraf yeri önermek",
+     "provider_deployer", "in_house", None, "computer_vision", 0, "on_prem", "production", "mehmet.kaya", "okan.yildiz", "Finans",
+     0, 0, "Önerilen hesap muhasebe uzmanı onayıyla kaydedilir", 0, 12, None, None, {},
+     [("SAP S/4HANA Üretim", "BKPF", "output"), ("SAP S/4HANA Üretim", "BSEG", "output"), ("SAP S/4HANA Üretim", "LFA1", "reference")]),
+    ("Bireysel müşteri vadeli satış limiti skorlaması", "Taksitli satışta bireysel müşterinin ödeme gücünü puanlayıp limit önermek",
+     "deployer", "vendor", "Akdeniz Teknoloji A.Ş.", "classical_ml", 0, "saas", "idea", "kerem.aksoy", None, "Finans",
+     1, 1, "Limit reddi kredi uzmanınca gözden geçirilir; müşteri itiraz edebilir", 1, 6,
+     "Satış ve faturalama", None, {"annex_iii": ["credit"], "profiling": True}, [("SAP S/4HANA Üretim", "KNA1", "input")]),
+    ("BT olay kayıtlarında otomatik önceliklendirme", "Gelen olay kayıtlarının önceliğini ve atanacak grubu tahmin etmek",
+     "deployer", "in_house", None, "classical_ml", 0, "cloud", "development", "can.ozturk", "can.ozturk", "BT Altyapı ve Operasyon",
+     0, 0, None, 0, None, None, None, None, [("ServiceNow ITSM", "incident", "training")]),
+]
+# Mevzuat değerlendirmeleri (sentetik): (mevzuat, madde, durum, not, sorumlu, hedef gün, bulgu açılsın mı)
+REG_ASSESSMENTS = [
+    ("KVKK", "md. 9", "non_compliant", "CRM'in yurt dışı bulut barındırması için standart sözleşme imzalandı ancak Kurula beş iş günü içinde bildirim yapılmadı.",
+     "zeynep.demir", 20, True),
+    ("KVKK", "md. 10", "partial", "Çağrı merkezi ve web formu için aydınlatma metni var; mobil uygulama kayıt ekranında katmanlı aydınlatma eksik.",
+     "deniz.koc", 45, False),
+    ("KVKK", "md. 13", "compliant", None, "zeynep.demir", None, False),
+    ("KVKK", "md. 16", "partial", "VERBİS kaydı 2025 sonunda güncellendi; yeni kampanya faaliyeti henüz eklenmedi.", "zeynep.demir", 30, False),
+    ("GDPR", "Art. 30", "partial", "AB müşterileri için işleme kayıtları KVKK envanterinden üretiliyor; temsilci (Art. 27) bilgisi eksik.", "zeynep.demir", 60, False),
+]
+# Kontrol ↔ madde eşlemeleri (sentetik): kontrol adı -> [(mevzuat, madde)]
+REG_CONTROLS = {
+    "Bulut tedarikçilerinde veri yerleşimi ve KVKK taahhüdü": [("KVKK", "md. 9"), ("GDPR", "Art. 28"), ("GDPR", "Art. 46")],
+    "İmtiyazlı hesaplarda MFA etkinliği": [("KVKK", "md. 12"), ("GDPR", "Art. 32")],
+    "Güvenlik olayı bildirim ve eskalasyonu": [("KVKK", "md. 12"), ("GDPR", "Art. 33")],
+    "Merkezi log saklama ve kaynak kapsaması": [("GDPR", "Art. 32")],
+}
 
 
 class DatagovSections:
@@ -846,6 +894,77 @@ class DatagovSections:
                 "consequence": "; ".join(score["factors"]), "entity_name": "Pazarlama Dosya Paylaşımı"}, None)
             db.execute("INSERT INTO tdr_risk_data_tables (risk_id, table_id, created_at) VALUES (?,?,?)", (risk, kampanya["id"], utcnow()))
 
+    # -------------------------------------------------------------- Faz 6: mevzuat boşluk analizi ve yapay zekâ (K-033, K-034)
+    def regulation(self):
+        """KVKK ve GDPR metinleri kütüphaneden kurulur; KVKK kapsama alınır, iki mevzuat eşlenir, birkaç kontrol maddelere
+        bağlanır ve örnek değerlendirmeler girilir (biri bulgu ve DÖF açar)."""
+        from datetime import date, timedelta
+        from . import crud
+        from .modules import grc_library, regulation as R
+        db = self.db
+        if one(db, "SELECT id FROM tdr_regulation_assessments LIMIT 1"):
+            return
+        packages = {pkg.get("key"): pkg for _, pkg in grc_library.packages()}
+        for key in ("kvkk-6698", "gdpr-2016-679"):
+            if key in packages:
+                grc_library.install_package(db, packages[key], ADMIN, library_key=key)
+        db.execute("UPDATE tdr_standards SET active=1 WHERE code='KVKK'")
+        R.apply_crosswalk(db, ADMIN)
+        clause = {(r["scode"], r["code"]): r["id"] for r in db.execute(
+            "SELECT c.id, c.code, s.code AS scode FROM tdr_clauses c JOIN tdr_standards s ON s.id=c.standard_id WHERE s.code IN ('KVKK','GDPR')").fetchall()}
+        for name, refs in REG_CONTROLS.items():
+            k = one(db, "SELECT id FROM tdr_controls WHERE name=?", (name,))
+            for ref in refs if k else ():
+                if ref in clause:
+                    db.execute("INSERT INTO tdr_control_clauses (control_id, clause_id) VALUES (?,?) ON CONFLICT DO NOTHING", (k["id"], clause[ref]))
+        now = utcnow()
+        for scode, art, status, note, owner, due_days, finding in REG_ASSESSMENTS:
+            cid = clause.get((scode, art))
+            if not cid:
+                continue
+            due = (date.today() + timedelta(days=due_days)).isoformat() if due_days else None
+            db.execute("""INSERT INTO tdr_regulation_assessments (clause_id, status, note, owner, due_date, assessed_by, assessed_at, created_at)
+                VALUES (?,?,?,?,?,?,?,?)""", (cid, status, note, owner, due, ADMIN.username, now, now))
+            if finding:
+                from .modules.grc import ACTIONS, FINDINGS
+                fid = crud.insert(db, FINDINGS, {"title": f"{scode} {art}: uyum açığı", "clause_id": cid, "source": "self_assessment",
+                                                 "severity": "high", "description": note, "owner": owner, "due_date": due}, ADMIN)
+                crud.insert(db, ACTIONS, {"title": f"Uyum açığını gider: {scode} {art}", "finding_id": fid, "owner": owner, "due_date": due,
+                                          "priority": "high", "description": "Standart sözleşmeyi Kurula bildirin; bildirim süresini takvime bağlayın."}, ADMIN)
+
+    def ai_inventory(self):
+        """Altı yapay zekâ sistemi: sınıflandırılmış (sınırlı, asgari, yüksek), biri sınıflandırılmamış; veri varlıklarına bağlı."""
+        from .demo_platform import day
+        from .modules import ai_inventory as A
+        db = self.db
+        if one(db, "SELECT id FROM tdr_ai_systems LIMIT 1"):
+            return
+        now = utcnow()
+        for (name, purpose, role, source_type, supplier, model, gpai, deployment, lifecycle, owner, tech, unit, personal, automated,
+             oversight, notice, logs, activity, dpia, answers, tables) in AI_SYSTEMS:
+            ref = lambda sql, v: (one(db, sql, (v,)) or {}).get("id") if v else None   # noqa: E731
+            data = {"name": name, "purpose": purpose, "role": role, "source_type": source_type, "model_type": model, "gpai_based": gpai,
+                    "deployment": deployment, "lifecycle": lifecycle, "owner": owner, "technical_owner": tech,
+                    "supplier_id": ref("SELECT id FROM tdr_suppliers WHERE name=?", supplier),
+                    "org_unit_id": ref("SELECT id FROM tdr_org_units WHERE name=?", unit), "uses_personal_data": personal,
+                    "automated_decision": automated, "human_oversight": oversight, "transparency_notice": notice, "log_retention_months": logs,
+                    "activity_id": ref("SELECT id FROM tdr_processing_activities WHERE name=?", activity),
+                    "dpia_id": ref("SELECT id FROM tdr_dpias WHERE title=?", dpia),
+                    "last_evaluated_on": day(-75) if lifecycle == "production" else None, "review_date": day(120)}
+            sid = self.add("ai_systems", {k: v for k, v in data.items() if v is not None})
+            if answers is not None:
+                result = A.classify(answers, role)
+                stored = {**result, "classified_by": ADMIN.username, "classified_at": now}
+                db.execute("""UPDATE tdr_ai_systems SET risk_class=?, risk_basis=?, classification_json=?, classified_by=?, classified_at=?
+                    WHERE id=?""", (result["risk_class"], "\n".join(result["basis"]), json.dumps(stored, ensure_ascii=False),
+                                    ADMIN.username, now, sid))
+            for source, table, usage in tables:
+                t = one(db, """SELECT t.id FROM tdr_data_tables t JOIN tdr_data_sources s ON s.id=t.source_id WHERE s.name=? AND t.name=?""",
+                        (source, table))
+                if t:
+                    db.execute("""INSERT INTO tdr_ai_system_tables (ai_system_id, table_id, usage, created_by, created_at)
+                        VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING""", (sid, t["id"], usage, ADMIN.username, now))
+
 
 COLLECTORS = [  # kaynak, ad, bağlayıcı, sıklık, kapsam, örnek satır, son gönderim (saat önce), sonuç, ileti, makine
     ("SAP S/4HANA Üretim", "S/4HANA gece toplayıcısı", "sql", "daily", "schemas", 0, 5, "ok", None, "dg-toplayici-01"),
@@ -914,7 +1033,6 @@ DQ_RULES = [  # (kaynak, tablo, kolon, tür, parametreler, eşik, önem, sahip, 
     ("Pazarlama Dosya Paylaşımı", "kampanya_katilimcilari_2026.xlsx", "e_posta", "format", {"format": "email"}, 97, "medium",
      None, (0.04, 0.06), False),
 ]
-
 
 def RESOURCES_COLUMNS():
     from .modules.datagov import COLUMNS

@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       domain:
-        description: "HTTPS alan adı (boş: sunucudaki kayıtlı ayar korunur)"
+        description: "HTTPS alan adı; birden çok adres virgülle, ilki ana adres (boş: sunucudaki kayıtlı ayar korunur)"
         type: string
         default: "tedarik.204-168-247-101.sslip.io"
       seed_demo:
@@ -45,7 +45,7 @@ jobs:
         run: |
           python -m pip install --require-hashes --only-binary=:all: -r requirements.txt
           python -m unittest discover -s tests
-          node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js && node --check tedarik/static/admin.js && node --check tedarik/static/assurance.js && node --check tedarik/static/ops.js && node --check tedarik/static/datagov.js && node --check tedarik/static/privacy.js && node --check tedarik/static/collect.js && node --check tedarik/static/lineage.js && node --check tedarik/static/quality.js
+          node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js && node --check tedarik/static/admin.js && node --check tedarik/static/assurance.js && node --check tedarik/static/ops.js && node --check tedarik/static/datagov.js && node --check tedarik/static/privacy.js && node --check tedarik/static/collect.js && node --check tedarik/static/lineage.js && node --check tedarik/static/quality.js && node --check tedarik/static/regulation.js && node --check tedarik/static/aisystems.js
           sh -n deploy/deploy.sh && sh -n deploy/backup.sh
       - name: Verify deployment secrets
         env:
@@ -67,7 +67,7 @@ jobs:
           AUTH_MODE: ${{ inputs.auth_mode || 'keep' }}
         run: |
           set -eu
-          case "$DOMAIN" in *[!a-z0-9.-]*) echo "Geçersiz alan adı"; exit 1;; esac
+          case "$DOMAIN" in *[!a-z0-9.,-]*|,*|*,|*,,*) echo "Geçersiz alan adı"; exit 1;; esac
           case "$AUTH_MODE" in keep|local|entra) ;; *) echo "Geçersiz giriş modu"; exit 1;; esac
           install -m 700 -d ~/.ssh
           printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
@@ -92,15 +92,18 @@ jobs:
           DOMAIN: ${{ inputs.domain }}
         run: |
           set -eu
-          for i in $(seq 1 24); do
-            if curl -fsS -o /dev/null --max-time 10 "https://$DOMAIN/login"; then break; fi
-            echo "Sertifika veya bağlantı bekleniyor ($i/24)"; sleep 10
+          for D in $(printf '%s' "$DOMAIN" | tr ',' ' '); do
+            echo "== https://$D"
+            for i in $(seq 1 24); do
+              if curl -fsS -o /dev/null --max-time 10 "https://$D/login"; then break; fi
+              echo "Sertifika veya bağlantı bekleniyor ($i/24)"; sleep 10
+            done
+            curl -sS -D headers.txt -o /dev/null --max-time 10 "https://$D/login"
+            grep -i '^strict-transport-security' headers.txt
+            grep -i '^content-security-policy' headers.txt
+            test "$(curl -s -o /dev/null -w '%{http_code}' "https://$D/api/tdr/suppliers")" = 401
+            echo | openssl s_client -connect "$D:443" -servername "$D" 2>/dev/null | openssl x509 -noout -issuer -enddate
           done
-          curl -sS -D headers.txt -o /dev/null --max-time 10 "https://$DOMAIN/login"
-          grep -i '^strict-transport-security' headers.txt
-          grep -i '^content-security-policy' headers.txt
-          test "$(curl -s -o /dev/null -w '%{http_code}' "https://$DOMAIN/api/tdr/suppliers")" = 401
-          echo | openssl s_client -connect "$DOMAIN:443" -servername "$DOMAIN" 2>/dev/null | openssl x509 -noout -issuer -enddate
       - name: Clean up key
         if: always()
         run: rm -f ~/.ssh/id_deploy
@@ -144,9 +147,11 @@ jobs:
           { echo "TDR_ADMIN_PASS=$PASS"; echo "TDR_MCP_KEY=$MCP"; } >> "$GITHUB_ENV"
       - name: Live acceptance test
         env:
-          TDR_BASE: https://${{ inputs.domain }}
+          DOMAIN: ${{ inputs.domain }}
           TDR_ADMIN_USER: kabul.yonetici
-        run: python scripts/acceptance.py kabul
+        run: |
+          export TDR_BASE="https://${DOMAIN%%,*}"
+          python scripts/acceptance.py kabul
       - name: Lock the acceptance administrator (random password nobody knows)
         if: always()
         env:

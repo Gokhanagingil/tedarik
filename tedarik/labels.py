@@ -588,6 +588,39 @@ CHOICES.update({
 })
 CHOICES["risk_category"] = CHOICES["category"]
 CHOICES["risk_category"] = CHOICES["category"]
+# Mevzuat boşluk analizi (K-033) ve yapay zekâ envanteri (K-034)
+FIELDS.update({
+    "regulation_assessments.clause_id": "Mevzuat maddesi", "regulation_assessments.status": "Değerlendirme",
+    "regulation_assessments.note": "Açık / gerekçe", "regulation_assessments.owner": "Sorumlu", "assessed_by": "Değerlendiren",
+    "ai_systems.name": "Sistem adı", "ai_systems.purpose": "Kullanım amacı", "ai_systems.role": "Kurumun rolü (Tüzük md. 3)",
+    "ai_systems.source_type": "Kaynağı", "ai_systems.owner": "İş sahibi", "model_type": "Model türü",
+    "gpai_based": "Genel amaçlı modele (ör. büyük dil modeli) dayanıyor", "deployment": "Kurulum",
+    "lifecycle": "Yaşam döngüsü", "technical_owner": "Teknik sorumlu", "affected_persons": "Etkilenen kişiler",
+    "risk_class": "Risk sınıfı (AB Yapay Zekâ Tüzüğü)", "risk_basis": "Sınıf dayanağı", "classification_json": "Sınıflandırma yanıtları",
+    "classified_by": "Sınıflandıran", "classified_at": "Sınıflandırma zamanı", "uses_personal_data": "Kişisel veri işliyor",
+    "uses_special_data": "Özel nitelikli kişisel veri işliyor", "automated_decision": "Kişi hakkında otomatik karar veriyor",
+    "human_oversight": "İnsan gözetimi (kim, nasıl müdahale eder)", "transparency_notice": "Kişilere yapay zekâ kullanımı bildiriliyor",
+    "log_retention_months": "Kayıt (log) saklama süresi (ay)", "dpia_id": "VKED", "fria_done_on": "Temel haklar etki değerlendirmesi (FRIA) tarihi",
+    "last_evaluated_on": "Son performans/yanlılık değerlendirmesi", "evaluation_summary": "Değerlendirme özeti",
+    "monitoring": "İzleme yöntemi", "ai_system_id": "Yapay zekâ sistemi", "usage": "Kullanım",
+})
+CHOICES.update({
+    "regulation_assessments.status": {"compliant": "Uyumlu", "partial": "Kısmen uyumlu", "non_compliant": "Uyumsuz",
+                                      "not_assessed": "Değerlendirilmedi"},
+    "ai_systems.role": {"provider": "Sağlayıcı (geliştirip kendi adıyla sunar)", "deployer": "Kullanıcı (deployer)",
+                        "provider_deployer": "Sağlayıcı ve kullanıcı", "importer": "İthalatçı", "distributor": "Dağıtıcı"},
+    "ai_systems.source_type": {"in_house": "Kurum içi geliştirme", "vendor": "Satın alınan / hizmet", "open_source": "Açık kaynak"},
+    "model_type": {"classical_ml": "Klasik makine öğrenmesi", "deep_learning": "Derin öğrenme", "llm": "Büyük dil modeli",
+                   "computer_vision": "Görüntü işleme", "speech": "Ses / konuşma", "recommendation": "Öneri sistemi",
+                   "rules": "Kural tabanlı / uzman sistem", "other": "Diğer"},
+    "deployment": {"saas": "Hizmet olarak (SaaS)", "cloud": "Kurum bulutu", "on_prem": "Kurum içi", "hybrid": "Hibrit", "edge": "Uç cihaz"},
+    "lifecycle": {"idea": "Fikir / değerlendirme", "development": "Geliştirme", "pilot": "Pilot", "production": "Kullanımda",
+                  "retired": "Kullanımdan kalktı"},
+    "risk_class": {"prohibited": "Yasaklı uygulama", "high": "Yüksek risk", "limited": "Sınırlı risk (şeffaflık)",
+                   "minimal": "Asgari risk", "unassessed": "Sınıflandırılmadı"},
+    "ai_system_tables.usage": {"training": "Eğitim verisi", "fine_tuning": "İnce ayar verisi", "input": "Girdi (çalışma anı)",
+                               "output": "Çıktı (sonuç yazılan)", "reference": "Referans / bilgi kaynağı"},
+})
 
 
 def field(name, resource=None):

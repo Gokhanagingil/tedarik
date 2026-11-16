@@ -9,7 +9,7 @@
 	}
 }
 
-{$TEDARIK_DOMAIN} {
+{$TEDARIK_SITES} {
 	tls {
 		issuer acme {
 			disable_http_challenge
