@@ -6,6 +6,7 @@ akış (PKCE, durum, nonce, bağlam, rol, oturum) gerçek kopya kodla çalışı
 import importlib.util
 import io
 import json
+import os
 import time
 import unittest
 import urllib.error
@@ -13,7 +14,7 @@ from pathlib import Path
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from test_tedarik import Base
+from test_tedarik import KEY, PG_URL, Base
 
 from tedarik import bootstrap
 from tedarik.vendor import identity
@@ -69,6 +70,38 @@ class YerelOturum(Base):
                                      cookie=cookie)
         self.assertEqual(status, 200)
         return cookie_of(reply)
+
+    def test_kurulum_komutu_parolayi_standart_girdiden_alir(self):
+        import contextlib
+        import io
+        from unittest import mock
+        start = "Baslangic-Parolasi-2026"            # sentetik
+        out = io.StringIO()
+        env = {"TEDARIK_DB": self.path, "TEDARIK_AUTH_MODE": "local", "TEDARIK_API_KEY": KEY}
+        if PG_URL:
+            env.update({"TEDARIK_DATABASE_URL": PG_URL, "TEDARIK_DB_SCHEMA": self.schema})
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdin", io.StringIO(start + "\n")), contextlib.redirect_stdout(out):
+            bootstrap.main(["set", "grc.yonetici", "--password-stdin"])
+        self.assertIn("grc.yonetici", out.getvalue())
+        self.assertNotIn(start, out.getvalue())                       # parola çıktıya yazılmaz
+        cookie, payload = self.login("grc.yonetici", start)
+        self.assertTrue(payload["must_change_password"])
+        self.assertEqual(self.request("GET", "/api/me", cookie=cookie)[1]["role"], "ADMIN")
+        fresh = self.ready("grc.yonetici", start)
+        self.assertEqual(self.request("GET", "/api/tdr/suppliers", cookie=fresh)[0], 200)
+        # var olan hesap: parola yenilenir, oturumlar kapanır, yeniden değişim zorunlu
+        self.assertTrue(bootstrap.run(self.app, "set", "grc.yonetici", start + "-2"))
+        self.assertEqual(self.request("GET", "/api/tdr/suppliers", cookie=fresh)[0], 401)
+        self.assertTrue(self.login("grc.yonetici", start + "-2")[1]["must_change_password"])
+        with self.assertRaises(SystemExit):
+            bootstrap.run(self.app, "set", "grc.yonetici", "kisa")
+        with self.assertRaises(SystemExit):
+            bootstrap.run(self.app, "set", "kötü ad", start)
+        with mock.patch.dict(os.environ, env), self.assertRaises(SystemExit):
+            bootstrap.main(["set", "grc.yonetici"])                  # --password-stdin zorunlu
+        with self.app.database.connect() as db:
+            events = db.execute("SELECT changes_json FROM tdr_audit_log WHERE method='BOOTSTRAP'").fetchall()
+        self.assertTrue(events and all(start not in e["changes_json"] for e in events))
 
     def test_anonim_istekler(self):
         self.assertEqual(self.request("GET", "/api/tdr/suppliers")[0], 401)

@@ -26,6 +26,10 @@ on:
         description: "Kurulumdan sonra canlı kabul testini çalıştır (scripts/acceptance.py; KABUL işaretli kayıt yazar)"
         type: boolean
         default: false
+      admin_account:
+        description: "Yönetici hesabı aç / parolasını yenile (ör. grc.yonetici). Başlangıç parolası TEDARIK_ADMIN_INITIAL_PASSWORD gizli değerinden alınır; ilk girişte değişim zorunlu. Boş: dokunulmaz"
+        type: string
+        default: ""
 permissions:
   contents: read
 concurrency:
@@ -86,6 +90,22 @@ jobs:
             \$S tar -xzf /tmp/tedarik-$GITHUB_SHA.tar.gz -C \$R && rm -f /tmp/tedarik-$GITHUB_SHA.tar.gz
             \$S ln -sfn \$R /opt/tedarik/current
             \$S env TEDARIK_RELEASE=${GITHUB_SHA::12} TEDARIK_INSTALL_DOCKER=$INSTALL_DOCKER TEDARIK_DOMAIN=$DOMAIN TEDARIK_SEED_DEMO=$SEED_DEMO TEDARIK_AUTH_MODE_SET=$AUTH_MODE sh /opt/tedarik/current/deploy/deploy.sh"
+      - name: Administrator account (password only from the TEDARIK_ADMIN_INITIAL_PASSWORD secret, via stdin; never logged)
+        if: inputs.admin_account != ''
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+          ACCOUNT: ${{ inputs.admin_account }}
+          INITIAL: ${{ secrets.TEDARIK_ADMIN_INITIAL_PASSWORD }}
+        run: |
+          set -eu
+          case "$ACCOUNT" in ""|*[!a-z0-9._-]*) echo "Geçersiz kullanıcı adı (küçük harf, rakam, . _ -)"; exit 1;; esac
+          [ ${#ACCOUNT} -le 80 ] || { echo "Kullanıcı adı çok uzun"; exit 1; }
+          [ -n "$INITIAL" ] || { echo "TEDARIK_ADMIN_INITIAL_PASSWORD gizli değeri tanımlı değil (Settings → Secrets and variables → Actions)"; exit 1; }
+          [ ${#INITIAL} -ge 12 ] || { echo "Başlangıç parolası en az 12 karakter olmalı"; exit 1; }
+          echo "::add-mask::$INITIAL"
+          OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          printf '%s' "$INITIAL" | ssh $OPTS "$USER@$HOST" "sudo -n docker exec -i tedarik-app-1 python -m tedarik.bootstrap set $ACCOUNT --password-stdin"
       - name: External HTTPS check (certificate, security headers, anonymous access denied)
         if: inputs.domain != ''
         env:
