@@ -247,6 +247,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
     kural, kolon profili, iki hacim anomalisi.
   - Testler: 178 uçtan uca test (SQLite ve PostgreSQL 16; kural SQL'leri gerçek PostgreSQL'de çalıştırılır), tarayıcı duman testi
     kalite akışıyla (kural → SQL → sonuç → bulgu/DÖF).
+  - Test sunucusuna dağıtıldı (commit `b398327`): demo verisine kalite bölümü eklendi; canlı kabul testi geçti (GitHub Actions
+    çalıştırması 43792632163, 2026-11-16); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
 - **Veri yönetişimi Faz 0–1 (2026-11-15, K-028).** Kurum bir teknoloji şirketi; öncelikli kaynaklar SAP HANA, ServiceNow, Dynamics 365
   ve Power BI.
   - *Yol haritası:* Yönetim → Yol Haritası; modül/faz kartları, ilerleme, "Bilgi bekleniyor" maddeleri ve kurumdan beklenenler;
