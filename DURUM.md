@@ -234,6 +234,10 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
   - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
     çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Yönetici hesabı GitHub gizli değeriyle (2026-11-16).** `tedarik.bootstrap set KULLANICI --password-stdin` ve kurulum işinde
+  `admin_account` girdisi: başlangıç parolası yalnızca `TEDARIK_ADMIN_INITIAL_PASSWORD` gizli değerinden, SSH standart girdisiyle
+  gider; günlükte maskelenir; hesap Yönetici, süresiz, ilk girişte parola değişimi zorunlu, denetim izine yazılır. Gökhan Bey için
+  `grc.yonetici` açıldı (çalıştırma 43863005510). Gizli değer ilk girişten sonra silinmeli (DAGITIM.md).
 - **Kullanım kılavuzları (2026-11-16, K-036).** Gökhan Bey'in isteği: kullanıcı kılavuzları.
   - 15 kılavuz (`tedarik/data/kilavuz/`, ~9.500 kelime): Başlarken; rol kılavuzları (Yönetici, Tedarikçi Yöneticisi, Birim
     Kullanıcısı, Denetçi ve dış denetçi, Görüntüleyici); modül kılavuzları (tedarikçi, risk, uyum ve denetim, iş sürekliliği,
