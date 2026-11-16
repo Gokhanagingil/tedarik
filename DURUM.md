@@ -246,6 +246,9 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - CLAUDE.md'ye kural: ekran davranışı veya düğme adı değişirse ilgili kılavuz aynı değişiklikte güncellenir.
   - Testler: 190 uçtan uca test; kılavuz testleri bölüm bağlantılarını, kılavuz içi bağlantıların gerçek ekranlara gittiğini ve
     menüdeki her ekranın yardım eşlemesini denetler; tarayıcı duman testi arama, bağlama duyarlı yardım ve `?` tuşunu yürütür.
+  - Test sunucusuna dağıtıldı (commit `2a4548f`, kabul betiği düzeltmesi `4b0b6c5`): canlı kabul testi 25/25 geçti (yeni senaryo:
+    görüntüleyiciyle kılavuz listesi, kılavuz ve arama) — GitHub Actions çalıştırması 43831419498 (2026-11-16). İlk çalıştırmada
+    (43830590906) yalnızca kabul betiğindeki kodlanmamış arama adresi hata verdi; uygulama etkilenmedi.
 - **Veri yönetişimi Faz 6 — mevzuat boşluk analizi, yapay zekâ envanteri; rol ve yetki matrisi (2026-11-16, K-033 – K-035).**
   Gökhan Bey'in isteği: Faz 6'nın kendisinden bilgi beklemeyen kısımları ve Kullanıcılar altında rol/yetki matrisi.
   - *Mevzuat metinleri:* KVKK 6698 (7499 değişiklikleriyle; mevzuat.gov.tr) ve GDPR 2016/679 (EUR-Lex, İngilizce; 99 madde,
