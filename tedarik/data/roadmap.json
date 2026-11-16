@@ -112,6 +112,8 @@
      "title": "Rol ve yetki matrisi", "description": "Yönetim → Kullanıcılar altında; koddaki tanımlardan hesaplanır: kaynak başına okuma/yazma, birim kapsamı, yazma yolu (form, iş akışı, değiştirilemez, sistem), MCP erişimi, görevler ayrılığı kuralları, özel kimlikler ve rollere göre kullanıcılar; CSV çıktısı."},
     {"key": "pf.domains", "module": "platform", "phase": 1, "status": "done", "completed_on": "2026-11-16",
      "title": "Birden çok alan adı", "description": "Kurulum birden çok HTTPS adresini birlikte sunar (ör. kurum alan adı ve eski adres); ilki ana adrestir. Kurumsal web filtresi joker DNS adreslerini engellediğinde kurum alan adına kesintisiz geçiş için."},
+    {"key": "pf.guides", "module": "platform", "phase": 1, "status": "done", "decision": "K-036", "completed_on": "2026-11-16",
+     "title": "Kullanım kılavuzları", "description": "Rol ve modül kılavuzları uygulama içinde: rolüne göre öneri, arama, içindekiler, her ekranda bağlama duyarlı yardım (? düğmesi ve tuşu), yazdırma/PDF."},
     {"key": "pf.reports", "module": "platform", "phase": 1, "status": "planned",
      "title": "Rapor şablonları", "description": "Kaydedilebilir raporlar, zaman serisi göstergeler, PDF ve Excel çıktısı."},
     {"key": "pf.workflow", "module": "platform", "phase": 1, "status": "planned",

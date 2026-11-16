@@ -265,7 +265,7 @@ class Arayuz(Base):
         self.assertIn('<script src="/static/lineage.js"', page.content)
         self.assertIn('<script src="/static/quality.js"', page.content)
         self.assertIn('<script src="/static/aisystems.js"', page.content)
-        for name in ("app.js", "pages.js", "grc.js", "admin.js", "assurance.js", "ops.js", "datagov.js", "privacy.js", "collect.js", "lineage.js", "quality.js", "regulation.js", "aisystems.js"):
+        for name in ("app.js", "pages.js", "grc.js", "admin.js", "assurance.js", "ops.js", "datagov.js", "privacy.js", "collect.js", "lineage.js", "quality.js", "regulation.js", "aisystems.js", "help.js"):
             status, js = self.app.dispatch("GET", "/static/" + name, {})
             self.assertEqual(status, 200)
             self.assertNotIn("innerHTML", js.content)              # sunucu verisi HTML olarak yorumlanmaz

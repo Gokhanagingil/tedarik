@@ -234,6 +234,18 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
   - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
     çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Kullanım kılavuzları (2026-11-16, K-036).** Gökhan Bey'in isteği: kullanıcı kılavuzları.
+  - 15 kılavuz (`tedarik/data/kilavuz/`, ~9.500 kelime): Başlarken; rol kılavuzları (Yönetici, Tedarikçi Yöneticisi, Birim
+    Kullanıcısı, Denetçi ve dış denetçi, Görüntüleyici); modül kılavuzları (tedarikçi, risk, uyum ve denetim, iş sürekliliği,
+    doküman ve CMDB, veri yönetişimi, KVKK/GDPR, yapay zekâ); sık sorulanlar ve sorun giderme. Ekran ve düğme adları uygulamadaki
+    metinlerle eşitlendi; örnekler sentetik. Dizin: `docs/KILAVUZ.md`.
+  - Uygulama içinde **Genel → Kullanım Kılavuzu**: rolüne göre "Sizin için", Türkçe katlamalı arama, içindekiler, önceki/sonraki,
+    yazdırma/PDF; **Tümünü yazdır / PDF** tüm kılavuzu tek belgede verir (43 sayfa A4). Her ekranda üst çubuktaki **?** düğmesi ve
+    `?` tuşu o ekranın kılavuz bölümünü açar (menüdeki tüm ekranlar eşli). Markdown sunucuda güvenli blok yapısına çevrilir,
+    tarayıcı yalnızca metin düğümü yazar; dış bağlantı yok; dış denetçi okuyabilir, makine/toplayıcı anahtarı okuyamaz.
+  - CLAUDE.md'ye kural: ekran davranışı veya düğme adı değişirse ilgili kılavuz aynı değişiklikte güncellenir.
+  - Testler: 190 uçtan uca test; kılavuz testleri bölüm bağlantılarını, kılavuz içi bağlantıların gerçek ekranlara gittiğini ve
+    menüdeki her ekranın yardım eşlemesini denetler; tarayıcı duman testi arama, bağlama duyarlı yardım ve `?` tuşunu yürütür.
 - **Veri yönetişimi Faz 6 — mevzuat boşluk analizi, yapay zekâ envanteri; rol ve yetki matrisi (2026-11-16, K-033 – K-035).**
   Gökhan Bey'in isteği: Faz 6'nın kendisinden bilgi beklemeyen kısımları ve Kullanıcılar altında rol/yetki matrisi.
   - *Mevzuat metinleri:* KVKK 6698 (7499 değişiklikleriyle; mevzuat.gov.tr) ve GDPR 2016/679 (EUR-Lex, İngilizce; 99 madde,

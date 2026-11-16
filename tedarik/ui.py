@@ -13,7 +13,7 @@ TYPES = {"app.js": "application/javascript; charset=utf-8", "pages.js": "applica
          "datagov.js": "application/javascript; charset=utf-8", "privacy.js": "application/javascript; charset=utf-8",
          "collect.js": "application/javascript; charset=utf-8", "lineage.js": "application/javascript; charset=utf-8",
          "quality.js": "application/javascript; charset=utf-8", "regulation.js": "application/javascript; charset=utf-8",
-         "aisystems.js": "application/javascript; charset=utf-8",
+         "aisystems.js": "application/javascript; charset=utf-8", "help.js": "application/javascript; charset=utf-8",
          "app.css": "text/css; charset=utf-8"}
 
 SHELL = """<!doctype html>
@@ -32,7 +32,8 @@ SHELL = """<!doctype html>
 <main id="main">
  <div id="topbar"><button id="menuToggle" type="button" aria-label="Menüyü aç"><svg viewBox="0 0 24 24" class="icon"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
   <div id="crumbs"></div>
-  <button id="searchOpen" type="button" aria-label="Ara (Ctrl+K)"><svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Kayıt veya sayfa ara…</span><kbd>Ctrl K</kbd></button></div>
+  <button id="searchOpen" type="button" aria-label="Ara (Ctrl+K)"><svg viewBox="0 0 24 24" class="icon"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><span>Kayıt veya sayfa ara…</span><kbd>Ctrl K</kbd></button>
+  <button id="helpOpen" type="button" aria-label="Bu ekranın yardımı (?)" title="Bu ekranın yardımı (?)"><svg viewBox="0 0 24 24" class="icon"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.5V14M12 17v.5"/></svg></button></div>
  <header id="topline"><div><h1 id="pageTitle">Yükleniyor…</h1><div id="pageSub"></div></div><div id="topActions"></div></header>
  <div id="content" tabindex="-1" aria-live="polite"><div class="panel skeleton">İçerik hazırlanıyor…</div></div>
 </main>
@@ -61,6 +62,7 @@ SHELL = """<!doctype html>
 <script src="/static/quality.js" defer></script>
 <script src="/static/regulation.js" defer></script>
 <script src="/static/aisystems.js" defer></script>
+<script src="/static/help.js" defer></script>
 </body></html>"""
 
 

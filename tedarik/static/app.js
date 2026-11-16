@@ -452,7 +452,7 @@ function content(...nodes) { const c = clear($('content')); append(c, nodes); re
 // ------------------------------------------------------------------ menü ve ekran tanımları
 // Menü: [başlık, [[rota, ikon, etiket?, gereken yetki?]]]. Etiket yoksa kaynağın Türkçe adı kullanılır.
 const MENU = [
-  ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim']]],
+  ['Genel', [['home', 'home', 'Genel Bakış'], ['my-work', 'inbox', 'İşlerim'], ['calendar', 'calendar', 'GRC Takvimi'], ['health', 'pulse', 'GRC Sağlık Kontrolü'], ['my-surveys', 'edit', 'Anketlerim'], ['help', 'help', 'Kullanım Kılavuzu']]],
   ['Risk yönetimi', [['risk', 'gauge', 'Risk Panosu'], ['r/supplier_risks', 'alert'], ['r/risk_actions', 'trend'], ['r/kris', 'activity'], ['r/rcsa_campaigns', 'check'], ['r/loss_events', 'coin'], ['r/risk_cycles', 'repeat'], ['r/risk_catalog', 'book'], ['r/risk_appetites', 'target'], ['r/risk_criteria', 'sliders']]],
   ['Uyum', [['compliance', 'shield', 'Uyum Panosu'], ['library', 'book', 'Standart Kütüphanesi'], ['obligations', 'scale', 'Yükümlülükler'], ['r/controls', 'check'], ['r/objectives', 'target'], ['r/policy_exceptions', 'flag'], ['r/attestation_campaigns', 'edit'], ['r/certifications', 'star'], ['r/access_reviews', 'users']]],
   ['Denetim', [['audit-plan', 'calendar', 'Denetim Planı'], ['r/audits', 'search'], ['r/evidence_requests', 'inbox'], ['r/findings', 'flag'], ['r/grc_actions', 'repeat'], ['r/evidence', 'paperclip'], ['archive', 'archive', 'Denetim Arşivi']]],
@@ -488,6 +488,7 @@ const ICONS = {
   swap: 'M7 4L3 8l4 4M3 8h14M17 12l4 4-4 4M21 16H7', plug: 'M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5',
   bell: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0', scale: 'M12 3v18M5 21h14M4 7h16M7 7l-3 7h6zM17 7l-3 7h6z', archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
   database: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.5V14M12 17v.5',
   key: 'M15 3a6 6 0 0 0-5.6 8.2L3 18.6V21h3v-2h2v-2h2l1.8-1.8A6 6 0 1 0 15 3zM16.5 6.5h.01', cpu: 'M7 7h10v10H7zM10 10h4v4h-4zM9 3v4M15 3v4M9 17v4M15 17v4M3 9h4M3 15h4M17 9h4M17 15h4',
   route: 'M6 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM6 17V9a4 4 0 0 1 4-4h6M18 7v8a4 4 0 0 1-4 4H8', chev: 'M6 9l6 6 6-6', plus: 'M12 5v14M5 12h14', download: 'M12 4v12M7 11l5 5 5-5M5 20h14',
 };
@@ -665,7 +666,7 @@ const DETAILS = {}; // özel detay ekranları aşağıda tanımlanır
 const SUPPLIER_TABS = []; // diğer dosyaların Tedarikçi 360'a eklediği sekmeler: {key, label, render(id), visible()}
 
 DETAILS.bc_incidents = id => Router.go('crisis/' + id);
-const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications']);   // dış denetçi
+const EXTERNAL_NAV = new Set(['r/audits', 'r/findings', 'r/evidence', 'r/evidence_requests', 'r/certifications', 'help']);   // dış denetçi
 function navVisible([key, , , need]) {
   if (need && !META.can(need)) return false;
   if (key === 'roles') return !!S.me && ['ADMIN', 'AUDITOR'].includes(S.me.role) && !S.me.external;

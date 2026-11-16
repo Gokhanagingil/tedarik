@@ -277,10 +277,11 @@ def build(config):
     for mod in loaded:
         if hasattr(mod, "register"):
             mod.register(app)
-    from . import login, meta, roles, ui
+    from . import help as guides, login, meta, roles, ui
     login.register(app)
     meta.register(app)
     roles.register(app)
+    guides.register(app)
     ui.register(app)
     with app.database.connect() as db:
         for mod in loaded:

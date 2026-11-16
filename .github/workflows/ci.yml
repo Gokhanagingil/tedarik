@@ -51,7 +51,7 @@ jobs:
           pip install playwright==1.57.0
           python -m playwright install --with-deps chromium
       - name: Validate browser JavaScript
-        run: node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js && node --check tedarik/static/admin.js && node --check tedarik/static/assurance.js && node --check tedarik/static/ops.js && node --check tedarik/static/datagov.js && node --check tedarik/static/privacy.js && node --check tedarik/static/collect.js && node --check tedarik/static/lineage.js && node --check tedarik/static/quality.js && node --check tedarik/static/regulation.js && node --check tedarik/static/aisystems.js
+        run: node --check tedarik/static/app.js && node --check tedarik/static/pages.js && node --check tedarik/static/grc.js && node --check tedarik/static/admin.js && node --check tedarik/static/assurance.js && node --check tedarik/static/ops.js && node --check tedarik/static/datagov.js && node --check tedarik/static/privacy.js && node --check tedarik/static/collect.js && node --check tedarik/static/lineage.js && node --check tedarik/static/quality.js && node --check tedarik/static/regulation.js && node --check tedarik/static/aisystems.js && node --check tedarik/static/help.js
       - name: Browser smoke test with synthetic data
         run: python scripts/browser_smoke.py verification
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

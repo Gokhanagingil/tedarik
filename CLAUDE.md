@@ -20,6 +20,7 @@ GRC platformu (adı sonra belirlenecek): tedarikçi yönetimi, kurumsal risk (IS
 - Arayüz metinleri ve hata iletileri Türkçe; kod tanımlayıcıları ve durum kodları İngilizce.
 - Arayüzde dış kaynak (CDN, yazı tipi, betik) kullanma; içerik güvenlik politikası engeller.
 - Her davranış değişikliği testle gelir. Test verisi sentetiktir; gerçek tedarikçi verisini repoya koyma.
+- Kullanıcıya görünen davranış veya ekran/düğme adı değişirse ilgili kullanım kılavuzu (`tedarik/data/kilavuz/`, K-036) aynı değişiklikte güncellenir.
 - Gizli bilgi (anahtar, parola, gerçek veri) Git'e girmez.
 
 ## Komutlar

@@ -459,6 +459,16 @@ def main():
                 f"matriste {len(matrix['resources'])} kaynak")
     check("KVKK/GDPR boşluk analizi, yapay zekâ envanteri, rol matrisi", regulation_ai_roles)
 
+    def guides():
+        idx = viewer.ok("GET", "help", timed="kullanım kılavuzu")
+        assert len(idx["guides"]) >= 15 and any(g["key"] == "goruntuleyici" and g["recommended"] for g in idx["guides"])
+        g = viewer.ok("GET", "help/guide?key=kvkk")
+        assert g["sections"] and g["blocks"]
+        hits = viewer.ok("GET", "help/search?q=geçici parola")["results"]
+        assert hits
+        return f"{len(idx['guides'])} kılavuz, {len(idx['context'])} ekranda bağlama duyarlı yardım; arama {len(hits)} sonuç"
+    check("Kullanım kılavuzu (görüntüleyici)", guides)
+
     def risk():
         units = admin.ok("GET", "risk_catalog?limit=50")
         template = units[0]
