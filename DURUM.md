@@ -1,6 +1,6 @@
 # Durum
 
-Son güncelleme: 2026-11-16 · Aşama: uygulama tedarikçi portalından **GRC platformuna** dönüştü (K-016 – K-020; adı sonra belirlenecek, `TEDARIK_APP_NAME`). Test sunucusu: https://tedarik.204-168-247-101.sslip.io (sentetik demo verisi). KS GRC artık kullanılmıyor (K-016).
+Son güncelleme: 2026-11-26 · Aşama: uygulama tedarikçi portalından **GRC platformuna** dönüştü (K-016 – K-020; adı sonra belirlenecek, `TEDARIK_APP_NAME`). Test sunucusu: https://tedarik.204-168-247-101.sslip.io (sentetik demo verisi). KS GRC artık kullanılmıyor (K-016).
 Bu dosya her çalışma oturumunun sonunda güncellenir: kararlar, yapılanlar, sıradaki adımlar.
 
 ## Kararlar (özet)
@@ -234,6 +234,17 @@ Ayrıntı `docs/KARARLAR.md` içinde.
   - Testler: 170 uçtan uca test (SQLite ve PostgreSQL 16), tarayıcı duman testi soy kütüğü akışıyla (bağlantı → etki → şema).
   - Test sunucusuna dağıtıldı (commit `dfeab87`): demo verisine soy kütüğü bölümü eklendi; canlı kabul testi geçti (GitHub Actions
     çalıştırması 43768176088, 2026-11-15); CI (SQLite, PostgreSQL, tarayıcı, güvenlik) yeşil.
+- **Veri taşıma ve test sunucusu dökümü (2026-11-26, K-037).** Gökhan Bey uygulamayı şirket içindeki bir sunucuya kurdu ve
+  test sunucusundaki demo verisini (kullanıcılar ve parolalar hariç) depoda istedi; geliştirme bundan sonra şirket içinde
+  sürecek, depo silinecek.
+  - `tedarik.dataio export|import`: motor bağımsız gzip JSON (`tedarik.data.v1`), kimlik ve bağlantılar korunur; kullanıcılar,
+    parolalar, oturumlar, rol/birim/erişim atamaları, tekrar koruma önbelleği, entegrasyon sırları, toplayıcı anahtarları ve
+    bildirim kutusu hariç. Yükleme yalnızca boş kuruluma, tek işlemde; PostgreSQL kimlik sayaçları düzeltilir.
+  - Kurulum işinin `data_export` girdisiyle döküm sunucuda alındı, denetlendi ve dala eklendi:
+    `veri-dokumu/hetzner-demo.json.gz` (159 tablo, 10.779 satır; çalıştırma 45775367826). Ayrıca tarandı: parola özeti,
+    geçici parola, anahtar, şifreli sır yok; e-postalar yalnızca `ornek.test` (ve NIST metnindeki kamu adresi). Boş SQLite
+    kuruluma yüklenip ekranlar denetlendi. Yükleme adımları: `veri-dokumu/README.md`.
+  - Testler: 193 (SQLite; PostgreSQL ve PostgreSQL→SQLite yönleri dahil).
 - **Yönetici hesabı GitHub gizli değeriyle (2026-11-16).** `tedarik.bootstrap set KULLANICI --password-stdin` ve kurulum işinde
   `admin_account` girdisi: başlangıç parolası yalnızca `TEDARIK_ADMIN_INITIAL_PASSWORD` gizli değerinden, SSH standart girdisiyle
   gider; günlükte maskelenir; hesap Yönetici, süresiz, ilk girişte parola değişimi zorunlu, denetim izine yazılır. Gökhan Bey için
@@ -382,6 +393,8 @@ Ayrıntı `docs/KARARLAR.md` içinde.
      bağlayıcıları (gerekenler aşağıda).
 10h. ~~**Veri yönetişimi Faz 6**~~ Bilgi/onay beklemeyen kısmı tamamlandı (2026-11-16, K-033, K-034); rol ve yetki matrisi
      (K-035). Kalan: ISO/IEC 42001 eşlemesi, yapay zekâ önerileri, GraphQL/olay kuyruğu (aşağıdaki beklenenler).
+10j. **Şirket içi kurulum:** `veri-dokumu/hetzner-demo.json.gz` boş kuruluma yüklenir (README), ardından yönetici hesabı açılır.
+     Depo silinecekse bu dal (`claude/affectionate-dijkstra-e8jhza`) şirket içi depoya alınmalı; `main` dalında bu çalışma yok.
 10i. **Kurum alan adına geçiş:** Gökhan Bey alan adını (A kaydı 204.168.247.101) bildirince kurulumu
      `domain=<yeni adres>,tedarik.204-168-247-101.sslip.io` ile çalıştır; gerekirse FortiGuard'a sınıflandırma isteği.
 10c. **KS GRC veri aktarımı:** KS GRC Excel dışa aktarımını (standart, madde, süreç, hedef, kontrol, eşleme, denetim) içe aktarım hattına ekle; kanıt dosyaları için KS GRC yedeğinden SHA-256 doğrulamalı aktarım.
