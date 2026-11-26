@@ -110,6 +110,10 @@ class SqliteConn(_Savepoints):
     def columns(self, table):
         return {r["name"] for r in self.raw.execute(f"PRAGMA table_info({table})")}
 
+    def reset_identity(self, table):
+        """Kimliği açıkça verilmiş eklemelerden sonra sayaç: SQLite AUTOINCREMENT en büyük kimliği kendisi izler."""
+        return None
+
 
 # ---------------------------------------------------------------- PostgreSQL
 
@@ -215,6 +219,13 @@ class PgConn(_Savepoints):
         cursor = self.raw.execute("SELECT column_name FROM information_schema.columns "
                                   "WHERE table_schema = current_schema() AND table_name = %s", (table,))
         return {r[0] for r in cursor.fetchall()}
+
+    def reset_identity(self, table):
+        """Kimliği açıkça verilmiş eklemelerden sonra kimlik sayacını en büyük kimliğe getirir (veri taşıma)."""
+        if not re.fullmatch(r"[a-z_][a-z0-9_]*", table):
+            raise ValueError("Geçersiz tablo adı")
+        self.raw.execute(f"SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST(COALESCE(MAX(id), 0), 1), "
+                         f"COALESCE(MAX(id), 0) > 0) FROM {table}")
 
 
 # ---------------------------------------------------------------- Ortak giriş

@@ -26,6 +26,10 @@ on:
         description: "Kurulumdan sonra canlı kabul testini çalıştır (scripts/acceptance.py; KABUL işaretli kayıt yazar)"
         type: boolean
         default: false
+      data_export:
+        description: "Kurulumdan sonra veri dökümünü al ve depoya ekle (veri-dokumu/hetzner-demo.json.gz; kullanıcılar, parolalar ve sırlar hariç)"
+        type: boolean
+        default: false
       admin_account:
         description: "Yönetici hesabı aç / parolasını yenile (ör. grc.yonetici). Başlangıç parolası TEDARIK_ADMIN_INITIAL_PASSWORD gizli değerinden alınır; ilk girişte değişim zorunlu. Boş: dokunulmaz"
         type: string
@@ -187,3 +191,48 @@ jobs:
           name: kabul-${{ github.run_id }}
           path: kabul/
           retention-days: 30
+
+  export:
+    # Veri dökümü (K-037): kullanıcılar, parolalar, oturumlar, tekrar koruma önbelleği, entegrasyon sırları, toplayıcı
+    # anahtarları ve bildirim kutusu dışarıda kalır. Döküm denetlenir, sonra bu dala eklenir.
+    needs: deploy
+    if: inputs.data_export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: tedarik
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Export data from the server and add it to this branch
+        env:
+          HOST: ${{ secrets.TEDARIK_SSH_HOST }}
+          USER: ${{ secrets.TEDARIK_SSH_USER }}
+          KEY: ${{ secrets.TEDARIK_SSH_KEY }}
+          KNOWN: ${{ secrets.TEDARIK_SSH_KNOWN_HOSTS }}
+        run: |
+          set -eu
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy && chmod 600 ~/.ssh/id_deploy
+          printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          OPTS="-i $HOME/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15"
+          mkdir -p veri-dokumu
+          ssh $OPTS "$USER@$HOST" "sudo -n docker exec tedarik-app-1 python -m tedarik.dataio export -" > veri-dokumu/hetzner-demo.json.gz
+          rm -f ~/.ssh/id_deploy
+          python3 - <<'PY'
+          import gzip, json
+          raw = gzip.decompress(open("veri-dokumu/hetzner-demo.json.gz", "rb").read()).decode("utf-8")
+          doc = json.loads(raw)
+          assert doc["format"] == "tedarik.data.v1"
+          banned = {"users", "auth_sessions", "user_roles", "user_units", "user_access", "user_audits", "idempotency",
+                    "integrations", "collector_keys", "notifications"} & set(doc["tables"])
+          assert not banned, banned
+          assert "pbkdf2_sha256" not in raw, "parola özeti bulundu"
+          print(len(doc["tables"]), "tablo,", sum(len(t["rows"]) for t in doc["tables"].values()), "satır;",
+                len(raw) // 1024, "KB (sıkıştırılmamış)")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add veri-dokumu/hetzner-demo.json.gz
+          git commit -m "Veri dökümü: test sunucusu demo verisi (kullanıcılar, parolalar ve sırlar hariç)"
+          git push origin "HEAD:$GITHUB_REF_NAME"
